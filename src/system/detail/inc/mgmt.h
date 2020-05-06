@@ -177,7 +177,7 @@ typedef struct _user_obj {
   char              reserved[16];
   char              updateEnd[1];
   int32_t           authAllowTime;
-  int16_t           authFailCount;
+  int32_t           authFailCount;
   struct _user_obj *prev, *next;
 } SUserObj;
 
