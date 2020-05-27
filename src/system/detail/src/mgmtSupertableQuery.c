@@ -577,7 +577,7 @@ static int32_t compareWStrPatternComp(const void* pLeft, const void* pRight) {
   const wchar_t* pattern = pRight;
   const wchar_t* str = pLeft;
 
-  int32_t ret = WCSPatternMatch(pattern, str, wcslen(str), &pInfo);
+  int32_t ret = WCSPatternMatch(pattern, str, twcslen(str), &pInfo);
 
   return (ret == TSDB_PATTERN_MATCH) ? 0 : 1;
 }
@@ -711,7 +711,6 @@ static int32_t mgmtFilterMeterByIndex(STabObj* pMetric, tQueryResultset* pRes, c
   // failed to build expression, no result, return immediately
   if (pExpr == NULL) {
     mError("metric:%s, no result returned, error in super table query expression:%s", pMetric->meterId, pCond);
-    tfree(pCond);
 
     return TSDB_CODE_OPS_NOT_SUPPORT;
   } else {  // query according to the binary expression

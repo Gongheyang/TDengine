@@ -156,11 +156,11 @@ char tsSocketType[4] = "udp";
 // time precision, millisecond by default
 int tsTimePrecision = TSDB_TIME_PRECISION_MILLI;
 
-// 10 ms for sliding time, the value will changed in case of time precision changed
-int tsMinSlidingTime = 10;
+// 1 us for sliding time, the value will changed in case of time precision changed
+int tsMinSlidingTime = 1;
 
-// 10 ms for interval time range, changed accordingly
-int tsMinIntervalTime = 10;
+// 1 us for interval time range, changed accordingly
+int tsMinIntervalTime = 1;
 
 // 20sec, the maximum value of stream computing delay, changed accordingly
 int tsMaxStreamComputDelay = 20000;
@@ -632,10 +632,10 @@ static void doInitGlobalConfig() {
 
   tsInitConfigOption(cfg++, "minSlidingTime", &tsMinSlidingTime, TSDB_CFG_VTYPE_INT,
                      TSDB_CFG_CTYPE_B_CONFIG | TSDB_CFG_CTYPE_B_SHOW,
-                     10, 1000000, 0, TSDB_CFG_UTYPE_MS);
+                     1, 1000000000, 0, TSDB_CFG_UTYPE_MS);
   tsInitConfigOption(cfg++, "minIntervalTime", &tsMinIntervalTime, TSDB_CFG_VTYPE_INT,
                      TSDB_CFG_CTYPE_B_CONFIG | TSDB_CFG_CTYPE_B_SHOW,
-                     10, 1000000, 0, TSDB_CFG_UTYPE_MS);
+                     1, 1000000000, 0, TSDB_CFG_UTYPE_MS);
   tsInitConfigOption(cfg++, "maxStreamCompDelay", &tsMaxStreamComputDelay, TSDB_CFG_VTYPE_INT,
                      TSDB_CFG_CTYPE_B_CONFIG | TSDB_CFG_CTYPE_B_SHOW,
                      10, 1000000000, 0, TSDB_CFG_UTYPE_MS);
@@ -690,11 +690,11 @@ static void doInitGlobalConfig() {
   tsInitConfigOption(cfg++, "maxSQLLength", &tsMaxSQLStringLen, TSDB_CFG_VTYPE_INT,
                      TSDB_CFG_CTYPE_B_CONFIG | TSDB_CFG_CTYPE_B_CLIENT | TSDB_CFG_CTYPE_B_SHOW,
                      TSDB_MAX_SQL_LEN, TSDB_MAX_ALLOWED_SQL_LEN, 0, TSDB_CFG_UTYPE_BYTE);
-  
+
   tsInitConfigOption(cfg++, "maxAuthRetryTime", &tsMaxAuthRetry, TSDB_CFG_VTYPE_INT,
                      TSDB_CFG_CTYPE_B_CONFIG | TSDB_CFG_CTYPE_B_CLIENT | TSDB_CFG_CTYPE_B_SHOW,
                      1, 10, 0, TSDB_CFG_UTYPE_BYTE);
-  
+
   tsInitConfigOption(cfg++, "maxNumOfOrderedRes", &tsMaxNumOfOrderedResults, TSDB_CFG_VTYPE_INT,
                      TSDB_CFG_CTYPE_B_CONFIG | TSDB_CFG_CTYPE_B_CLIENT | TSDB_CFG_CTYPE_B_SHOW,
                      TSDB_MAX_SQL_LEN, TSDB_MAX_ALLOWED_SQL_LEN, 0, TSDB_CFG_UTYPE_NONE);

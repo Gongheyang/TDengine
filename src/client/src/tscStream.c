@@ -28,7 +28,7 @@
 
 static void tscProcessStreamQueryCallback(void *param, TAOS_RES *tres, int numOfRows);
 static void tscProcessStreamRetrieveResult(void *param, TAOS_RES *res, int numOfRows);
-static void tscSetNextLaunchTimer(SSqlStream *pStream, SSqlObj *pSql);
+void tscSetNextLaunchTimer(SSqlStream *pStream, SSqlObj *pSql);
 static void tscSetRetryTimer(SSqlStream *pStream, SSqlObj *pSql, int64_t timer);
 
 static int64_t getDelayValueAfterTimewindowClosed(SSqlStream* pStream, int64_t launchDelay) {
@@ -94,6 +94,18 @@ static void tscProcessStreamLaunchQuery(SSchedMsg *pMsg) {
     tscError("%p stream:%p,get metermeta failed, retry in %" PRId64 "ms", pStream->pSql, pStream, retryDelayTime);
   
     tscSetRetryTimer(pStream, pSql, retryDelayTime);
+    return;
+  }
+
+  if ((UTIL_METER_IS_SUPERTABLE(pMeterMetaInfo) 
+      && ( pMeterMetaInfo->pMeterMeta  == NULL 
+        || pMeterMetaInfo->pMetricMeta == NULL 
+        || pMeterMetaInfo->pMetricMeta->numOfMeters == 0 
+        || pMeterMetaInfo->pMetricMeta->numOfVnodes == 0)) 
+      || (!(UTIL_METER_IS_SUPERTABLE(pMeterMetaInfo))  && (pMeterMetaInfo->pMeterMeta  == NULL))) {
+    tscTrace("%p no table in metricmeta, no launch query", pSql);
+    tscClearMeterMetaInfo(pMeterMetaInfo, false);
+    tscSetNextLaunchTimer(pStream, pSql);
     return;
   }
 
@@ -323,7 +335,7 @@ static int64_t getLaunchTimeDelay(const SSqlStream* pStream) {
 }
 
 
-static void tscSetNextLaunchTimer(SSqlStream *pStream, SSqlObj *pSql) {
+void tscSetNextLaunchTimer(SSqlStream *pStream, SSqlObj *pSql) {
   int64_t timer = 0;
   
   SQueryInfo* pQueryInfo = tscGetQueryInfoDetail(&pSql->cmd, 0);
@@ -374,8 +386,7 @@ static void tscSetNextLaunchTimer(SSqlStream *pStream, SSqlObj *pSql) {
 }
 
 static void tscSetSlidingWindowInfo(SSqlObj *pSql, SSqlStream *pStream) {
-  int64_t minIntervalTime =
-      (pStream->precision == TSDB_TIME_PRECISION_MICRO) ? tsMinIntervalTime * 1000L : tsMinIntervalTime;
+  int64_t minIntervalTime = tsMinIntervalTime;
   
   SQueryInfo* pQueryInfo = tscGetQueryInfoDetail(&pSql->cmd, 0);
   
@@ -391,8 +402,7 @@ static void tscSetSlidingWindowInfo(SSqlObj *pSql, SSqlStream *pStream) {
     pQueryInfo->slidingTime = pQueryInfo->intervalTime;
   }
 
-  int64_t minSlidingTime =
-      (pStream->precision == TSDB_TIME_PRECISION_MICRO) ? tsMinSlidingTime * 1000L : tsMinSlidingTime;
+  int64_t minSlidingTime = tsMinSlidingTime;
 
   if (pQueryInfo->slidingTime == -1) {
     pQueryInfo->slidingTime = pQueryInfo->intervalTime;
@@ -582,10 +592,10 @@ void taos_close_stream(TAOS_STREAM *handle) {
     tscRemoveFromStreamList(pStream, pSql);
 
     taosTmrStopA(&(pStream->pTimer));
+    tscTrace("%p stream:%p is closed", pSql, pStream);
     tscFreeSqlObj(pSql);
     pStream->pSql = NULL;
 
-    tscTrace("%p stream:%p is closed", pSql, pStream);
     tfree(pStream);
   }
 }

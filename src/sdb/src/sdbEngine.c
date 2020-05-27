@@ -289,7 +289,7 @@ sdb_exit1:
   return -1;
 }
 
-void *sdbOpenTable(int maxRows, int32_t maxRowSize, char *name, uint8_t keyType, char *directory,
+void *sdbOpenTable(int maxRows, int32_t maxRowSize, char *name, char keyType, char *directory,
                    void *(*appTool)(char, void *, char *, int, int *)) {
   SSdbTable *pTable = (SSdbTable *)malloc(sizeof(SSdbTable));
   if (pTable == NULL) return NULL;
@@ -310,7 +310,7 @@ void *sdbOpenTable(int maxRows, int32_t maxRowSize, char *name, uint8_t keyType,
   pTable->appTool = appTool;
   sprintf(pTable->fn, "%s/%s.db", directory, pTable->name);
 
-  if (sdbInitIndexFp[keyType] != NULL) pTable->iHandle = (*sdbInitIndexFp[keyType])(maxRows, sizeof(SRowMeta));
+  if (sdbInitIndexFp[(int)keyType] != NULL) pTable->iHandle = (*sdbInitIndexFp[(int)keyType])(maxRows, sizeof(SRowMeta));
 
   pthread_mutex_init(&pTable->mutex, NULL);
 

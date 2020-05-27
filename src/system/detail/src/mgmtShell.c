@@ -1185,7 +1185,7 @@ int mgmtProcessHeartBeatMsg(char *cont, int contLen, SConnObj *pConn) {
   char *    pStart, *pMsg;
   int       msgLen;
   STaosRsp *pRsp;
-
+  
   mgmtSaveQueryStreamList(cont, contLen, pConn);
 
   pStart = taosBuildRspMsgWithSize(pConn->thandle, TSDB_MSG_TYPE_HEARTBEAT_RSP, 128);
@@ -1202,6 +1202,10 @@ int mgmtProcessHeartBeatMsg(char *cont, int contLen, SConnObj *pConn) {
   pHBRsp->streamId = pConn->streamId;
   pConn->streamId = 0;
   pHBRsp->killConnection = pConn->killConnection;
+
+  mgmtGetDnodeOnlineNum(&pHBRsp->totalDnodes, &pHBRsp->onlineDnodes);
+  pHBRsp->totalDnodes = htonl(pHBRsp->totalDnodes);
+  pHBRsp->onlineDnodes = htonl(pHBRsp->onlineDnodes);
 
   if (pConn->usePublicIp) {
     if (pSdbPublicIpList != NULL) {
@@ -1348,38 +1352,37 @@ _rsp:
   pRsp = (STaosRsp *)pMsg;
   pRsp->code = code;
   pMsg += sizeof(STaosRsp);
-
+  
   pConnectRsp = (SConnectRsp *)pRsp->more;
-  if (NULL != pConn->pAcct) {
+
+  if (code == 0) {
     sprintf(pConnectRsp->acctId, "%x", pConn->pAcct->acctId);
-  }
-  strcpy(pConnectRsp->version, version);
-  pConnectRsp->writeAuth = pConn->writeAuth;
-  pConnectRsp->superAuth = pConn->superAuth;
-  pMsg += sizeof(SConnectRsp);
+    strcpy(pConnectRsp->version, version);
+    pConnectRsp->writeAuth = pConn->writeAuth;
+    pConnectRsp->superAuth = pConn->superAuth;
+    pMsg += sizeof(SConnectRsp);
 
-  int size;
-  if (pSdbPublicIpList != NULL && pSdbIpList != NULL) {
-    size = pSdbPublicIpList->numOfIps * 4 + sizeof(SIpList);
-    if (pConn->usePublicIp) {
-      memcpy(pMsg, pSdbPublicIpList, size);
+    int size;
+    if (pSdbPublicIpList != NULL && pSdbIpList != NULL) {
+      size = pSdbPublicIpList->numOfIps * 4 + sizeof(SIpList);
+      if (pConn->usePublicIp) {
+        memcpy(pMsg, pSdbPublicIpList, size);
+      } else {
+        memcpy(pMsg, pSdbIpList, size);
+      }
     } else {
-      memcpy(pMsg, pSdbIpList, size);
+      SIpList tmpIpList;
+      tmpIpList.numOfIps = 0;
+      size = tmpIpList.numOfIps * 4 + sizeof(SIpList);
+      memcpy(pMsg, &tmpIpList, size);
     }
+
+    pMsg += size;
+
+    // set the time resolution: millisecond or microsecond
+    *((uint32_t *)pMsg) = tsTimePrecision;
+    pMsg += sizeof(uint32_t);
   } else {
-    SIpList tmpIpList;
-    tmpIpList.numOfIps = 0;
-    size = tmpIpList.numOfIps * 4 + sizeof(SIpList);
-    memcpy(pMsg, &tmpIpList, size);
-  }
-
-  pMsg += size;
-
-  // set the time resolution: millisecond or microsecond
-  *((uint32_t *)pMsg) = tsTimePrecision;
-  pMsg += sizeof(uint32_t);
-
-  if (code != 0) {
     pConnectRsp->writeAuth = 0;
     pConnectRsp->superAuth = 0;
     pConn->pAcct = NULL;

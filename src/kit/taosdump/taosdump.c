@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include <wordexp.h>
 #include <iconv.h>
+#include <time.h>
 
 #include "taos.h"
 #include "taosmsg.h"
@@ -162,6 +163,7 @@ static struct argp_option options[] = {
   {"password",      'p', "PASSWORD",    0,  "User password to connect to server. Default is "DB_COMPANY".",                0},
   {"port",          'P', "PORT",        0,  "Port to connect",                                                             0},
   {"cversion",      'v', "CVERION",     0,  "client version",                                                              0},
+  {"mysqlFlag",     'q', "MYSQLFLAG",   0,  "mysqlFlag, Default is 0",                                                     0},
   // input/output file
   {"outpath",       'o', "OUTPATH",     0,  "Output file path.",                                                           1},
   {"inpath",        'i', "INPATH",      0,  "Input file path.",                                                            1},
@@ -189,6 +191,7 @@ struct arguments {
   char    *password;
   uint16_t port;  
   char     cversion[TSDB_FILENAME_LEN+1];
+  uint16_t mysqlFlag;
   // output file
   char     outpath[TSDB_FILENAME_LEN+1];
   char     inpath[TSDB_FILENAME_LEN+1];
@@ -235,6 +238,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
       break;
     case 'P':
       arguments->port = atoi(arg);
+      break;
+    case 'q':
+      arguments->mysqlFlag = atoi(arg);
       break;
     case 'v':
       if (wordexp(arg, &full_path, 0) != 0) {
@@ -325,6 +331,7 @@ int taosDumpOut(struct arguments *arguments);
 int taosDumpIn(struct arguments *arguments);
 void taosDumpCreateDbClause(SDbInfo *dbInfo, bool isDumpProperty, FILE *fp);
 int taosDumpDb(SDbInfo *dbInfo, struct arguments *arguments, FILE *fp, TAOS *taosCon);
+int32_t taosDumpStable(char *table, FILE *fp, TAOS* taosCon);
 void taosDumpCreateTableClause(STableDef *tableDes, int numOfCols, FILE *fp);
 void taosDumpCreateMTableClause(STableDef *tableDes, char *metric, int numOfCols, FILE *fp);
 int32_t taosDumpTable(char *table, char *metric, struct arguments *arguments, FILE *fp, TAOS* taosCon);
@@ -340,6 +347,7 @@ struct arguments tsArguments = {
   DB_COMPANY, 
   0,
   "",
+  0,
   // outpath and inpath
   "", 
   "", 
@@ -383,7 +391,8 @@ int main(int argc, char *argv[]) {
     printf("user: %s\n", tsArguments.user);
     printf("password: %s\n", tsArguments.password);
     printf("port: %u\n", tsArguments.port);
-    printf("cversion: %s\n", tsArguments.cversion);
+    printf("cversion: %s\n", tsArguments.cversion);    
+    printf("mysqlFlag: %d", tsArguments.mysqlFlag);    
     printf("outpath: %s\n", tsArguments.outpath);
     printf("inpath: %s\n", tsArguments.inpath);
     printf("encode: %s\n", tsArguments.encode);
@@ -616,7 +625,7 @@ int taosDumpOut(struct arguments *arguments) {
   int32_t count = 0;
   STableRecordInfo tableRecordInfo;
 
-  char tmpBuf[TSDB_FILENAME_LEN+1] = {0};
+  char tmpBuf[TSDB_FILENAME_LEN+9] = {0};
   if (arguments->outpath[0] != 0) {
       sprintf(tmpBuf, "%s/dbs.sql", arguments->outpath);
   } else {
@@ -917,6 +926,8 @@ void taosDumpCreateDbClause(SDbInfo *dbInfo, bool isDumpProperty, FILE *fp) {
         dbInfo->ablocks, dbInfo->tblocks, dbInfo->ctime, dbInfo->clog, dbInfo->comp);
   }
 
+  pstr += sprintf(pstr, ";");
+
   fprintf(fp, "%s\n\n", tmpCommand);
   free(tmpCommand);
 }
@@ -927,7 +938,7 @@ void* taosDumpOutWorkThreadFp(void *arg)
   STableRecord    tableRecord;
   int fd;  
   
-  char tmpFileName[TSDB_FILENAME_LEN + 1] = {0};
+  char tmpFileName[TSDB_FILENAME_LEN + 128] = {0};
   sprintf(tmpFileName, ".tables.tmp.%d", pThread->threadIndex);
   fd = open(tmpFileName, O_RDWR | O_CREAT, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH);
   if (fd == -1) {
@@ -936,7 +947,7 @@ void* taosDumpOutWorkThreadFp(void *arg)
   }
 
   FILE *fp = NULL;
-  memset(tmpFileName, 0, TSDB_FILENAME_LEN);
+  memset(tmpFileName, 0, TSDB_FILENAME_LEN + 128);
   
   if (tsArguments.outpath[0] != 0) {
     sprintf(tmpFileName, "%s/%s.tables.%d.sql", tsArguments.outpath, pThread->dbName, pThread->threadIndex);
@@ -1235,7 +1246,7 @@ void taosDumpCreateTableClause(STableDef *tableDes, int numOfCols, FILE *fp) {
     }
   }
 
-  pstr += sprintf(pstr, ")");
+  pstr += sprintf(pstr, ");");
 
   fprintf(fp, "%s\n", tmpBuf);
 
@@ -1288,7 +1299,7 @@ void taosDumpCreateMTableClause(STableDef *tableDes, char *metric, int numOfCols
     /* } */
   }
 
-  pstr += sprintf(pstr, ")");
+  pstr += sprintf(pstr, ");");
 
   fprintf(fp, "%s\n", tmpBuf);
   free(tmpBuf);
@@ -1358,14 +1369,31 @@ int taosDumpTableData(FILE *fp, char *tbname, struct arguments *arguments, TAOS*
     return -1;
   }
 
+  char sqlStr[8] = "\0";
+  if (arguments->mysqlFlag) {
+    sprintf(sqlStr, "INSERT");
+  } else {
+    sprintf(sqlStr, "IMPORT");
+  }
+
+  int rowFlag = 0;
   count = 0;
   while ((row = taos_fetch_row(tmpResult)) != NULL) {
     pstr = tmpBuffer;
 
     if (count == 0) {
-      pstr += sprintf(pstr, "IMPORT INTO %s VALUES (", tbname);
-    } else {
-      pstr += sprintf(pstr, "(");
+      pstr += sprintf(pstr, "%s INTO %s VALUES (", sqlStr, tbname);
+    } else {      
+      if (arguments->mysqlFlag) {
+        if (0 == rowFlag) {
+          pstr += sprintf(pstr, "(");
+          rowFlag++;
+        } else {
+          pstr += sprintf(pstr, ", (");
+        }
+      } else {
+        pstr += sprintf(pstr, "(");
+      }
     }
 
     for (int col = 0; col < numFields; col++) {
@@ -1409,12 +1437,22 @@ int taosDumpTableData(FILE *fp, char *tbname, struct arguments *arguments, TAOS*
           pstr += sprintf(pstr, "\'%s\'", tbuf);
           break;
         case TSDB_DATA_TYPE_TIMESTAMP:
-          pstr += sprintf(pstr, "%" PRId64 "", *(int64_t *)row[col]);
+          if (!arguments->mysqlFlag) {
+            pstr += sprintf(pstr, "%" PRId64 "", *(int64_t *)row[col]);
+          } else {
+            char buf[64] = "\0";
+            int64_t ts = *((int64_t *)row[col]);
+            time_t tt = (time_t)(ts / 1000);
+            struct tm *ptm = localtime(&tt);
+            strftime(buf, 64, "%y-%m-%d %H:%M:%S", ptm);
+            pstr += sprintf(pstr, "\'%s.%03d\'", buf, (int)(ts % 1000));
+          }
           break;
         default:
           break;
       }
     }
+
     pstr += sprintf(pstr, ") ");
 
     totalRows++;
@@ -1422,7 +1460,7 @@ int taosDumpTableData(FILE *fp, char *tbname, struct arguments *arguments, TAOS*
     fprintf(fp, "%s", tmpBuffer);
 
     if (count >= arguments->data_batch) {
-      fprintf(fp, "\n");
+      fprintf(fp, ";\n");
       count = 0;
     } //else {
       //fprintf(fp, "\\\n");

@@ -1,7 +1,7 @@
-char version[64] = "1.6.6.1";
-char compatible_version[64] = "1.6.0.0";
-char gitinfo[128] = "feea817446e25ff1ef77cefaeeda08f45564d6bc";
-char gitinfoOfInternal[128] = "5c736133836e7a9f757216539986ddf746439a11";
-char buildinfo[512] = "Built by root at 2020-03-13 16:27";
+char version[64] = "2.0.2.3";
+char compatible_version[64] = "2.0.0.0";
+char gitinfo[128] = "615410abe06a3a5354385760ce9f46fb954a67c5";
+char gitinfoOfInternal[128] = "be258cbbe8a9bc3a3da785d451479e46e9c8d03e";
+char buildinfo[512] = "Built by root at 2020-05-27 14:12";
 
-void libtaos_1_6_6_1_Linux_x64() {};
+void libtaos_2_0_2_3_Linux_x64() {};

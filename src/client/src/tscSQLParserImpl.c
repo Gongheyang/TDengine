@@ -446,6 +446,8 @@ int32_t getTimestampInUsFromStrImpl(int64_t val, char unit, int64_t *result) {
       break;
     case 'a':
       break;
+    case 'u':
+      return 0;
     default: {
       ;
       return -1;
@@ -813,6 +815,7 @@ void setCreateDBSQL(SSqlInfo *pInfo, int32_t type, SSQLToken *pToken, SCreateDBI
   pInfo->pDCLInfo->dbOpt.dbname = *pToken;
 
   tTokenListAppend(pInfo->pDCLInfo, pIgExists);
+  pInfo->pDCLInfo->existsCheck = (pIgExists->n == 1);
 }
 
 void setCreateAcctSQL(SSqlInfo *pInfo, int32_t type, SSQLToken *pName, SSQLToken *pPwd, SCreateAcctSQL *pAcctInfo) {
