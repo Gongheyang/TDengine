@@ -812,6 +812,16 @@ void taosProcessResponse(SRpcConn *pConn) {
 
 }
 
+int taosCheckIPinWhiteList(int32_t ip) {
+
+  for(int i = 0; i < TSDB_MAX_IP_WHITELIST; i++) {
+    if ((tsWhiteListIps[i] !=0 )&&(ip & tsWhiteListIps[i]) == tsWhiteListIps[i]) return 0;
+  }
+  return TSDB_CODE_IP_WHITELIST_FILTERED;
+
+}
+
+
 int taosProcessMsgHeader(STaosHeader *pHeader, SRpcConn **ppConn, STaosRpc *pServer, int dataLen, uint32_t ip,
                          uint16_t port, void *chandle) {
   int        chann, sid, code = 0;
@@ -825,7 +835,13 @@ int taosProcessMsgHeader(STaosHeader *pHeader, SRpcConn **ppConn, STaosRpc *pSer
   uint32_t destId = htonl(pHeader->destId);
   chann = destId >> pServer->bits;
   sid = destId & pServer->mask;
-
+  if(tscEmbedded){
+    code = taosCheckIPinWhiteList(ip);
+    if (code ) {
+      tError("%s cid:%d sid:%d, ip not in whitelist", pServer->label, chann, sid);
+      return code;
+    }
+  }
   if (pHeader->msgType >= TSDB_MSG_TYPE_MAX || pHeader->msgType <= 0) {
     tTrace("%s cid:%d sid:%d, invalid message type:%d", pServer->label, chann, sid, pHeader->msgType);
     return TSDB_CODE_INVALID_MSG_TYPE;

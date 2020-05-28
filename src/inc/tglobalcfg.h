@@ -55,6 +55,7 @@ extern char dataDir[];
 extern char logDir[];
 extern char scriptDir[];
 extern char osName[];
+extern int32_t tsWhiteListIps[];
 
 extern char  tsMasterIp[];
 extern char  tsSecondIp[];
@@ -256,7 +257,7 @@ extern int            tsGlobalConfigNum;
 extern char *         tsCfgStatusStr[];
 SGlobalConfig *tsGetConfigOption(const char *option);
 
-#define TSDB_CFG_MAX_NUM    111
+#define TSDB_CFG_MAX_NUM    112
 #define TSDB_CFG_PRINT_LEN  23
 #define TSDB_CFG_OPTION_LEN 24
 #define TSDB_CFG_VALUE_LEN  41

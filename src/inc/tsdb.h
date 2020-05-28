@@ -211,6 +211,7 @@ extern "C" {
 #define TSDB_DATA_NULL_STR_L            "null"
 
 #define TSDB_MAX_RPC_THREADS            5
+#define TSDB_MAX_IP_WHITELIST           10
 
 #define TSDB_QUERY_TYPE_NON_TYPE                       0x00U     // none type
 #define TSDB_QUERY_TYPE_FREE_RESOURCE                  0x01U     // free qhandle at vnode

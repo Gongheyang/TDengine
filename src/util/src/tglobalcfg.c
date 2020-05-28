@@ -123,6 +123,8 @@ char tsDefaultPass[64] = DB_COMPANY;
 int  tsMaxMeterConnections = 10000;
 int  tsMaxMgmtConnections = 2000;
 int  tsMaxVnodeConnections = 10000;
+int32_t  tsWhiteListIps[TSDB_MAX_IP_WHITELIST] = {0};
+char  tsWhiteListIp[TSDB_IPv4ADDR_LEN] = {0};
 
 int tsBalanceMonitorInterval = 2;  // seconds
 int tsBalanceStartInterval = 300;  // seconds
@@ -484,6 +486,9 @@ static void doInitGlobalConfig() {
   tsInitConfigOption(cfg++, "httpIp", tsHttpIp, TSDB_CFG_VTYPE_IPSTR,
                      TSDB_CFG_CTYPE_B_CONFIG,
                      0, 0, TSDB_IPv4ADDR_LEN, TSDB_CFG_UTYPE_NONE);
+  tsInitConfigOption(cfg++, "ipWhiteList", tsWhiteListIp, TSDB_CFG_VTYPE_IPSTR,
+                     TSDB_CFG_CTYPE_B_CONFIG | TSDB_CFG_CTYPE_B_CLIENT,
+                     0, 0, TSDB_IPv4ADDR_LEN, TSDB_CFG_UTYPE_NONE);                     
 
   // port
   tsInitConfigOption(cfg++, "httpPort", &tsHttpPort, TSDB_CFG_VTYPE_SHORT,
@@ -1212,7 +1217,60 @@ void tsSetTimeZone() {
 
 #ifndef CLUSTER
 
-bool tsReadGlobalConfigSpec() { return true; }
+bool tsReadGlobalConfigSpec() { 
+
+  FILE * fp;
+  char * line, *option, *value, *value1;
+  size_t len;
+  int    olen, vlen, vlen1;
+  int    netmask;
+  int    i = 0;
+  char   fileName[128];
+
+  sprintf(fileName, "%s/%s.cfg", configDir, DB_CLIENT_NAME);
+  fp = fopen(fileName, "r");
+  if (fp == NULL) {
+  } else {
+    line = NULL;
+    while (!feof(fp)) {
+      tfree(line);
+      line = option = value = NULL;
+      len = olen = vlen = 0;
+
+      getline(&line, &len, fp);
+      if (line == NULL) break;
+
+      paGetToken(line, &option, &olen);
+      if (olen == 0) continue;
+      option[olen] = 0;
+
+      paGetToken(option + olen + 1, &value, &vlen);
+      if (vlen == 0) continue;
+      value[vlen] = 0;
+
+      // For dataDir, the format is:
+      // dataDir    /mnt/disk1    0
+      paGetToken(value + vlen + 1, &value1, &vlen1);
+      if (strncasecmp(option, "ipWhiteList", 11) == 0) {
+        if (!tscEmbedded||i >= TSDB_MAX_IP_WHITELIST) continue;
+        if (vlen1 == 0) {
+          netmask = 32;
+        }else {
+          netmask = (int)atoi(value1);
+          if(netmask >32) netmask = 32;
+        }
+
+        int ipInt = inet_addr(value);
+        tsWhiteListIps[i] = ipInt & (0xFFFFFFFF >> (32 - netmask));
+        i++;        
+      }
+    }
+
+    tfree(line);
+    fclose(fp);
+  }
+  return true;
+}
 
 void tsPrintGlobalConfigSpec() {
   pPrint(" dataDir:                %s", dataDir);

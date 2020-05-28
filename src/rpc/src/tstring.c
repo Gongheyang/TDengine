@@ -245,4 +245,5 @@ char *tsError[] = {"success",
                    "table id/uid mismatch",
                    "client query cache erased",     // 119
                    "too many authentication failed, try 10 minutes later",   //120                   
+                   "ip not in white list , connection denied",   //121
 };
