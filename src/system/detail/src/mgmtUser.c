@@ -128,8 +128,10 @@ int mgmtCreateUser(SAcctObj *pAcct, char *name, char *pass) {
   pUser->createdTime = taosGetTimestampMs();
   pUser->superAuth = 0;
   pUser->writeAuth = 1;
+  pUser->auditAuth = 0;
   if (strcmp(pUser->user, "root") == 0 || strcmp(pUser->user, pUser->acct) == 0) {
     pUser->superAuth = 1;
+    pUser->auditAuth = 1;
   }
 
   code = TSDB_CODE_SUCCESS;
@@ -227,6 +229,8 @@ int mgmtRetrieveUsers(SShowObj *pShow, char *data, int rows, SConnObj *pConn) {
       strcpy(pWrite, "super");
     } else if (pUser->writeAuth) {
       strcpy(pWrite, "write");
+    } else if (pUser->auditAuth) {
+      strcpy(pWrite, "audit");
     } else {
       strcpy(pWrite, "read");
     }

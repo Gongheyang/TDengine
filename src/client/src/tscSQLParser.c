@@ -442,6 +442,8 @@ int32_t tscToSQLCmd(SSqlObj* pSql, struct SSqlInfo* pInfo) {
             pCmd->count = 2;
           } else if (strncasecmp(pPrivilege->z, "write", 5) == 0 && pPrivilege->n == 5) {
             pCmd->count = 3;
+          } else if (strncasecmp(pPrivilege->z, "audit", 5) == 0 && pPrivilege->n == 5) {
+            pCmd->count = 4;
           } else {
             return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg5);
           }

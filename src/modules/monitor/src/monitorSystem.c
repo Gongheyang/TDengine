@@ -28,6 +28,7 @@
 
 #define SQL_LENGTH     1024
 #define LOG_LEN_STR    80
+#define LOG_RESULT_LEN 10
 #define IP_LEN_STR     15
 #define CHECK_INTERVAL 1000
 
@@ -39,6 +40,8 @@ typedef enum {
   MONITOR_CMD_CREATE_TB_DN,
   MONITOR_CMD_CREATE_TB_ACCT_ROOT,
   MONITOR_CMD_CREATE_TB_SLOWQUERY,
+  MONITOR_CMD_CREATE_DB_AUDIT,
+  MONITOR_CMD_CREATE_TB_AUDIT,
   MONITOR_CMD_MAX
 } MonitorCommand;
 
@@ -194,9 +197,18 @@ void dnodeBuildMonitorSql(char *sql, int cmd) {
              "create table if not exists %s.log(ts timestamp, level tinyint, "
              "content binary(%d), ipaddr binary(%d))",
              tsMonitorDbName, LOG_LEN_STR, IP_LEN_STR);
+  } else if (cmd == MONITOR_CMD_CREATE_DB_AUDIT) {
+    char * auditDBname = "audit";
+    snprintf(sql, SQL_LENGTH,
+             "create database if not exists %s replica 1 days 10 keep 3650 rows 1024 cache 2048",
+            auditDBname);    
+  } else if (cmd == MONITOR_CMD_CREATE_TB_AUDIT) {
+    snprintf(sql, SQL_LENGTH,
+             "create table if not exists audit.audit(ts timestamp, level tinyint, "
+             "dbuser binary(%d), result binary(%d), ipaddr binary(%d), content binary(%d))",
+             TSDB_USER_LEN, LOG_RESULT_LEN, IP_LEN_STR, LOG_LEN_STR);    
   }
 
-  sql[SQL_LENGTH] = 0;
 }
 
 void monitorInitDatabase() {

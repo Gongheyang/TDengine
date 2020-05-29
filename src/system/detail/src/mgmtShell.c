@@ -199,6 +199,26 @@ int mgmtProcessMeterMetaMsg(char *pMsg, int msgLen, SConnObj *pConn) {
     goto _exit_code;
   }
 
+  char db[TSDB_DB_NAME_LEN + 1] = {0};
+  extractDBName(pInfo->meterId, db);
+  if(strncasecmp(db,"audit",5) == 0 && pConn->pUser->auditAuth == 0 && pConn->pUser->superAuth == 0) {
+    if ((pStart = mgmtAllocMsg(pConn, size, &pMsg, &pRsp)) == NULL) {
+      taosSendSimpleRsp(pConn->thandle, TSDB_MSG_TYPE_METERINFO_RSP, TSDB_CODE_SERV_OUT_OF_MEMORY);
+	    return 0;
+    }
+    pRsp->code = TSDB_CODE_NOT_AUDIT_USER;
+    pMsg++;
+    goto _exit_code;
+  }
+  if(strncasecmp(db,"audit",5) != 0 && pConn->pUser->auditAuth != 0 && pConn->pUser->writeAuth ==0 ){
+    if ((pStart = mgmtAllocMsg(pConn, size, &pMsg, &pRsp)) == NULL) {
+      taosSendSimpleRsp(pConn->thandle, TSDB_MSG_TYPE_METERINFO_RSP, TSDB_CODE_SERV_OUT_OF_MEMORY);
+	    return 0;
+    }
+    pRsp->code = TSDB_CODE_NO_READ_ACCESS;
+    pMsg++;
+    goto _exit_code;
+  }
   pMeterObj = mgmtGetMeter(pInfo->meterId);
 
   // on demand create table from super table if meter does not exists
@@ -766,12 +786,19 @@ int mgmtProcessAlterUserMsg(char *pMsg, int msgLen, SConnObj *pConn) {
       if (pAlter->privilege == 2) {  // read
         pUser->superAuth = 0;
         pUser->writeAuth = 0;
+        pUser->auditAuth = 0;
       }
       if (pAlter->privilege == 3) {  // write
         pUser->superAuth = 0;
         pUser->writeAuth = 1;
+        pUser->auditAuth = 0;
       }
-
+      if (pAlter->privilege == 4) {  // audit
+        pUser->superAuth = 0;
+        pUser->writeAuth = 0;
+        pUser->auditAuth = 1;
+      }
+      printf("user right: s %d, w %d, a %d \r\n ",pUser->superAuth,pUser->writeAuth, pUser->auditAuth);
       code = mgmtUpdateUser(pUser);
       mLPrint("user:%s privilege is altered by %s, code:%d", pAlter->user, pConn->pUser->user, code);
     } else {
@@ -1244,11 +1271,14 @@ void mgmtEstablishConn(SConnObj *pConn) {
   if (strcmp(pConn->pUser->user, "root") == 0) {
     pConn->superAuth = 1;
     pConn->writeAuth = 1;
+    pConn->auditAuth = 1;
   } else {
     pConn->superAuth = pConn->pUser->superAuth;
     pConn->writeAuth = pConn->pUser->writeAuth;
+    pConn->auditAuth = pConn->pUser->auditAuth;
     if (pConn->superAuth) {
       pConn->writeAuth = 1;
+      pConn->auditAuth = 1;
     }
   }
 

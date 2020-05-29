@@ -174,6 +174,7 @@ typedef struct _user_obj {
   int64_t           createdTime;
   char              superAuth : 1;
   char              writeAuth : 1;
+  char              auditAuth : 1;
   char              reserved[16];
   char              updateEnd[1];
   struct _user_obj *prev, *next;
@@ -223,9 +224,10 @@ typedef struct _connObj {
   uint64_t         stime;               // login time
   char             superAuth : 1;       // super user flag
   char             writeAuth : 1;       // write flag
+  char             auditAuth : 1;
   char             killConnection : 1;  // kill the connection flag
   uint8_t          usePublicIp : 1;     // if the connection request is publicIp
-  uint8_t          reserved : 4;
+  uint8_t          reserved : 3;
   uint32_t         queryId;             // query ID to be killed
   uint32_t         streamId;            // stream ID to be killed
   uint32_t         ip;                  // shell IP

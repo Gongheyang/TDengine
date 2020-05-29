@@ -140,8 +140,9 @@ extern "C" {
 #define TSDB_CODE_QUERY_CACHE_ERASED         119
 #define TSDB_CODE_AUTH_BANNED_PERIOD         120
 #define TSDB_CODE_IP_WHITELIST_FILTERED      121
+#define TSDB_CODE_NOT_AUDIT_USER             122
 
-#define TSDB_CODE_MAX_ERROR_CODE             122
+#define TSDB_CODE_MAX_ERROR_CODE             123
 
 #ifdef __cplusplus
 }

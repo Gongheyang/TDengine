@@ -246,4 +246,5 @@ char *tsError[] = {"success",
                    "client query cache erased",     // 119
                    "too many authentication failed, try 10 minutes later",   //120                   
                    "ip not in white list , connection denied",   //121
+                   "not audit user, can not access audit database" //122
 };
