@@ -201,7 +201,7 @@ int mgmtProcessMeterMetaMsg(char *pMsg, int msgLen, SConnObj *pConn) {
 
   char db[TSDB_DB_NAME_LEN + 1] = {0};
   extractDBName(pInfo->meterId, db);
-  if(strncasecmp(db,"audit",5) == 0 && pConn->pUser->auditAuth == 0 && pConn->pUser->superAuth == 0) {
+  if(strncasecmp(db,"audit",5) == 0 && pConn->pUser->auditAuth == 0 && pConn->pUser->superAuth == 0 && strncasecmp(pConn->pUser->user,"monitor",7) != 0) {
     if ((pStart = mgmtAllocMsg(pConn, size, &pMsg, &pRsp)) == NULL) {
       taosSendSimpleRsp(pConn->thandle, TSDB_MSG_TYPE_METERINFO_RSP, TSDB_CODE_SERV_OUT_OF_MEMORY);
 	    return 0;
@@ -215,7 +215,7 @@ int mgmtProcessMeterMetaMsg(char *pMsg, int msgLen, SConnObj *pConn) {
       taosSendSimpleRsp(pConn->thandle, TSDB_MSG_TYPE_METERINFO_RSP, TSDB_CODE_SERV_OUT_OF_MEMORY);
 	    return 0;
     }
-    pRsp->code = TSDB_CODE_NO_READ_ACCESS;
+    pRsp->code = TSDB_CODE_NO_RIGHTS;
     pMsg++;
     goto _exit_code;
   }
@@ -590,6 +590,9 @@ int mgmtProcessCreateDbMsg(char *pMsg, int msgLen, SConnObj *pConn) {
     code = mgmtCreateDb(pConn->pAcct, pCreate);
     if (code == TSDB_CODE_SUCCESS) {
       mLPrint("DB:%s is created by %s", pCreate->db, pConn->pUser->user);
+      char content[1024];
+      sprintf(content, "DB:%s is created by %s", pCreate->db, pConn->pUser->user);
+      taosAuditRecord(AUDIT_INFO, pConn->pUser->user, "success", content);
     }
   }
 
@@ -620,6 +623,9 @@ int mgmtProcessAlterDbMsg(char *pMsg, int msgLen, SConnObj *pConn) {
     code = mgmtAlterDb(pConn->pAcct, pAlter);
     if (code == TSDB_CODE_SUCCESS) {
       mLPrint("DB:%s is altered by %s", pAlter->db, pConn->pUser->user);
+      char content[1024];
+      sprintf(content, "DB:%s is altered by %s", pAlter->db, pConn->pUser->user);
+      taosAuditRecord(AUDIT_INFO, pConn->pUser->user, "success", content);      
     }
   }
 
@@ -685,6 +691,9 @@ int mgmtProcessCreateUserMsg(char *pMsg, int msgLen, SConnObj *pConn) {
     code = mgmtCreateUser(pConn->pAcct, pCreate->user, pCreate->pass);
     if (code == TSDB_CODE_SUCCESS) {
       mLPrint("user:%s is created by %s", pCreate->user, pConn->pUser->user);
+      char content[1024];
+      sprintf(content, "user:%s is created by %s", pCreate->user, pConn->pUser->user);
+      taosAuditRecord(AUDIT_INFO, pConn->pUser->user, "success", content);  
     }
   } else {
     code = TSDB_CODE_NO_RIGHTS;
@@ -745,6 +754,9 @@ int mgmtProcessAlterUserMsg(char *pMsg, int msgLen, SConnObj *pConn) {
       taosEncryptPass((uint8_t*)pAlter->pass, strlen(pAlter->pass), pUser->pass);
       code = mgmtUpdateUser(pUser);
       mLPrint("user:%s password is altered by %s, code:%d", pAlter->user, pConn->pUser->user, code);
+      char content[1024];
+      sprintf(content, "user:%s password is altered by %s, code:%d", pAlter->user, pConn->pUser->user, code);
+      taosAuditRecord(AUDIT_INFO, pConn->pUser->user, "success", content);        
     } else {
       code = TSDB_CODE_NO_RIGHTS;
     }

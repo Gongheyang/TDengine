@@ -25,10 +25,15 @@ extern "C" {
 #include <string.h>
 #include "tglobalcfg.h"
 
+
 #define DEBUG_ERROR 1U
 #define DEBUG_WARN  2U
 #define DEBUG_TRACE 4U
 #define DEBUG_DUMP  8U
+
+#define AUDIT_INFO  0
+#define AUDIT_WARN  1
+#define AUDIT_ERROR 2
 
 #define DEBUG_FILE   0x80
 #define DEBUG_SCREEN 0x40
@@ -57,6 +62,8 @@ void tprintf(const char *const flags, int dflag, const char *const format, ...);
 void taosPrintLongString(const char *const flags, int dflag, const char *const format, ...);
 
 int taosOpenLogFileWithMaxLines(char *fn, int maxLines, int maxFileNum);
+
+void taosAuditRecord(int level, char * dbuser, char * result, char * content );
 
 void taosCloseLog();
 

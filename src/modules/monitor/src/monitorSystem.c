@@ -200,13 +200,12 @@ void dnodeBuildMonitorSql(char *sql, int cmd) {
   } else if (cmd == MONITOR_CMD_CREATE_DB_AUDIT) {
     char * auditDBname = "audit";
     snprintf(sql, SQL_LENGTH,
-             "create database if not exists %s replica 1 days 10 keep 3650 rows 1024 cache 2048",
-            auditDBname);    
+             "create database if not exists %s replica 1 days 10 keep 3650 rows 1024 cache 2048 ablocks 2 tblocks 32 tables 32 precision 'us'", auditDBname);    
   } else if (cmd == MONITOR_CMD_CREATE_TB_AUDIT) {
     snprintf(sql, SQL_LENGTH,
              "create table if not exists audit.audit(ts timestamp, level tinyint, "
-             "dbuser binary(%d), result binary(%d), ipaddr binary(%d), content binary(%d))",
-             TSDB_USER_LEN, LOG_RESULT_LEN, IP_LEN_STR, LOG_LEN_STR);    
+             "dbuser binary(%d), result binary(%d), content binary(%d))",
+             TSDB_USER_LEN, LOG_RESULT_LEN, LOG_LEN_STR);    
   }
 
 }
@@ -293,6 +292,16 @@ void dnodeMontiorInsertLogCallback(void *param, TAOS_RES *result, int code) {
     monitorError("monitor:%p, save log failed, affect rows:%d", monitor->conn, code);
   } else {
     monitorTrace("monitor:%p, save log info success, code:%d", monitor->conn, code);
+  }
+}
+
+void dnodeMontiorInsertAuditCallback(void *param, TAOS_RES *result, int code) {
+  if (code < 0) {
+    monitorError("monitor:%p, save audit failed, code:%d", monitor->conn, code);
+  } else if (code == 0) {
+    monitorError("monitor:%p, save audit failed, affect rows:%d", monitor->conn, code);
+  } else {
+    monitorTrace("monitor:%p, save audit info success, code:%d", monitor->conn, code);
   }
 }
 
@@ -454,4 +463,13 @@ void monitorSaveLog(int level, const char *const format, ...) {
 void monitorExecuteSQL(char *sql) {
   monitorTrace("monitor:%p, execute sql: %s", monitor->conn, sql);
   taos_query_a(monitor->conn, sql, NULL, NULL);
+}
+
+void taosAuditRecord(int level, char * dbuser, char * result, char * content ){
+  char sqlcmd[1024] = {0};
+  int64_t ts = taosGetTimestampUs();
+
+  int pos = snprintf(sqlcmd, SQL_LENGTH, "insert into audit.audit values(%" PRId64, ts);
+  pos += snprintf(sqlcmd + pos, SQL_LENGTH - pos, ", %d, \'%s\' , \'%s\', \'%s\')", level, dbuser, result, content);
+  taos_query_a(monitor->conn, sqlcmd, dnodeMontiorInsertAuditCallback, "audit");  
 }
