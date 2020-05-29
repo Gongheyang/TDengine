@@ -797,8 +797,7 @@ int mgmtProcessAlterUserMsg(char *pMsg, int msgLen, SConnObj *pConn) {
         pUser->superAuth = 0;
         pUser->writeAuth = 0;
         pUser->auditAuth = 1;
-      }
-      printf("user right: s %d, w %d, a %d \r\n ",pUser->superAuth,pUser->writeAuth, pUser->auditAuth);
+      }      
       code = mgmtUpdateUser(pUser);
       mLPrint("user:%s privilege is altered by %s, code:%d", pAlter->user, pConn->pUser->user, code);
     } else {
