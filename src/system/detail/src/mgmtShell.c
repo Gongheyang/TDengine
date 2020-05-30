@@ -590,9 +590,9 @@ int mgmtProcessCreateDbMsg(char *pMsg, int msgLen, SConnObj *pConn) {
     code = mgmtCreateDb(pConn->pAcct, pCreate);
     if (code == TSDB_CODE_SUCCESS) {
       mLPrint("DB:%s is created by %s", pCreate->db, pConn->pUser->user);
-      char content[1024];
-      sprintf(content, "DB:%s is created by %s", pCreate->db, pConn->pUser->user);
-      taosAuditRecord(AUDIT_INFO, pConn->pUser->user, "success", content);
+      char content[LOG_LEN_STR ] = {0};
+      snprintf(content, LOG_LEN_STR, "DB:%s is created by %s", pCreate->db, pConn->pUser->user);
+      aLPrint(AUDIT_INFO, pConn->pUser->user, "success", content);
     }
   }
 
@@ -623,9 +623,9 @@ int mgmtProcessAlterDbMsg(char *pMsg, int msgLen, SConnObj *pConn) {
     code = mgmtAlterDb(pConn->pAcct, pAlter);
     if (code == TSDB_CODE_SUCCESS) {
       mLPrint("DB:%s is altered by %s", pAlter->db, pConn->pUser->user);
-      char content[1024];
-      sprintf(content, "DB:%s is altered by %s", pAlter->db, pConn->pUser->user);
-      taosAuditRecord(AUDIT_INFO, pConn->pUser->user, "success", content);      
+      char content[LOG_LEN_STR] = {0};
+      snprintf(content, LOG_LEN_STR, "DB:%s is altered by %s", pAlter->db, pConn->pUser->user);
+      aLPrint(AUDIT_INFO, pConn->pUser->user, "success", content);      
     }
   }
 
@@ -691,9 +691,9 @@ int mgmtProcessCreateUserMsg(char *pMsg, int msgLen, SConnObj *pConn) {
     code = mgmtCreateUser(pConn->pAcct, pCreate->user, pCreate->pass);
     if (code == TSDB_CODE_SUCCESS) {
       mLPrint("user:%s is created by %s", pCreate->user, pConn->pUser->user);
-      char content[1024];
-      sprintf(content, "user:%s is created by %s", pCreate->user, pConn->pUser->user);
-      taosAuditRecord(AUDIT_INFO, pConn->pUser->user, "success", content);  
+      char content[LOG_LEN_STR] = {0};
+      snprintf(content, LOG_LEN_STR, "user:%s is created by %s", pCreate->user, pConn->pUser->user);
+      aLPrint(AUDIT_INFO, pConn->pUser->user, "success", content);  
     }
   } else {
     code = TSDB_CODE_NO_RIGHTS;
@@ -754,9 +754,9 @@ int mgmtProcessAlterUserMsg(char *pMsg, int msgLen, SConnObj *pConn) {
       taosEncryptPass((uint8_t*)pAlter->pass, strlen(pAlter->pass), pUser->pass);
       code = mgmtUpdateUser(pUser);
       mLPrint("user:%s password is altered by %s, code:%d", pAlter->user, pConn->pUser->user, code);
-      char content[1024];
-      sprintf(content, "user:%s password is altered by %s, code:%d", pAlter->user, pConn->pUser->user, code);
-      taosAuditRecord(AUDIT_INFO, pConn->pUser->user, "success", content);        
+      char content[LOG_LEN_STR] = {0};
+      snprintf(content, LOG_LEN_STR, "user:%s password is altered by %s, code:%d", pAlter->user, pConn->pUser->user, code);
+      aLPrint(AUDIT_INFO, pConn->pUser->user, "success", content);        
     } else {
       code = TSDB_CODE_NO_RIGHTS;
     }
@@ -812,6 +812,9 @@ int mgmtProcessAlterUserMsg(char *pMsg, int msgLen, SConnObj *pConn) {
       }      
       code = mgmtUpdateUser(pUser);
       mLPrint("user:%s privilege is altered by %s, code:%d", pAlter->user, pConn->pUser->user, code);
+      char content[LOG_LEN_STR] = {0};
+      snprintf(content, LOG_LEN_STR, "user:%s privilege is altered by %s, new privilege %d, code:%d", pAlter->user, pConn->pUser->user, pAlter->privilege, code);
+      aLPrint(AUDIT_INFO, pConn->pUser->user, "success", content);   
     } else {
       code = TSDB_CODE_NO_RIGHTS;
     }
@@ -875,6 +878,9 @@ int mgmtProcessDropUserMsg(char *pMsg, int msgLen, SConnObj *pConn) {
     code = mgmtDropUser(pConn->pAcct, pDrop->user);
     if (code == 0) {
       mLPrint("user:%s is dropped by %s", pDrop->user, pConn->pUser->user);
+      char content[LOG_LEN_STR] ={0};
+      snprintf(content, LOG_LEN_STR, "user:%s is dropped by %s", pDrop->user, pConn->pUser->user);
+      aLPrint(AUDIT_INFO, pConn->pUser->user, "success", content); 
     }
   } else {
     code = TSDB_CODE_NO_RIGHTS;
@@ -898,6 +904,9 @@ int mgmtProcessDropDbMsg(char *pMsg, int msgLen, SConnObj *pConn) {
     code = mgmtDropDbByName(pConn->pAcct, pDrop->db, pDrop->ignoreNotExists);
     if (code == 0) {
       mLPrint("DB:%s is dropped by %s", pDrop->db, pConn->pUser->user);
+      char content[LOG_LEN_STR] ={0};
+      snprintf(content, LOG_LEN_STR, "DB:%s is dropped by %s", pDrop->db, pConn->pUser->user);
+      aLPrint(AUDIT_INFO, pConn->pUser->user, "success", content); 
     }
   }
   taosSendSimpleRsp(pConn->thandle, TSDB_MSG_TYPE_DROP_DB_RSP, code);
@@ -1149,6 +1158,9 @@ int mgmtProcessDropTableMsg(char *pMsg, int msgLen, SConnObj *pConn) {
     if (code == 0) {
       mTrace("meter:%s is dropped by user:%s", pDrop->meterId, pConn->pUser->user);
       // mLPrint("meter:%s is dropped by user:%s", pDrop->meterId, pConn->pUser->user);
+      char content[LOG_LEN_STR] = {0};
+      snprintf(content, LOG_LEN_STR, "meter:%s is dropped by user:%s", pDrop->meterId, pConn->pUser->user);
+      aLPrint(AUDIT_INFO, pConn->pUser->user, "success", content); 
     }
 
     taosSendSimpleRsp(pConn->thandle, TSDB_MSG_TYPE_DROP_TABLE_RSP, code);
@@ -1186,6 +1198,9 @@ int mgmtProcessAlterTableMsg(char *pMsg, int msgLen, SConnObj *pConn) {
         code = mgmtAlterMeter(pDb, pAlter);
         if (code == 0) {
           mLPrint("meter:%s is altered by %s", pAlter->meterId, pConn->pUser->user);
+          char content[LOG_LEN_STR] = {0};
+          snprintf(content, LOG_LEN_STR, "meter:%s is altered by %s", pAlter->meterId, pConn->pUser->user);
+          aLPrint(AUDIT_INFO, pConn->pUser->user, "success", content);           
         }
       } else {
         code = TSDB_CODE_DB_NOT_SELECTED;
@@ -1436,6 +1451,9 @@ _rsp:
   char ipstr[24];
   tinet_ntoa(ipstr, pConn->ip);
   mLPrint("user:%s login from %s, code:%d", pConn->user, ipstr, code);
+  char content[LOG_LEN_STR] = {0};
+  snprintf(content, LOG_LEN_STR, "user:%s login from %s, code:%d", pConn->user, ipstr, code);
+  aLPrint(AUDIT_INFO,  pConn->user, "success", content);       
 
   return code;
 }

@@ -36,6 +36,7 @@ void signal_handler(int signum, siginfo_t *sigInfo, void *context) {
   syslog(LOG_INFO, "Shutting down "DB_FULL_NAME" service...");
   // clean the system.
   dPrint("shut down signal is %d, sender PID:%d", signum, sigInfo->si_pid);
+  aLPrint(AUDIT_INFO,"system","success","database stopped!");
   dnodeCleanUpSystem();
   // close the syslog
   syslog(LOG_INFO, "Shut down "DB_FULL_NAME" service successfully");

@@ -30,6 +30,7 @@ extern "C" {
 #define DEBUG_WARN  2U
 #define DEBUG_TRACE 4U
 #define DEBUG_DUMP  8U
+#define LOG_LEN_STR  100
 
 #define AUDIT_INFO  0
 #define AUDIT_WARN  1
@@ -39,6 +40,8 @@ extern "C" {
 #define DEBUG_SCREEN 0x40
 
 extern void (*taosLogFp)(int level, const char *const format, ...);
+
+extern void (*taosAuditFp)(int level, char * dbuser, char * result, char * content );
 
 extern void (*taosLogSqlFp)(char *sql);
 
@@ -63,8 +66,6 @@ void taosPrintLongString(const char *const flags, int dflag, const char *const f
 
 int taosOpenLogFileWithMaxLines(char *fn, int maxLines, int maxFileNum);
 
-void taosAuditRecord(int level, char * dbuser, char * result, char * content );
-
 void taosCloseLog();
 
 void taosResetLogFile();
@@ -81,6 +82,12 @@ void taosResetLogFile();
   if (taosLogFp) {                \
     (*taosLogFp)(0, __VA_ARGS__); \
   }
+
+#define taosAuditPrint(...)         \
+  if (taosAuditFp) {                \
+    (*taosAuditFp)(__VA_ARGS__); \
+  }
+
 
 // utility log function
 #define pError(...)                          \
@@ -203,6 +210,7 @@ extern uint32_t cdebugFlag;
 #define mLError(...) taosLogError(__VA_ARGS__) mError(__VA_ARGS__)
 #define mLWarn(...) taosLogWarn(__VA_ARGS__) mWarn(__VA_ARGS__)
 #define mLPrint(...) taosLogPrint(__VA_ARGS__) mPrint(__VA_ARGS__)
+#define aLPrint(...) taosAuditPrint(__VA_ARGS__)
 
 #ifdef __cplusplus
 }

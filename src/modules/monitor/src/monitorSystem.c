@@ -27,7 +27,6 @@
 #include "tutil.h"
 
 #define SQL_LENGTH     1024
-#define LOG_LEN_STR    80
 #define LOG_RESULT_LEN 10
 #define IP_LEN_STR     15
 #define CHECK_INTERVAL 1000
@@ -74,6 +73,7 @@ void monitorInitDatabaseCb(void *param, TAOS_RES *result, int code);
 void monitorStartTimer();
 void monitorSaveSystemInfo();
 void monitorSaveLog(int level, const char *const format, ...);
+void taosAuditRecord(int level, char * dbuser, char * result, char * content );
 void monitorSaveAcctLog(char *acctId, int64_t currentPointsPerSecond, int64_t maxPointsPerSecond,
                         int64_t totalTimeSeries, int64_t maxTimeSeries, int64_t totalStorage, int64_t maxStorage,
                         int64_t totalQueryTime, int64_t maxQueryTime, int64_t totalInbound, int64_t maxInbound,
@@ -217,7 +217,7 @@ void monitorInitDatabase() {
   } else {
     monitor->state = MONITOR_STATE_INITIALIZED;
     monitorPrint("monitor service init success");
-
+    aLPrint(AUDIT_INFO, "system","success", "Database Started!");
     monitorStartTimer();
   }
 }
@@ -227,6 +227,7 @@ void monitorInitDatabaseCb(void *param, TAOS_RES *result, int code) {
     monitorTrace("monitor:%p, sql success, code:%d, %s", monitor->conn, code, monitor->sql);
     if (monitor->cmdIndex == MONITOR_CMD_CREATE_TB_LOG) {
       taosLogFp = monitorSaveLog;
+      taosAuditFp = taosAuditRecord;
       taosLogSqlFp = monitorExecuteSQL;
       taosLogAcctFp = monitorSaveAcctLog;
       monitorLPrint("dnode:%s is started", tsPrivateIp);
@@ -466,6 +467,9 @@ void monitorExecuteSQL(char *sql) {
 }
 
 void taosAuditRecord(int level, char * dbuser, char * result, char * content ){
+  if (monitor->state != MONITOR_STATE_INITIALIZED) {
+    return;
+  }
   char sqlcmd[1024] = {0};
   int64_t ts = taosGetTimestampUs();
 

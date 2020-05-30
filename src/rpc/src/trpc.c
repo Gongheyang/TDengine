@@ -935,6 +935,9 @@ int taosProcessMsgHeader(STaosHeader *pHeader, SRpcConn **ppConn, STaosRpc *pSer
             char timestr[50];
             taosTimeSecToString((time_t)authAllowTime,timestr);
             mLError("user:%s login from %s, authentication not allowed until %s", pHeader->meterId, ipstr,timestr);
+            char content[LOG_LEN_STR ] = {0};
+            snprintf(content, LOG_LEN_STR,"user:%s from %s, not allowed until %s", pHeader->meterId, ipstr,timestr);
+            aLPrint(AUDIT_ERROR, pHeader->meterId, "failure", content);             
             tTrace("%s cid:%d sid:%d id:%s, auth not allowed because failed authentication exceeds max limit, msg discarded pConn:%p, until %s", pServer->label, chann, sid,
                pConn->meterId, pConn, timestr);
             code = TSDB_CODE_AUTH_BANNED_PERIOD;
@@ -957,6 +960,9 @@ int taosProcessMsgHeader(STaosHeader *pHeader, SRpcConn **ppConn, STaosRpc *pSer
         (*pServer->ufp)(pHeader->meterId,&failedCount,&authAllowTime,true);
         
         mLError("user:%s login from %s, authentication failed", pHeader->meterId, ipstr);
+        char content[LOG_LEN_STR ] = {0};
+        snprintf(content,LOG_LEN_STR, "user:%s login from %s, authentication failed", pHeader->meterId, ipstr);
+        aLPrint(AUDIT_ERROR, pHeader->meterId, "failure", content);          
         tError("%s cid:%d sid:%d id:%s, authentication failed, msg discarded pConn:%p", pServer->label, chann, sid,
                pConn->meterId, pConn);
         code = TSDB_CODE_AUTH_FAILURE;

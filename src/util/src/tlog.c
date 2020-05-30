@@ -56,6 +56,7 @@ static int       taosLogFlag = 0;
 static int             openInProgress = 0;
 static pthread_mutex_t logMutex;
 void (*taosLogFp)(int level, const char *const format, ...) = NULL;
+void (*taosAuditFp)(int level, char * dbuser, char * result, char * content ) = NULL;
 void (*taosLogSqlFp)(char *sql) = NULL;
 void (*taosLogAcctFp)(char *acctId, int64_t currentPointsPerSecond, int64_t maxPointsPerSecond, int64_t totalTimeSeries,
                       int64_t maxTimeSeries, int64_t totalStorage, int64_t maxStorage, int64_t totalQueryTime,
