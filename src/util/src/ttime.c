@@ -167,7 +167,7 @@ int32_t taosTimeSecToString(time_t ts,char* outstr) {
   t = localtime(&ts);
   if (NULL == t) return 1;
 
-  sprintf(outstr,"%4d-%02d-%02d %02d:%02d:%02d\n", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
+  sprintf(outstr,"%4d-%02d-%02d %02d:%02d:%02d", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
   return 0;
 
 }
