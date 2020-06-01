@@ -391,6 +391,7 @@ typedef struct {
   char version[TSDB_VERSION_LEN];
   char writeAuth;
   char superAuth;
+  char auditAuth;
 } SConnectRsp;
 
 typedef struct {

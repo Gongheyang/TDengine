@@ -3353,6 +3353,7 @@ int tscProcessConnectRsp(SSqlObj *pSql) {
   strcpy(pObj->sversion, pConnect->version);
   pObj->writeAuth = pConnect->writeAuth;
   pObj->superAuth = pConnect->superAuth;
+  pObj->auditAuth = pConnect->auditAuth;
   taosTmrReset(tscProcessActivityTimer, tsShellActivityTimer * 500, pObj, tscTmr, &pObj->pTimer);
 
   return 0;
@@ -3575,6 +3576,15 @@ static int32_t doGetMeterMetaFromServer(SSqlObj *pSql, SMeterMetaInfo *pMeterMet
 
 int tscGetMeterMeta(SSqlObj *pSql, SMeterMetaInfo *pMeterMetaInfo) {
   assert(strlen(pMeterMetaInfo->name) != 0);
+
+  char db[TSDB_DB_NAME_LEN + 1] = {0};
+  extractDBName(pMeterMetaInfo->name, db);
+  if(strncasecmp(db,"audit",5) == 0 && pSql->pTscObj->auditAuth == 0  && strncasecmp(pSql->pTscObj->user,"monitor",7) != 0) {
+    return TSDB_CODE_NOT_AUDIT_USER;
+  }
+  if(strncasecmp(db,"audit",5) != 0 && pSql->pTscObj->auditAuth != 0 && pSql->pTscObj->writeAuth == 0 ){
+    return TSDB_CODE_NO_RIGHTS;
+  }
 
   // If this SMeterMetaInfo owns a metermeta, release it first
   if (pMeterMetaInfo->pMeterMeta != NULL) {

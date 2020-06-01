@@ -307,6 +307,7 @@ typedef struct _tsc_obj {
   char             sversion[TSDB_VERSION_LEN];
   char             writeAuth : 1;
   char             superAuth : 1;
+  char             auditAuth : 1;
   struct _sql_obj *pSql;
   struct _sql_obj *pHb;
   struct _sql_obj *sqlList;

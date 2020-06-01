@@ -1416,6 +1416,7 @@ _rsp:
     strcpy(pConnectRsp->version, version);
     pConnectRsp->writeAuth = pConn->writeAuth;
     pConnectRsp->superAuth = pConn->superAuth;
+    pConnectRsp->auditAuth = pConn->auditAuth;  
     pMsg += sizeof(SConnectRsp);
 
     int size;
@@ -1441,6 +1442,7 @@ _rsp:
   } else {
     pConnectRsp->writeAuth = 0;
     pConnectRsp->superAuth = 0;
+    pConnectRsp->auditAuth = 0;
     pConn->pAcct = NULL;
     pConn->pUser = NULL;
   }
