@@ -216,9 +216,6 @@ void monitorInitDatabase() {
     taos_query_a(monitor->conn, monitor->sql, monitorInitDatabaseCb, NULL);
   } else {
     monitor->state = MONITOR_STATE_INITIALIZED;
-    monitorPrint("monitor service init success");
-    aLPrint(AUDIT_INFO, "system","success", "Database Started!");
-    monitorStartTimer();
   }
 }
 
@@ -239,6 +236,22 @@ void monitorInitDatabaseCb(void *param, TAOS_RES *result, int code) {
     monitor->state = MONITOR_STATE_UN_INIT;
     monitorStartSystemRetry();
   }
+      
+
+    aLPrint(AUDIT_INFO, "system","success", "Database Started!");
+    char content[80] = {0};
+    sprintf(content, " Set the max auth retry: %d ", tsMaxAuthRetry);
+    aLPrint(AUDIT_INFO, "system", "success", content);
+
+    if (tsEnableMonitorModule == 1) {
+      sprintf(content, " audit is on ");
+    } else {
+      sprintf(content, " audit is off ");
+    }
+    aLPrint(AUDIT_INFO, "system", "success", content);
+
+    monitorStartTimer();
+    aLPrint(AUDIT_INFO, "system","success", "Database Started!");
 }
 
 void monitorStopSystem() {
@@ -445,6 +458,7 @@ void monitorSaveLog(int level, const char *const format, ...) {
   if (monitor->state != MONITOR_STATE_INITIALIZED) {
     return;
   }
+
 
   int len = snprintf(sql, (size_t)max_length, "import into %s.log values(%" PRId64 ", %d,'", tsMonitorDbName,
                      taosGetTimestampUs(), level);
