@@ -28,7 +28,7 @@ static int     tsdbRestoreTable(void *pHandle, void *cont, int contLen);
 static void    tsdbOrgMeta(void *pHandle);
 static char *  getTagIndexKey(const void *pData);
 static STable *tsdbNewTable();
-static STable *tsdbCreateTableFromCfg(STableCfg *pCfg, bool isSuper);
+static STable *tsdbCreateTableFromCfg(STableCfg *pCfg, bool isSuper, STsdbRepo *pRepo);
 static void    tsdbFreeTable(STable *pTable);
 static int     tsdbAddTableToMeta(STsdbRepo *pRepo, STable *pTable, bool addIdx, bool lock);
 static void    tsdbRemoveTableFromMeta(STsdbRepo *pRepo, STable *pTable, bool rmFromIdx, bool lock);
@@ -93,7 +93,7 @@ int tsdbCreateTable(TSDB_REPO_T *repo, STableCfg *pCfg) {
     super = tsdbGetTableByUid(pMeta, pCfg->superUid);
     if (super == NULL) {  // super table not exists, try to create it
       newSuper = 1;
-      super = tsdbCreateTableFromCfg(pCfg, true);
+      super = tsdbCreateTableFromCfg(pCfg, true, pRepo);
       if (super == NULL) goto _err;
     } else {
       if (TABLE_TYPE(super) != TSDB_SUPER_TABLE || TABLE_UID(super) != pCfg->superUid) {
@@ -103,7 +103,7 @@ int tsdbCreateTable(TSDB_REPO_T *repo, STableCfg *pCfg) {
     }
   }
 
-  table = tsdbCreateTableFromCfg(pCfg, false);
+  table = tsdbCreateTableFromCfg(pCfg, false, pRepo);
   if (table == NULL) goto _err;
 
   // Register to meta
@@ -667,7 +667,7 @@ static STable *tsdbNewTable() {
   return pTable;
 }
 
-static STable *tsdbCreateTableFromCfg(STableCfg *pCfg, bool isSuper) {
+static STable *tsdbCreateTableFromCfg(STableCfg *pCfg, bool isSuper, STsdbRepo *pRepo) {
   STable *pTable = NULL;
   size_t  tsize = 0;
 
@@ -745,8 +745,8 @@ static STable *tsdbCreateTableFromCfg(STableCfg *pCfg, bool isSuper) {
 
   T_REF_INC(pTable);
 
-  tsdbTrace("table %s tid %d uid %" PRIu64 " is created", TABLE_CHAR_NAME(pTable), TABLE_TID(pTable),
-            TABLE_UID(pTable));
+  tsdbTrace("vgId:%d table %s tid %d uid %" PRIu64 " is created", REPO_ID(pRepo), TABLE_CHAR_NAME(pTable),
+            TABLE_TID(pTable), TABLE_UID(pTable));
 
   return pTable;
 
