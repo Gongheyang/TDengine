@@ -69,22 +69,3 @@ int tsdbGetNextSeqNum(int currentNum) {
     return 0;
   }
 }
-
-// ========================= TEST ========================= 
-#include <stdio.h>
-#include <libgen.h>
-
-int main(int argc, char const *argv[])
-{
-  char *fname = "/root/vnode0/data/v0f1897.head-1";
-  char *bname = basename(fname);
-  int vid = 0;
-  int fid = 0;
-  int seq = 0;
-
-  sscanf(bname, "v%df%d", &vid, &fid);
-  sscanf(bname, "*%d", NULL, &seq);
-
-  printf("vid:%d fid:%d seq:%d", vid, fid, seq);
-  return 0;
-}
