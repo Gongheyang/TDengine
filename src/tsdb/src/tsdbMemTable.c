@@ -464,18 +464,20 @@ static void tsdbFreeTableData(STableData *pTableData) {
 static char *tsdbGetTsTupleKey(const void *data) { return dataRowTuple(*(SDataRow *)data); }
 
 static void *tsdbCommitData(void *arg) {
-  STsdbRepo *  pRepo = (STsdbRepo *)arg;
-  SMemTable *  pMem = pRepo->imem;
-  STsdbCfg *   pCfg = &pRepo->config;
-  SDataCols *  pDataCols = NULL;
-  STsdbMeta *  pMeta = pRepo->tsdbMeta;
-  SCommitIter *iters = NULL;
-  SRWHelper    whelper = {0};
-  ASSERT(pRepo->commit == 1);
-  ASSERT(pMem != NULL);
+  STsdbRepo *    pRepo = (STsdbRepo *)arg;
+  SMemTable *    pMem = pRepo->imem;
+  STsdbCfg *     pCfg = &pRepo->config;
+  STsdbMeta *    pMeta = pRepo->tsdbMeta;
+  SCommitHandle  commitHandle = {0};
+  SCommitHandle *pCommitH = &commitHandle;
+
+  ASSERT(pRepo->commit == 1 && pMem != NULL);
 
   tsdbInfo("vgId:%d start to commit! keyFirst %" PRId64 " keyLast %" PRId64 " numOfRows %" PRId64, REPO_ID(pRepo),
             pMem->keyFirst, pMem->keyLast, pMem->numOfRows);
+
+  pCommitH->pRepo = pRepo;
+  if (tsdbInitManifestHandle(pRepo, &(pCommitH->manifest)) < 0) goto _exit;
 
   // Create the iterator to read from cache
   if (pMem->numOfRows > 0) {
@@ -485,7 +487,7 @@ static void *tsdbCommitData(void *arg) {
       goto _exit;
     }
 
-    if (tsdbInitWriteHelper(&whelper, pRepo) < 0) {
+    if (tsdbInitWriteHelper(&(pCommitH->whelper), pRepo) < 0) {
       tsdbError("vgId:%d failed to init write helper since %s", REPO_ID(pRepo), tstrerror(terrno));
       goto _exit;
     }
@@ -502,7 +504,7 @@ static void *tsdbCommitData(void *arg) {
 
     // Loop to commit to each file
     for (int fid = sfid; fid <= efid; fid++) {
-      if (tsdbCommitToFile(pRepo, fid, iters, &whelper, pDataCols) < 0) {
+      if (tsdbCommitToFile(pRepo, fid, iters, &(pCommitH->whelper), pDataCols) < 0) {
         tsdbError("vgId:%d failed to commit to file %d since %s", REPO_ID(pRepo), fid, tstrerror(terrno));
         goto _exit;
       }
@@ -517,23 +519,34 @@ static void *tsdbCommitData(void *arg) {
 
   tsdbFitRetention(pRepo);
 
+  if (tsdbAppendManifestEnd(&pCommitH->manifest, pCommitH->pRepo) < 0) {
+    // TODO
+  }
+
+  tsdbApplyManifestAction(&pCommitH->manifest);
+
 _exit:
   tdFreeDataCols(pDataCols);
   tsdbDestroyCommitIters(iters, pMem->maxTables);
-  tsdbDestroyHelper(&whelper);
+  tsdbCloseManifestHandle(&(pCommitH->manifest));
+  tsdbDestroyHelper(&(pCommitH->whelper));
   tsdbEndCommit(pRepo);
   tsdbInfo("vgId:%d commit over", pRepo->config.tsdbId);
 
   return NULL;
 }
 
-static int tsdbCommitMeta(STsdbRepo *pRepo) {
+static int tsdbCommitMeta(STsdbRepo *pRepo, SManifestHandle *pManifest) {
   SMemTable *pMem = pRepo->imem;
   STsdbMeta *pMeta = pRepo->tsdbMeta;
   SActObj *  pAct = NULL;
   SActCont * pCont = NULL;
 
   if (listNEles(pMem->actList) > 0) {
+    pManifest->contSize = tdEncodeCommitAction(pMeta->pStore, &(pManifest->pBuffer));
+
+    if (tsdbAppendManifestRecord(pManifest, pRepo, TSDB_MANIFEST_META_RECORD) < 0) goto _err;
+
     if (tdKVStoreStartCommit(pMeta->pStore) < 0) {
       tsdbError("vgId:%d failed to commit data while start commit meta since %s", REPO_ID(pRepo), tstrerror(terrno));
       goto _err;

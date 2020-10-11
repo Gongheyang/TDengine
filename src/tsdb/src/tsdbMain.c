@@ -23,9 +23,6 @@
 #include "tsdb.h"
 #include "tulog.h"
 
-#define TSDB_CFG_FILE_NAME "config"
-#define TSDB_DATA_DIR_NAME "data"
-#define TSDB_META_FILE_NAME "meta"
 #define TSDB_META_FILE_INDEX 10000000
 #define IS_VALID_PRECISION(precision) \
   (((precision) >= TSDB_TIME_PRECISION_MILLI) && ((precision) <= TSDB_TIME_PRECISION_NANO))
@@ -49,7 +46,6 @@ static int32_t     tsdbSetRepoEnv(char *rootDir, STsdbCfg *pCfg);
 static int32_t     tsdbUnsetRepoEnv(char *rootDir);
 static int32_t     tsdbSaveConfig(char *rootDir, STsdbCfg *pCfg);
 static int         tsdbLoadConfig(char *rootDir, STsdbCfg *pCfg);
-static char *      tsdbGetCfgFname(char *rootDir);
 static STsdbRepo * tsdbNewRepo(char *rootDir, STsdbAppH *pAppH, STsdbCfg *pCfg);
 static void        tsdbFreeRepo(STsdbRepo *pRepo);
 static int         tsdbInitSubmitMsgIter(SSubmitMsg *pMsg, SSubmitMsgIter *pIter);
@@ -233,7 +229,7 @@ uint32_t tsdbGetFileInfo(TSDB_REPO_T *repo, char *name, uint32_t *index, uint32_
 
     if (pFileH->nFGroups == 0 || fid > pFileH->pFGroup[pFileH->nFGroups - 1].fileId) {
       if (*index <= TSDB_META_FILE_INDEX && TSDB_META_FILE_INDEX <= eindex) {
-        fname = tsdbGetMetaFileName(pRepo->rootDir);
+        tsdbGetFileName(pRepo->rootDir, TSDB_FILE_TYPE_META, 0, 0, 0, &fname);
         *index = TSDB_META_FILE_INDEX;
         magic = TSDB_META_FILE_MAGIC(pRepo->tsdbMeta);
       } else {
@@ -345,22 +341,6 @@ int tsdbGetState(TSDB_REPO_T *repo) {
 }
 
 // ----------------- INTERNAL FUNCTIONS -----------------
-char *tsdbGetMetaFileName(char *rootDir) {
-  int   tlen = (int)(strlen(rootDir) + strlen(TSDB_META_FILE_NAME) + 2);
-  char *fname = calloc(1, tlen);
-  if (fname == NULL) {
-    terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
-    return NULL;
-  }
-
-  snprintf(fname, tlen, "%s/%s", rootDir, TSDB_META_FILE_NAME);
-  return fname;
-}
-
-void tsdbGetDataFileName(char *rootDir, int vid, int fid, int type, char *fname) {
-  snprintf(fname, TSDB_FILENAME_LEN, "%s/%s/v%df%d%s", rootDir, TSDB_DATA_DIR_NAME, vid, fid, tsdbFileSuffix[type]);
-}
-
 int tsdbLockRepo(STsdbRepo *pRepo) {
   int code = pthread_mutex_lock(&pRepo->mutex);
   if (code != 0) {
@@ -557,15 +537,11 @@ static int32_t tsdbUnsetRepoEnv(char *rootDir) {
 
 static int32_t tsdbSaveConfig(char *rootDir, STsdbCfg *pCfg) {
   int   fd = -1;
-  char *fname = NULL;
+  char  fname[TSDB_FILENAME_LEN] = "\0";
   char  buf[TSDB_FILE_HEAD_SIZE] = "\0";
   char *pBuf = buf;
 
-  fname = tsdbGetCfgFname(rootDir);
-  if (fname == NULL) {
-    tsdbError("vgId:%d failed to save configuration since %s", pCfg->tsdbId, tstrerror(terrno));
-    goto _err;
-  }
+  tsdbGetFileName(rootDir, TSDB_FILE_TYPE_CFG, 0, 0, 0, &fname);
 
   fd = open(fname, O_WRONLY | O_CREAT, 0755);
   if (fd < 0) {
@@ -592,26 +568,20 @@ static int32_t tsdbSaveConfig(char *rootDir, STsdbCfg *pCfg) {
     goto _err;
   }
 
-  free(fname);
   close(fd);
   return 0;
 
 _err:
-  taosTFree(fname);
   if (fd >= 0) close(fd);
   return -1;
 }
 
 static int tsdbLoadConfig(char *rootDir, STsdbCfg *pCfg) {
-  char *fname = NULL;
-  int   fd = -1;
-  char  buf[TSDB_FILE_HEAD_SIZE] = "\0";
+  char fname[TSDB_FILENAME_LEN] = "\0";
+  int  fd = -1;
+  char buf[TSDB_FILE_HEAD_SIZE] = "\0";
 
-  fname = tsdbGetCfgFname(rootDir);
-  if (fname == NULL) {
-    terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
-    goto _err;
-  }
+  tsdbGetFileName(rootDir, TSDB_FILE_TYPE_CFG, 0, 0, 0, &fname);
 
   fd = open(fname, O_RDONLY);
   if (fd < 0) {
@@ -634,27 +604,12 @@ static int tsdbLoadConfig(char *rootDir, STsdbCfg *pCfg) {
 
   tsdbDecodeCfg(buf, pCfg);
 
-  taosTFree(fname);
   close(fd);
-
   return 0;
 
 _err:
-  taosTFree(fname);
   if (fd >= 0) close(fd);
   return -1;
-}
-
-static char *tsdbGetCfgFname(char *rootDir) {
-  int   tlen = (int)(strlen(rootDir) + strlen(TSDB_CFG_FILE_NAME) + 2);
-  char *fname = calloc(1, tlen);
-  if (fname == NULL) {
-    terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
-    return NULL;
-  }
-
-  snprintf(fname, tlen, "%s/%s", rootDir, TSDB_CFG_FILE_NAME);
-  return fname;
 }
 
 static STsdbRepo *tsdbNewRepo(char *rootDir, STsdbAppH *pAppH, STsdbCfg *pCfg) {

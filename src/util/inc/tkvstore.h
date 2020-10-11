@@ -37,8 +37,6 @@ typedef struct {
 typedef struct {
   char *     fname;
   int        fd;
-  char *     fsnap;
-  int        sfd;
   char *     fnew;
   int        nfd;
   SHashObj * map;
@@ -46,6 +44,7 @@ typedef struct {
   afterFunc  aFunc;
   void *     appH;
   SStoreInfo info;
+  SStoreInfo ninfo;
 } SKVStore;
 
 #define KVSTORE_MAGIC(s) (s)->info.magic
@@ -57,8 +56,10 @@ void      tdCloseKVStore(SKVStore *pStore);
 int       tdKVStoreStartCommit(SKVStore *pStore);
 int       tdUpdateKVStoreRecord(SKVStore *pStore, uint64_t uid, void *cont, int contLen);
 int       tdDropKVStoreRecord(SKVStore *pStore, uint64_t uid);
-int       tdKVStoreEndCommit(SKVStore *pStore);
+int       tdKVStoreEndCommit(SKVStore *pStore, bool hasError);
 void      tsdbGetStoreInfo(char *fname, uint32_t *magic, int64_t *size);
+int       tdEncodeStoreInfo(void **buf, SStoreInfo *pInfo);
+void *    tdDecodeStoreInfo(void *buf, SStoreInfo *pInfo);
 
 #ifdef __cplusplus
 }

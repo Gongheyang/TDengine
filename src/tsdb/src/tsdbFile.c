@@ -23,9 +23,6 @@
 #include "tsdbMain.h"
 #include "tutil.h"
 
-
-const char *tsdbFileSuffix[] = {".head", ".data", ".last", ".stat", ".h", ".d", ".l", ".s"};
-
 static int   tsdbInitFile(SFile *pFile, STsdbRepo *pRepo, int fid, int type);
 static void  tsdbDestroyFile(SFile *pFile);
 static int   compFGroup(const void *arg1, const void *arg2);
@@ -128,7 +125,7 @@ int tsdbOpenFileH(STsdbRepo *pRepo) {
 
       if (fid < mfid) {
         for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
-          tsdbGetDataFileName(pRepo->rootDir, pCfg->tsdbId, fid, type, fname);
+          tsdbGetFileName(pRepo->rootDir, pCfg->tsdbId, fid, type, fname);
           (void)remove(fname);
         }
         continue;
@@ -345,7 +342,7 @@ int tsdbCreateFile(SFile *pFile, STsdbRepo *pRepo, int fid, int type) {
   memset((void *)pFile, 0, sizeof(SFile));
   pFile->fd = -1;
 
-  tsdbGetDataFileName(pRepo->rootDir, REPO_ID(pRepo), fid, type, pFile->fname);
+  tsdbGetFileName(pRepo->rootDir, REPO_ID(pRepo), fid, type, pFile->fname);
 
   if (access(pFile->fname, F_OK) == 0) {
     tsdbError("vgId:%d file %s already exists", REPO_ID(pRepo), pFile->fname);
@@ -525,7 +522,7 @@ _err:
 static int tsdbInitFile(SFile *pFile, STsdbRepo *pRepo, int fid, int type) {
   uint32_t version;
 
-  tsdbGetDataFileName(pRepo->rootDir, REPO_ID(pRepo), fid, type, pFile->fname);
+  tsdbGetFileName(pRepo->rootDir, REPO_ID(pRepo), fid, type, pFile->fname);
 
   pFile->fd = -1;
   if (tsdbOpenFile(pFile, O_RDONLY) < 0) goto _err;

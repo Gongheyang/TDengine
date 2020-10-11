@@ -156,18 +156,12 @@ typedef enum {
   TSDB_FILE_TYPE_HEAD = 0,
   TSDB_FILE_TYPE_DATA,
   TSDB_FILE_TYPE_LAST,
-  TSDB_FILE_TYPE_STAT,
-  TSDB_FILE_TYPE_NHEAD,
-  TSDB_FILE_TYPE_NDATA,
-  TSDB_FILE_TYPE_NLAST,
-  TSDB_FILE_TYPE_NSTAT
+  TSDB_FILE_TYPE_MANIFEST,
+  TSDB_FILE_TYPE_META,
+  TSDB_FILE_TYPE_CFG
 } TSDB_FILE_TYPE;
 
-#ifndef TDINTERNAL
 #define TSDB_FILE_TYPE_MAX (TSDB_FILE_TYPE_LAST+1)
-#else
-#define TSDB_FILE_TYPE_MAX (TSDB_FILE_TYPE_STAT+1)
-#endif
 
 typedef struct {
   uint32_t magic;
@@ -552,8 +546,7 @@ static FORCE_INLINE int compTSKEY(const void* key1, const void* key2) {
 #define IS_REPO_LOCKED(r) (r)->repoLocked
 #define TSDB_SUBMIT_MSG_HEAD_SIZE sizeof(SSubmitMsg)
 
-char*       tsdbGetMetaFileName(char* rootDir);
-void        tsdbGetDataFileName(char* rootDir, int vid, int fid, int type, char* fname);
+int         tsdbGetFileName(char* rootDir, int type, int vid, int fid, int seq, char** fname);
 int         tsdbLockRepo(STsdbRepo* pRepo);
 int         tsdbUnlockRepo(STsdbRepo* pRepo);
 char*       tsdbGetDataDirName(char* rootDir);
@@ -572,6 +565,14 @@ int              tsdbScanSCompBlock(STsdbScanHandle* pScanHandle, int idx);
 int              tsdbCloseScanFile(STsdbScanHandle* pScanHandle);
 void             tsdbFreeScanHandle(STsdbScanHandle* pScanHandle);
 
+// -------------------------- ADDED --------------------------
+typedef struct {
+  STsdbRepo* pRepo;
+  char       fname[TSDB_FILENAME_LEN];  // manifest file name
+  int        fd;
+  void*      pBuffer;
+  SList*     pModLog;
+} SCommitHandle;
 #ifdef __cplusplus
 }
 #endif

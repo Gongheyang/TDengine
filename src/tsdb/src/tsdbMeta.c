@@ -472,11 +472,7 @@ int tsdbOpenMeta(STsdbRepo *pRepo) {
   STsdbMeta *pMeta = pRepo->tsdbMeta;
   ASSERT(pMeta != NULL);
 
-  fname = tsdbGetMetaFileName(pRepo->rootDir);
-  if (fname == NULL) {
-    terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
-    goto _err;
-  }
+  if (tsdbGetFileName(pRepo->rootDir, TSDB_FILE_TYPE_META, 0, 0, 0, &fname) < 0) goto _err;
 
   pMeta->pStore = tdOpenKVStore(fname, tsdbRestoreTable, tsdbOrgMeta, (void *)pRepo);
   if (pMeta->pStore == NULL) {
