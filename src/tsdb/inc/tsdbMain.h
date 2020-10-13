@@ -229,7 +229,7 @@ typedef struct {
   uint32_t numOfBlocks : 30;
   uint64_t uid;
   TSKEY    maxKey;
-} SCompIdx;
+} SBlockIdx;
 
 typedef struct {
   int64_t last : 1;
@@ -288,7 +288,7 @@ typedef struct {
 } SHelperTable;
 
 typedef struct {
-  SCompIdx* pIdxArray;
+  SBlockIdx* pIdxArray;
   int       numOfIdx;
   int       curIdx;
 } SIdxH;
@@ -301,7 +301,7 @@ typedef struct {
   // For file set usage
   SHelperFile files;
   SIdxH       idxH;
-  SCompIdx    curCompIdx;
+  SBlockIdx    curCompIdx;
   void*       pWIdx;
   // For table set usage
   SHelperTable tableInfo;
@@ -318,7 +318,7 @@ typedef struct {
 typedef struct {
   SFileGroup fGroup;
   int        numOfIdx;
-  SCompIdx*  pCompIdx;
+  SBlockIdx*  pCompIdx;
   SBlockInfo* pCompInfo;
   void*      pBuf;
   FILE*      tLogStream;
@@ -521,9 +521,9 @@ int  tsdbMoveLastBlockIfNeccessary(SRWHelper* pHelper);
 int  tsdbWriteCompInfo(SRWHelper* pHelper);
 int  tsdbWriteCompIdx(SRWHelper* pHelper);
 int  tsdbLoadCompIdxImpl(SFile* pFile, uint32_t offset, uint32_t len, void* buffer);
-int  tsdbDecodeSCompIdxImpl(void* buffer, uint32_t len, SCompIdx** ppCompIdx, int* numOfIdx);
+int  tsdbDecodeSCompIdxImpl(void* buffer, uint32_t len, SBlockIdx** ppCompIdx, int* numOfIdx);
 int  tsdbLoadCompIdx(SRWHelper* pHelper, void* target);
-int  tsdbLoadCompInfoImpl(SFile* pFile, SCompIdx* pIdx, SBlockInfo** ppCompInfo);
+int  tsdbLoadCompInfoImpl(SFile* pFile, SBlockIdx* pIdx, SBlockInfo** ppCompInfo);
 int  tsdbLoadCompInfo(SRWHelper* pHelper, void* target);
 int  tsdbLoadCompData(SRWHelper* phelper, SBlock* pcompblock, void* target);
 void tsdbGetDataStatis(SRWHelper* pHelper, SDataStatis* pStatis, int numOfCols);
