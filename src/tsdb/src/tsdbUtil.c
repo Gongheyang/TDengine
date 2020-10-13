@@ -69,3 +69,39 @@ int tsdbGetNextSeqNum(int currentNum) {
     return 0;
   }
 }
+
+int tsdbEncodeBlockIdx(void **buf, SBlockIdx *pBlockIdx) {
+  int tlen = 0;
+
+  tlen += taosEncodeVariantI32(buf, pBlockIdx->tid);
+  tlen += taosEncodeVariantU32(buf, pBlockIdx->len);
+  tlen += taosEncodeVariantU32(buf, pBlockIdx->offset);
+  tlen += taosEncodeFixedU8(buf, pBlockIdx->hasLast);
+  tlen += taosEncodeVariantU32(buf, pBlockIdx->numOfBlocks);
+  tlen += taosEncodeFixedU64(buf, pBlockIdx->uid);
+  tlen += taosEncodeFixedU64(buf, pBlockIdx->maxKey);
+
+  return tlen;
+}
+
+void *tsdbDecodeBlockIdx(void *buf, SBlockIdx *pBlockIdx) {
+  uint8_t  hasLast = 0;
+  uint32_t numOfBlocks = 0;
+  uint64_t uid = 0;
+  uint64_t maxKey = 0;
+
+  if ((buf = taosDecodeVariantI32(buf, &(pBlockIdx->tid))) == NULL) return NULL;
+  if ((buf = taosDecodeVariantU32(buf, &(pBlockIdx->len))) == NULL) return NULL;
+  if ((buf = taosDecodeVariantU32(buf, &(pBlockIdx->offset))) == NULL) return NULL;
+  if ((buf = taosDecodeFixedU8(buf, &(hasLast))) == NULL) return NULL;
+  if ((buf = taosDecodeVariantU32(buf, &(numOfBlocks))) == NULL) return NULL;
+  if ((buf = taosDecodeFixedU64(buf, &uid)) == NULL) return NULL;
+  if ((buf = taosDecodeFixedU64(buf, &maxKey)) == NULL) return NULL;
+
+  pBlockIdx->hasLast = hasLast;
+  pBlockIdx->numOfBlocks = numOfBlocks;
+  pBlockIdx->uid = value;
+  pBlockIdx->maxKey = (TSKEY)maxKey;
+
+  return buf;
+}
