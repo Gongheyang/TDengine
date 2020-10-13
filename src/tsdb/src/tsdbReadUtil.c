@@ -174,13 +174,14 @@ int tsdbLoadBlockInfo(SReadHandle *pReadH) {
 }
 
 int tsdbLoadBlockData(SReadHandle *pReadH, SBlock *pBlock, SBlockInfo *pBlockInfo) {
-  // TODO
+  ASSERT(pBlock->numOfSubBlocks >= 1);
+
   SBlock *pSubBlock = pBlock;
   int     nSubBlocks = pBlock->numOfSubBlocks;
 
   if (nSubBlocks > 1) {
     if (pBlockInfo == NULL) pBlockInfo = pReadH->pBlockInfo;
-    pSubBlock = (SBlock *)POINTER_SHIFT((void *)pReadH->pBlockInfo, pBlock->offset);
+    pSubBlock = (SBlock *)POINTER_SHIFT((void *)pBlockInfo, pBlock->offset);
   }
 
   if (tsdbLoadBlockDataImpl(pReadH, pSubBlock, pReadH->pDataCols[0]) < 0) return -1;
@@ -198,7 +199,23 @@ int tsdbLoadBlockData(SReadHandle *pReadH, SBlock *pBlock, SBlockInfo *pBlockInf
 }
 
 int tsdbLoadBlockDataCols(SReadHandle *pReadH, SBlock *pBlock, SBlockInfo *pBlockInfo, int16_t *colIds, int numOfCols) {
-  // TODO
+  ASSERT(pBlock->numOfSubBlocks >= 1);
+
+  SBlock *pSubBlock = pBlock;
+  int     nSubBlock = pBlock->numOfSubBlocks;
+
+  if (nSubBlock > 1) {
+    if (pBlockInfo == NULL) pBlockInfo = pReadH->pBlockInfo;
+    pSubBlock = (SBlock *)POINTER_SHIFT((void *)pBlockInfo, pBlock->offset);
+  }
+
+  if (tsdbLoadBlockDataColsImpl(pReadH, pSubBlock, pReadH->pDataCols[0], colIds, numOfCols) < 0) return -1;
+  for (int i = 1; i < nSubBlock; i++) {
+    pSubBlock++;
+    if (tsdbLoadBlockDataColsImpl(pReadH, pSubBlock, pReadH->pDataCols[1], colIds, numOfCols) < 0) return -1;
+    if (tdMergeDataCols(pReadH->pDataCols[0], pReadH->pDataCols[1], pReadH->pDataCols[1]->numOfRows) < 0) goto _err;
+  }
+
   return 0;
 }
 
@@ -299,9 +316,83 @@ static int tsdbLoadBlockDataImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols 
   return 0;
 }
 
-static int tsdbLoadBlockDataColsImpl() {
-  // TODO
+static int tsdbLoadBlockDataColsImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols *pDataCols, int16_t *colIds,
+                                     int numOfColIds) {
+  ASSERT(pBlock->numOfSubBlocks <= 1);
+  ASSERT(colIds[0] == 0);
+
+  SFile *pFile =
+      pBlock->last ? TSDB_READ_FILE(pReadH, TSDB_FILE_TYPE_LAST) : TSDB_READ_FILE(pReadH, TSDB_FILE_TYPE_DATA);
+  SBlockCol compCol = {0};
+
+  // If only load timestamp column, no need to load SBlockData part
+  if (numOfColIds > 1 && tsdbLoadCompData(pHelper, pCompBlock, NULL) < 0) goto _err;
+
+  pDataCols->numOfRows = pCompBlock->numOfRows;
+
+  int dcol = 0;
+  int ccol = 0;
+  for (int i = 0; i < numOfColIds; i++) {
+    int16_t   colId = colIds[i];
+    SDataCol *pDataCol = NULL;
+    SBlockCol *pCompCol = NULL;
+
+    while (true) {
+      if (dcol >= pDataCols->numOfCols) {
+        pDataCol = NULL;
+        break;
+      }
+      pDataCol = &pDataCols->cols[dcol];
+      if (pDataCol->colId > colId) {
+        pDataCol = NULL;
+        break;
+      } else {
+        dcol++;
+        if (pDataCol->colId == colId) break;
+      }
+    }
+
+    if (pDataCol == NULL) continue;
+    ASSERT(pDataCol->colId == colId);
+
+    if (colId == 0) {  // load the key row
+      compCol.colId = colId;
+      compCol.len = pCompBlock->keyLen;
+      compCol.type = pDataCol->type;
+      compCol.offset = TSDB_KEY_COL_OFFSET;
+      pCompCol = &compCol;
+    } else {  // load non-key rows
+      while (true) {
+        if (ccol >= pCompBlock->numOfCols) {
+          pCompCol = NULL;
+          break;
+        }
+
+        pCompCol = &(pHelper->pCompData->cols[ccol]);
+        if (pCompCol->colId > colId) {
+          pCompCol = NULL;
+          break;
+        } else {
+          ccol++;
+          if (pCompCol->colId == colId) break;
+        }
+      }
+
+      if (pCompCol == NULL) {
+        dataColSetNEleNull(pDataCol, pCompBlock->numOfRows, pDataCols->maxPoints);
+        continue;
+      }
+
+      ASSERT(pCompCol->colId == pDataCol->colId);
+    }
+
+    if (tsdbLoadColData(pHelper, pFile, pCompBlock, pCompCol, pDataCol) < 0) goto _err;
+  }
+
   return 0;
+
+_err:
+  return -1;
 }
 
 static int tsdbDecodeBlockIdxArray(SReadHandle *pReadH) {
@@ -381,5 +472,46 @@ static int tsdbCheckAndDecodeColumnData(SDataCol *pDataCol, char *content, int32
       dataColSetOffset(pDataCol, numOfRows);
     }
   }
+  return 0;
+}
+
+static int tsdbLoadColData(SRWHelper *pHelper, SFile *pFile, SBlock *pCompBlock, SBlockCol *pCompCol,
+                           SDataCol *pDataCol) {
+  ASSERT(pDataCol->colId == pCompCol->colId);
+  int tsize = pDataCol->bytes * pCompBlock->numOfRows + COMP_OVERFLOW_BYTES;
+  pHelper->pBuffer = taosTRealloc(pHelper->pBuffer, pCompCol->len);
+  if (pHelper->pBuffer == NULL) {
+    terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
+    return -1;
+  }
+
+  pHelper->compBuffer = taosTRealloc(pHelper->compBuffer, tsize);
+  if (pHelper->compBuffer == NULL) {
+    terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
+    return -1;
+  }
+
+  int64_t offset = pCompBlock->offset + TSDB_GET_COMPCOL_LEN(pCompBlock->numOfCols) + pCompCol->offset;
+  if (lseek(pFile->fd, (off_t)offset, SEEK_SET) < 0) {
+    tsdbError("vgId:%d failed to lseek file %s since %s", REPO_ID(pHelper->pRepo), pFile->fname, strerror(errno));
+    terrno = TAOS_SYSTEM_ERROR(errno);
+    return -1;
+  }
+
+  if (taosTRead(pFile->fd, pHelper->pBuffer, pCompCol->len) < pCompCol->len) {
+    tsdbError("vgId:%d failed to read %d bytes from file %s since %s", REPO_ID(pHelper->pRepo), pCompCol->len, pFile->fname,
+              strerror(errno));
+    terrno = TAOS_SYSTEM_ERROR(errno);
+    return -1;
+  }
+
+  if (tsdbCheckAndDecodeColumnData(pDataCol, pHelper->pBuffer, pCompCol->len, pCompBlock->algorithm,
+                                   pCompBlock->numOfRows, pHelper->pRepo->config.maxRowsPerFileBlock,
+                                   pHelper->compBuffer, (int32_t)taosTSizeof(pHelper->compBuffer)) < 0) {
+    tsdbError("vgId:%d file %s is broken at column %d offset %" PRId64, REPO_ID(pHelper->pRepo), pFile->fname,
+              pCompCol->colId, offset);
+    return -1;
+  }
+
   return 0;
 }
