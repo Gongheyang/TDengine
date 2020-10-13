@@ -181,9 +181,9 @@ typedef struct {
 } SFile;
 
 typedef struct {
-  int   fileId;
-  int   state; // 0 for health, 1 for problem
-  SFile files[TSDB_FILE_TYPE_MAX];
+  int32_t fileId;
+  int32_t state;  // 0 for health, 1 for problem
+  SFile   files[TSDB_FILE_TYPE_MAX];
 } SFileGroup;
 
 typedef struct {

@@ -107,6 +107,8 @@ _err:
 }
 
 static void tsdbEndCommit(SCommitHandle *pCommitH, bool hasError) {
+  STsdbRepo *pRepo = pCommitH->pRepo;
+
   // TODO: append commit over flag
   if (false /* tsdbLogCommitOver(pCommitH) < 0 */) {
     hasError = true;
@@ -127,6 +129,11 @@ static void tsdbEndCommit(SCommitHandle *pCommitH, bool hasError) {
   pCommitH->fd = -1;
   remove(pCommitH->fname);
   tdListFree(pCommitH->pModLog);
+
+  // notify uplayer to delete WAL
+  if (!hasError && pRepo->appH.notifyStatus) {
+    pRepo->appH.notifyStatus(pRepo->appH.appH, TSDB_STATUS_COMMIT_OVER);
+  }
   return;
 }
 
@@ -162,27 +169,20 @@ static int tsdbCommitTimeSeriesData(SCommitHandle *pCommitH) {
 
     if (!tsdbHasDataToCommit(tsCommitH.pIters, pMem->maxTables, minKey, maxKey)) continue;
 
-    { // TODO: Log file change
-      SFileGroup *pFGroup = tsdbSearchFGroup(pFileH, fid, TD_EQ);
-      if (pFGroup == NULL) {
-
-      } else {
-
-      }
+    if (tsdbLogTSFileChange(pCommitH, fid) < 0) {
+      tsdbDestroyTSCommitHandle(&tsCommitH);
+      return -1;
     }
 
     if (tsdbCommitToFile(pRepo, fid, &tsCommitH) < 0) {
-      tsdbError("vgId:%d failed to commit to file %d since %s", REPO_ID(pRepo), fid, tstrerror(terrno));
-      goto _err;
+      tsdbError("vgId:%d error occurs while committing to file %d since %s", REPO_ID(pRepo), fid, tstrerror(terrno));
+      tsdbDestroyTSCommitHandle(&tsCommitH);
+      return -1;
     }
   }
 
   tsdbDestroyTSCommitHandle(&tsCommitH);
   return 0;
-
-_err:
-  tsdbDestroyTSCommitHandle(&tsCommitH);
-  return -1;
 }
 
 // Function to commit meta data
@@ -289,7 +289,44 @@ static void tsdbDestroyCommitIters(SCommitIter *iters, int maxTables) {
   free(iters);
 }
 
-static int tsdbCommitToFile(STsdbRepo *pRepo, int fid, STSCommitHandle *pTSCh) {
+static int tsdbCommitToFileGroup(STsdbRepo *pRepo, SFileGroup *pFGroup, STSCommitHandle *pTSCh) {
+  SRWHelper *  pWHelper = &(pTSCh->whelper);
+  SCommitIter *iters = pTSCh->pIters;
+
+  if (tsdbHelperOpenFile(pWHelper) < 0) return -1;
+
+  if (tsdbLoadCompIdx(pWHelper, NULL) < 0) {
+    tsdbHelperCloseFile(pWHelper, true /* hasError = false */);
+    return -1;
+  }
+
+  for (int tid = 1; tid < pTSCh->maxIters; tid++) {
+    if (tsdbCommitTableData(pTSCh, tid) < 0) {
+      tsdbHelperCloseFile(pWHelper, true /* hasError = false */);
+      return -1;
+    }
+
+    if (tsdbTryMoveLastBlock(pTSCh) < 0) {
+      tsdbHelperCloseFile(pWHelper, true /* hasError = false */);
+      return -1;
+    }
+
+    if (tsdbWriteBlockInfo(pWHelper) < 0) {
+      tsdbHelperCloseFile(pWHelper, true /* hasError = false */);
+      return -1;
+    }
+  }
+
+  if (tsdbWriteBlockIdx(pWHelper) < 0) {
+      tsdbHelperCloseFile(pWHelper, true /* hasError = false */);
+      return -1;
+  }
+
+  tsdbHelperCloseFile(pWHelper, false /* hasError = false */);
+  return 0;
+}
+
+static int tsdbCommitToFile(STsdbRepo *pRepo, SFileGroup *pOldFGroup, SFileGroup *pNewFGroup, STSCommitHandle *pTSCh) {
   char *       dataDir = NULL;
   STsdbCfg *   pCfg = &pRepo->config;
   STsdbFileH * pFileH = pRepo->tsdbFileH;
@@ -299,18 +336,9 @@ static int tsdbCommitToFile(STsdbRepo *pRepo, int fid, STSCommitHandle *pTSCh) {
   SCommitIter *iters = pTSCh->pIters;
   SRWHelper *  pHelper = &(pTSCh->whelper);
   SDataCols *  pDataCols = pTSCh->pDataCols;
+  int          fid = pOldFGroup->fileId;
 
-  // Create and open files for commit
-  dataDir = tsdbGetDataDirName(pRepo->rootDir);
-  if (dataDir == NULL) {
-    terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
-    return -1;
-  }
-
-  if ((pGroup = tsdbCreateFGroupIfNeed(pRepo, dataDir, fid)) == NULL) {
-    tsdbError("vgId:%d failed to create file group %d since %s", REPO_ID(pRepo), fid, tstrerror(terrno));
-    goto _err;
-  }
+  ASSERT(pOldFGroup->fileId == pNewFGroup->fileId);
 
   // Open files for write/read
   if (tsdbSetAndOpenHelperFile(pHelper, pGroup) < 0) {
@@ -372,21 +400,21 @@ static int tsdbCommitToFile(STsdbRepo *pRepo, int fid, STSCommitHandle *pTSCh) {
   taosTFree(dataDir);
   tsdbCloseHelperFile(pHelper, 0, pGroup);
 
-  pthread_rwlock_wrlock(&(pFileH->fhlock));
+  // pthread_rwlock_wrlock(&(pFileH->fhlock));
 
-  (void)rename(helperNewHeadF(pHelper)->fname, helperHeadF(pHelper)->fname);
-  pGroup->files[TSDB_FILE_TYPE_HEAD].info = helperNewHeadF(pHelper)->info;
+  // (void)rename(helperNewHeadF(pHelper)->fname, helperHeadF(pHelper)->fname);
+  // pGroup->files[TSDB_FILE_TYPE_HEAD].info = helperNewHeadF(pHelper)->info;
 
-  if (newLast) {
-    (void)rename(helperNewLastF(pHelper)->fname, helperLastF(pHelper)->fname);
-    pGroup->files[TSDB_FILE_TYPE_LAST].info = helperNewLastF(pHelper)->info;
-  } else {
-    pGroup->files[TSDB_FILE_TYPE_LAST].info = helperLastF(pHelper)->info;
-  }
+  // if (newLast) {
+  //   (void)rename(helperNewLastF(pHelper)->fname, helperLastF(pHelper)->fname);
+  //   pGroup->files[TSDB_FILE_TYPE_LAST].info = helperNewLastF(pHelper)->info;
+  // } else {
+  //   pGroup->files[TSDB_FILE_TYPE_LAST].info = helperLastF(pHelper)->info;
+  // }
 
-  pGroup->files[TSDB_FILE_TYPE_DATA].info = helperDataF(pHelper)->info;
+  // pGroup->files[TSDB_FILE_TYPE_DATA].info = helperDataF(pHelper)->info;
 
-  pthread_rwlock_unlock(&(pFileH->fhlock));
+  // pthread_rwlock_unlock(&(pFileH->fhlock));
 
   return 0;
 
@@ -488,12 +516,15 @@ static int tsdbEncodeFileChange(void **buf, STsdbFileChange *pChange) {
   int tsize = 0;
   if (pChange->type == TSDB_META_FILE_CHANGE) {
     SMetaFileChange *pMetaChange = (SMetaFileChange *)pChange->change;
+
     tsize += taosEncodeString(buf, pMetaChange->oname);
     tsize += taosEncodeString(buf, pMetaChange->nname);
     tsize += tdEncodeStoreInfo(buf, pMetaChange->info);
   } else if (pChange->type == TSDB_DATA_FILE_CHANGE) {
     SDataFileChange *pDataChange = (SDataFileChange *)pChange->change;
-    // TODO
+
+    tsize += tsdbEncodeSFileGroup(buf, &(pDataChange->ofgroup));
+    tsize += tsdbEncodeSFileGroup(buf, &(pDataChange->nfgroup));
   } else {
     ASSERT(false);
   }
@@ -504,6 +535,40 @@ static int tsdbEncodeFileChange(void **buf, STsdbFileChange *pChange) {
 static void *tsdbDecodeFileChange(void *buf, STsdbFileChange *pChange) {
   // TODO
   return buf;
+}
+
+static int tsdbLogTSFileChange(SCommitHandle *pCommitH, int fid) {
+  STsdbRepo * pRepo = pCommitH->pRepo;
+  STsdbFileH *pFileH = pRepo->tsdbFileH;
+
+  SListNode *pNode = (SListNode *)calloc(1, sizeof(SListNode) + sizeof(STsdbFileChange) + sizeof(SDataFileChange));
+  if (pNode == NULL) {
+    terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
+    return -1;
+  }
+
+  STsdbFileChange *pChange = (STsdbFileChange *)pNode->data;
+  pChange->type = TSDB_DATA_FILE_CHANGE;
+
+  SDataFileChange *pDataFileChange = (SDataFileChange *)pChange->change;
+
+  SFileGroup *pFGroup = tsdbSearchFGroup(pFileH, fid, TD_EQ);
+  if (pFGroup == NULL) {
+    pDataFileChange->ofgroup.fileId = fid;
+  } else {
+    pDataFileChange->ofgroup = *pFGroup;
+  }
+
+  tsdbGetNextCommitFileGroup(&(pDataFileChange->ofgroup), &(pDataFileChange->nfgroup));
+
+  if (tsdbLogFileChange(pCommitH, pChange) < 0) {
+    free(pNode);
+    return -1;
+  }
+
+  tdListAppendNode(pCommitH->pModLog, pNode);
+
+  return 0;
 }
 
 static int tsdbLogMetaFileChange(SCommitHandle *pCommitH) {
@@ -528,7 +593,7 @@ static int tsdbLogMetaFileChange(SCommitHandle *pCommitH) {
     free(pNode);
     return -1;
   }
-  tdListPrependNode(pCommitH->pModLog, pNode);
+  tdListAppendNode(pCommitH->pModLog, pNode);
 
   return 0;
 }
@@ -556,7 +621,7 @@ static int tsdbLogRetentionChange(SCommitHandle *pCommitH, int mfid) {
         free(pNode);
         return -1;
       }
-      tdListPrependNode(pCommitH->pModLog, &pChange);
+      tdListAppendNode(pCommitH->pModLog, &pChange);
     } else {
       break;
     }
@@ -593,4 +658,86 @@ static void tsdbSeekTSCommitHandle(STSCommitHandle *pTSCh, TSKEY key) {
     while (tsdbLoadDataFromCache(pIter->pTable, pIter->pIter, key, INT32_MAX, NULL, NULL, 0) != 0) {
     }
   }
+}
+
+static int tsdbEncodeSFileGroup(void **buf, SFileGroup *pFGroup) {
+  int tsize = 0;
+
+  tsize += taosEncodeVariantI32(buf, pFGroup->fileId);
+  for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
+    SFile *pFile = &(pFGroup->files[type]);
+
+    tsize += taosEncodeString(buf, pFile->fname);
+    tsize += tsdbEncodeSFileInfo(buf, &pFile->info);
+  }
+
+  return tsize;
+}
+
+static void *tsdbDecodeSFileGroup(void *buf, SFileGroup *pFGroup) {
+  buf = taosDecodeVariantI32(buf, &(pFGroup->fileId));
+
+  for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
+    SFile *pFile = &(pFGroup->files[type]);
+
+    buf = taosDecodeString(buf, &(pFile->fname));
+    buf = tsdbDecodeSFileInfo(buf, &(pFile->info));
+  }
+
+  return buf;
+}
+
+static void tsdbGetNextCommitFileGroup(SFileGroup *pOldGroup, SFileGroup *pNewGroup) {
+  pNewGroup->fileId = pOldGroup->fileId;
+
+  for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
+    SFile *pOldFile = &(pOldGroup->files[type]);
+    SFile *pNewFile = &(pNewGroup->files[type]);
+
+    size_t len =strlen(pOldFile->fname);
+    if (len == 0 || pOldFile->fname[len - 1] == '1') {
+      tsdbGetFileName(pRepo->rootDir, type, vid, pOldGroup->fileId, 0, pNewFile->fname);
+    } else {
+      tsdbGetFileName(pRepo->rootDir, type, vid, pOldGroup->fileId, 1, pNewFile->fname);
+    }
+  }
+}
+
+static int tsdbCommitTableData(STSCommitHandle *pTSCh, int tid) {
+  SCommitIter *pIter = pTSCh->pIters + tid;
+  if (pIter->pTable == NULL) return 0;
+
+  taosRLockLatch(&(pIter->pTable->latch));
+
+  if (pIter->pIter == NULL) {
+    // TODO
+  }
+
+  if (tdInitDataCols(pTSCh->pDataCols, tsdbGetTableSchemaImpl(pIter->pTable, false, false, -1)) < 0) {
+    terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
+    goto _err;
+  }
+
+  if (tsdbReadBlockInfo() < 0) {
+    goto _err;
+  }
+
+  while (true) {
+    TSKEY keyNext = tsdbNextIterKey(pIter->pIter);
+    if (keyNext < 0 || keyNext > maxKey) break;
+
+    if (/* no block info exists*/ || keyNext > pIdx->maxKey) {
+      if (tsdbProcessAppendCommit() < 0) goto _err;
+    } else {
+      if (tsdbProcessMergeCommit() < 0) goto _err;
+    }
+
+  }
+
+  taosRUnLockLatch(&(pIter->pTable->latch));
+  return 0;
+
+_err:
+  taosRUnLockLatch(&(pIter->pTable->latch));
+  return -1;
 }
