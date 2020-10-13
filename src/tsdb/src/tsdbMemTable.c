@@ -645,7 +645,7 @@ void tsdbGetFidKeyRange(int daysPerFile, int8_t precision, int fileId, TSKEY *mi
 //   newLast = TSDB_NLAST_FILE_OPENED(pHelper);
 
 //   if (tsdbLoadCompIdx(pHelper, NULL) < 0) {
-//     tsdbError("vgId:%d failed to load SCompIdx part since %s", REPO_ID(pRepo), tstrerror(terrno));
+//     tsdbError("vgId:%d failed to load SBlockIdx part since %s", REPO_ID(pRepo), tstrerror(terrno));
 //     goto _err;
 //   }
 
@@ -681,7 +681,7 @@ void tsdbGetFidKeyRange(int daysPerFile, int8_t precision, int fileId, TSKEY *mi
 //       goto _err;
 //     }
 
-//     // Write the SCompBlock part
+//     // Write the SBlock part
 //     if (tsdbWriteCompInfo(pHelper) < 0) {
 //       tsdbError("vgId:%d, failed to write compInfo part since %s", REPO_ID(pRepo), tstrerror(terrno));
 //       goto _err;
