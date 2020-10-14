@@ -26,7 +26,10 @@
 typedef struct {
   int          maxIters;
   SCommitIter *pIters;
-  SRWHelper    whelper;
+  SFileGroup * pFGroup;
+  SReadHandle *pReadH;
+  SBlockIdx *  pBlockIdx;
+  SBlockInfo * pBlockInfo;
   SDataCols *  pDataCols;
 } STSCommitHandle;
 

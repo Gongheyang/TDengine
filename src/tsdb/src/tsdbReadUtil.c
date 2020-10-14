@@ -21,24 +21,6 @@
 #include "tscompression.h"
 #include "tsdbMain.h"
 
-typedef struct {
-  STsdbRepo * pRepo;
-  SFileGroup  fGroup;
-  TSKEY       minKey;
-  TSKEY       maxKey;
-  SBlockIdx * pBlockIdx;
-  int         nBlockIdx;
-  SBlockIdx * pCurBlockIdx;
-  STable *    pTable;
-  SBlockInfo *pBlockInfo;
-  SDataCols * pDataCols[2];
-  void *      pBuf;
-  void *      pCBuf;
-} SReadHandle;
-
-#define TSDB_READ_FILE(pReadH, type) (&((pReadH)->fGroup.files[(type)]))
-#define TSDB_BLOCK_DATA_LEN(nCols) (sizeof(SBlockData) + sizeof(SBlockCol) * (nCols) + sizeof(TSCKSUM))
-
 int tsdbInitReadHandle(SReadHandle *pReadH, STsdbRepo *pRepo) {
   pReadH->pRepo = pRepo;
   return 0;
