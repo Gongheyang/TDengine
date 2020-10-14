@@ -105,3 +105,9 @@ void *tsdbDecodeBlockIdx(void *buf, SBlockIdx *pBlockIdx) {
 
   return buf;
 }
+
+void tsdbResetFGroupFd(SFileGroup *pFGroup) {
+  for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
+    pFGroup->files[type].fd = -1;
+  }
+}

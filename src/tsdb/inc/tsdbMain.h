@@ -332,9 +332,11 @@ typedef struct {
   TSKEY       maxKey;
   SBlockIdx*  pBlockIdx;
   int         nBlockIdx;
+  int         cBlockIdx;
   SBlockIdx*  pCurBlockIdx;
   STable*     pTable;
   SBlockInfo* pBlockInfo;
+  SBlockData* pBlockData;
   SDataCols*  pDataCols[2];
   void*       pBuf;
   void*       pCBuf;
@@ -592,6 +594,9 @@ typedef struct {
   void*      pBuffer;
   SList*     pModLog;
 } SCommitHandle;
+
+void tsdbResetFGroupFd(SFileGroup* pFGroup);
+
 #ifdef __cplusplus
 }
 #endif
