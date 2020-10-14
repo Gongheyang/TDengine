@@ -595,7 +595,19 @@ typedef struct {
   SList*     pModLog;
 } SCommitHandle;
 
-void tsdbResetFGroupFd(SFileGroup* pFGroup);
+void         tsdbResetFGroupFd(SFileGroup* pFGroup);
+SReadHandle* tsdbNewReadHandle(STsdbRepo* pRepo);
+void         tsdbFreeReadHandle(SReadHandle* pReadH);
+int          tsdbSetAndOpenReadFGroup(SReadHandle* pReadH, SFileGroup* pFGroup);
+void         tsdbCloseAndUnsetReadFile(SReadHandle* pReadH);
+int          tsdbLoadBlockIdx(SReadHandle* pReadH);
+int          tsdbSetReadTable(SReadHandle* pReadH, STable* pTable);
+int          tsdbLoadBlockInfo(SReadHandle* pReadH);
+int          tsdbLoadBlockData(SReadHandle* pReadH, SBlock* pBlock, SBlockInfo* pBlockInfo);
+int tsdbLoadBlockDataCols(SReadHandle* pReadH, SBlock* pBlock, SBlockInfo* pBlockInfo, int16_t* colIds, int numOfCols);
+int          tsdbLoadBlockDataInfo(SReadHandle* pReadH, SBlock* pBlock);
+
+#define TSDB_FILE_IN_FGROUP(pGroup, type) (&((pGroup)->files[(type)]))
 
 #ifdef __cplusplus
 }

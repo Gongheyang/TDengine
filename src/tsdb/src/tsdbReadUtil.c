@@ -60,7 +60,7 @@ void tsdbFreeReadHandle(SReadHandle *pReadH) {
   }
 }
 
-int tsdbSetAndOpenFGroup(SReadHandle *pReadH, SFileGroup *pFGroup) {
+int tsdbSetAndOpenReadFGroup(SReadHandle *pReadH, SFileGroup *pFGroup) {
   STsdbRepo *pRepo = pReadH->pRepo;
   STsdbCfg * pCfg = &(pRepo->config);
 
@@ -76,7 +76,7 @@ int tsdbSetAndOpenFGroup(SReadHandle *pReadH, SFileGroup *pFGroup) {
       if (pFile->fd < 0) {
         tsdbError("vgId:%d failed to open file %s since %s", REPO_ID(pRepo), pFile->fname, strerror(errno));
         terrno = TAOS_SYSTEM_ERROR(errno);
-        tsdbCloseAndUnsetFile(pReadH);
+        tsdbCloseAndUnsetReadFile(pReadH);
         return -1;
       }
     }
@@ -87,7 +87,7 @@ int tsdbSetAndOpenFGroup(SReadHandle *pReadH, SFileGroup *pFGroup) {
   return 0;
 }
 
-void tsdbCloseAndUnsetFile(SReadHandle *pReadH) {
+void tsdbCloseAndUnsetReadFile(SReadHandle *pReadH) {
   for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
     SFile *pFile = TSDB_READ_FILE(pReadH, type);
 
