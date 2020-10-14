@@ -259,9 +259,19 @@ TAOS *taos_connect_a(char *ip, char *user, char *pass, char *db, uint16_t port, 
 void taos_close(TAOS *taos) {
   STscObj *pObj = (STscObj *)taos;
 
-  if (pObj == NULL || pObj->signature != pObj)  {
+  if (pObj == NULL) {
+    tscDebug("(null) try to free tscObj and close dnodeConn");
     return;
   }
+
+  tscDebug("%p try to free tscObj and close dnodeConn:%p", pObj, pObj->pDnodeConn);
+  if (pObj->signature != pObj) {
+    tscDebug("%p already closed or invalid conn", pObj);
+    return;
+  }
+
+  // enable close connection only once.
+  pObj->signature = NULL;
 
   SSqlObj* pHb = pObj->pHb;
   if (pHb != NULL) {
