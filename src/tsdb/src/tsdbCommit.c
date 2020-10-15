@@ -303,27 +303,28 @@ static int tsdbCommitToFileGroup(STsdbRepo *pRepo, SFileGroup *pOldGroup, SFileG
 
   for (int tid = 1; tid < pTSCh->maxIters; tid++) {
     if (tsdbCommitTableData(pTSCh, tid) < 0) {
-      tsdbHelperCloseFile(pWHelper, true /* hasError = false */);
+      tsdbCloseAndUnsetCommitFGroup(pTSCh, true /* hasError = true */);
       return -1;
     }
 
     if (tsdbTryMoveLastBlock(pTSCh) < 0) {
-      tsdbHelperCloseFile(pWHelper, true /* hasError = false */);
+      tsdbCloseAndUnsetCommitFGroup(pTSCh, true /* hasError = true */);
       return -1;
     }
 
     if (tsdbWriteBlockInfo(pWHelper) < 0) {
-      tsdbHelperCloseFile(pWHelper, true /* hasError = false */);
+      tsdbCloseAndUnsetCommitFGroup(pTSCh, true /* hasError = true */);
       return -1;
     }
   }
 
   if (tsdbWriteBlockIdx(pWHelper) < 0) {
-      tsdbHelperCloseFile(pWHelper, true /* hasError = false */);
-      return -1;
+    tsdbCloseAndUnsetCommitFGroup(pTSCh, true /* hasError = true */);
+    return -1;
   }
 
-  tsdbHelperCloseFile(pWHelper, false /* hasError = false */);
+  tsdbCloseAndUnsetCommitFGroup(pTSCh, false /* hasError = true */);
+
   return 0;
 }
 
