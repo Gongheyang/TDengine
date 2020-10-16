@@ -151,6 +151,8 @@ static int tsdbCommitTimeSeriesData(SCommitHandle *pCommitH) {
   STsdbRepo *pRepo = pCommitH->pRepo;
   SMemTable *pMem = pRepo->imem;
   STsdbCfg * pCfg = &(pRepo->config);
+  TSKEY      minKey = 0;
+  TSKEY      maxKey = 0;
 
   int mfid = tsdbGetCurrMinFid(pCfg->precision, pCfg->keep, pCfg->daysPerFile);
   if (tsdbLogRetentionChange(pCommitH, mfid) < 0) return -1;
@@ -161,19 +163,16 @@ static int tsdbCommitTimeSeriesData(SCommitHandle *pCommitH) {
   STSCommitHandle *pTSCh = tsdbNewTSCommitHandle(pRepo);
   if (pTSCh == NULL) return -1;
 
+  // Seek skip over data beyond retention
+  tsdbGetFidKeyRange(pCfg->daysPerFile, pCfg->precision, fid, &minKey, &maxKey);
+  tsdbSeekTSCommitHandle(pTSCh, maxKey);
+
   // Commit Time-Series data file by file
   int sfid = (int)(TSDB_KEY_FILEID(pMem->keyFirst, pCfg->daysPerFile, pCfg->precision));
   int efid = (int)(TSDB_KEY_FILEID(pMem->keyLast, pCfg->daysPerFile, pCfg->precision));
 
   for (int fid = sfid; fid <= efid; fid++) {
-    TSKEY minKey = 0, maxKey = 0;
-    tsdbGetFidKeyRange(pCfg->daysPerFile, pCfg->precision, fid, &minKey, &maxKey);
-
-    if (fid < mfid) {
-      // Skip data in files beyond retention
-      tsdbSeekTSCommitHandle(&tsCommitH, maxKey);
-      continue;
-    }
+    if (fid < mfid) continue;
 
     if (!tsdbHasDataToCommit(tsCommitH.pIters, pMem->maxTables, minKey, maxKey)) continue;
 
