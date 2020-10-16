@@ -519,7 +519,7 @@ static int tsdbDecodeBlockIdxArray(SReadHandle *pReadH) {
   return 0;
 }
 
-static int tsdbAllocBuf(void **ppBuf, int size) {
+int tsdbAllocBuf(void **ppBuf, int size) {
   void *pBuf = *pBuf;
 
   int tsize = taosTSizeof(pBuf);

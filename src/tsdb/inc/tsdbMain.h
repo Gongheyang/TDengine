@@ -609,6 +609,8 @@ int          tsdbLoadBlockDataInfo(SReadHandle* pReadH, SBlock* pBlock);
 
 #define TSDB_FILE_IN_FGROUP(pGroup, type) (&((pGroup)->files[(type)]))
 
+int tsdbAllocBuf(void** ppBuf, int size);
+
 #ifdef __cplusplus
 }
 #endif
