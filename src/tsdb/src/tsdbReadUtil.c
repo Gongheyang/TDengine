@@ -12,6 +12,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+#include <errno.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -22,6 +23,15 @@
 #include "tsdbMain.h"
 
 #define TSDB_KEY_COL_OFFSET 0
+
+static int tsdbLoadBlockDataImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols *pDataCols);
+static int tsdbLoadBlockDataColsImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols *pDataCols, int16_t *colIds,
+                                     int numOfColIds);
+static int tsdbDecodeBlockIdxArray(SReadHandle *pReadH);
+static int tsdbVerifyBlockInfo(SBlockInfo *pBlockInfo, SBlockIdx *pBlockIdx);
+static int tsdbCheckAndDecodeColumnData(SDataCol *pDataCol, void *content, int32_t len, int8_t comp, int numOfRows,
+                                        int maxPoints, char *buffer, int bsize);
+static int tsdbLoadColData(SReadHandle *pReadH, SFile *pFile, SBlock *pBlock, SBlockCol *pBlockCol, SDataCol *pDataCol);
 
 SReadHandle *tsdbNewReadHandle(STsdbRepo *pRepo) {
   SReadHandle *pReadH = (SReadHandle *)calloc(1, sizeof(*pReadH));
@@ -35,6 +45,7 @@ SReadHandle *tsdbNewReadHandle(STsdbRepo *pRepo) {
   STsdbMeta *pMeta = pRepo->tsdbMeta;
   STsdbCfg * pCfg = &(pRepo->config);
 
+  // TODO: make the memory allocation on demand
   if ((pReadH->pDataCols[0] = tdNewDataCols(pMeta->maxRowBytes, pMeta->maxCols, pCfg->maxRowsPerFileBlock)) == NULL ||
       (pReadH->pDataCols[1] = tdNewDataCols(pMeta->maxRowBytes, pMeta->maxCols, pCfg->maxRowsPerFileBlock)) == NULL) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
@@ -61,6 +72,8 @@ void tsdbFreeReadHandle(SReadHandle *pReadH) {
 }
 
 int tsdbSetAndOpenReadFGroup(SReadHandle *pReadH, SFileGroup *pFGroup) {
+  ASSERT(pReadH != NULL && pFGroup != NULL);
+
   STsdbRepo *pRepo = pReadH->pRepo;
   STsdbCfg * pCfg = &(pRepo->config);
 
@@ -69,7 +82,7 @@ int tsdbSetAndOpenReadFGroup(SReadHandle *pReadH, SFileGroup *pFGroup) {
   tsdbResetFGroupFd(&(pReadH->fGroup));
 
   for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
-    SFile *pFile = TSDB_READ_FILE(pReadH, type);
+    SFile *pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), type);
 
     if (pFile->fname[0] != '\0') {  // pFile->fname[0] == '\0' is for commit usage
       pFile->fd = open(pFile->fname, O_RDONLY);
@@ -89,7 +102,7 @@ int tsdbSetAndOpenReadFGroup(SReadHandle *pReadH, SFileGroup *pFGroup) {
 
 void tsdbCloseAndUnsetReadFile(SReadHandle *pReadH) {
   for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
-    SFile *pFile = TSDB_READ_FILE(pReadH, type);
+    SFile *pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), type);
 
     if (pFile->fd >= 0) {
       (void)close(pFile->fd);
@@ -99,14 +112,18 @@ void tsdbCloseAndUnsetReadFile(SReadHandle *pReadH) {
 }
 
 int tsdbLoadBlockIdx(SReadHandle *pReadH) {
-  STsdbRepo *pRepo = pReadH->pRepo;
-  SFile *    pFile = TSDB_READ_FILE(pReadH, TSDB_FILE_TYPE_HEAD);
+  ASSERT(pReadH != NULL);
 
-  if (pFile->fd < 0 || pFile->info.len == 0) {
+  STsdbRepo *pRepo = pReadH->pRepo;
+  SFile *    pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), TSDB_FILE_TYPE_HEAD);
+
+  if (pFile->fd < 0 || pFile->info.len == 0) { // for backward compatibility
     pReadH->nBlockIdx = 0;
     pReadH->pCurBlockIdx = NULL;
     return 0;
   }
+
+  ASSERT(pFile->info.size == pFile->info.offset + pFile->info.len);
 
   if (tsdbAllocBuf(&(pReadH->pBuf), pFile->info.len) < 0) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
@@ -129,15 +146,15 @@ int tsdbLoadBlockIdx(SReadHandle *pReadH) {
   }
 
   if (ret < pFile->info.len || !taosCheckChecksumWhole((uint8_t *)(pReadH->pBuf), pFile->info.len)) {
-    tsdbError("vgId:%d block idx part is corrupted in file %s, offset %u len %u", REPO_ID(pRepo), pFile->fname,
-              pFile->info.offset, pFile->info.len);
+    tsdbError("vgId:%d block idx part is corrupted in file %s, offset %u len %u file size %" PRIu64, REPO_ID(pRepo),
+              pFile->fname, pFile->info.offset, pFile->info.len, pFile->info.size);
     terrno = TSDB_CODE_TDB_FILE_CORRUPTED;
     return -1;
   }
 
   if (tsdbDecodeBlockIdxArray(pReadH) < 0) {
-    tsdbError("vgId:%d error occurs while decoding block idx part from file %s", REPO_ID(pRepo), pFile->fname);
-    terrno = TSDB_CODE_TDB_FILE_CORRUPTED;
+    tsdbError("vgId:%d error occurs while decoding block idx part from file %s since %s", REPO_ID(pRepo), pFile->fname,
+              tstrerror(terrno));
     return -1;
   }
 
@@ -147,7 +164,7 @@ int tsdbLoadBlockIdx(SReadHandle *pReadH) {
 }
 
 int tsdbSetReadTable(SReadHandle *pReadH, STable *pTable) {
-  ASSERT(pTable != NULL);
+  ASSERT(pReadH != NULL && pTable != NULL);
 
   pReadH->pTable = pTable;
 
@@ -162,6 +179,7 @@ int tsdbSetReadTable(SReadHandle *pReadH, STable *pTable) {
   if (pReadH->nBlockIdx > 0) {
     ASSERT(pReadH->cBlockIdx <= pReadH->nBlockIdx);
 
+    // linear search TABLE_TID(pTable)
     while (true) {
       if (pReadH->cBlockIdx >= pReadH->nBlockIdx) {
         pReadH->pCurBlockIdx = NULL;
@@ -192,15 +210,17 @@ int tsdbSetReadTable(SReadHandle *pReadH, STable *pTable) {
 }
 
 int tsdbLoadBlockInfo(SReadHandle *pReadH) {
+  ASSERT(pReadH != NULL);
+
   if (pReadH->pCurBlockIdx == NULL) return 0;
 
-  SFile *    pFile = TSDB_READ_FILE(pReadH, TSDB_FILE_TYPE_HEAD);
+  SFile *    pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), TSDB_FILE_TYPE_HEAD);
   SBlockIdx *pBlockIdx = pReadH->pCurBlockIdx;
   STsdbRepo *pRepo = pReadH->pRepo;
 
-  ASSERT(pFile->fd > 0);
+  ASSERT(pFile->fd > 0 && pBlockIdx->len > 0);
 
-  if (tsdbAllocBuf(&((void *)pReadH->pBlockInfo), pBlockIdx->len) < 0) {
+  if (tsdbAllocBuf(&((void *)(pReadH->pBlockInfo)), pBlockIdx->len) < 0) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
     return -1;
   }
@@ -221,7 +241,7 @@ int tsdbLoadBlockInfo(SReadHandle *pReadH) {
   }
 
   if (ret < pBlockIdx->len || tsdbVerifyBlockInfo(pReadH->pBlockInfo, pBlockIdx) < 0) {
-    tsdbError("vgId:%d table %s block info part is corrupted from file %s", REPO_ID(pRepo),
+    tsdbError("vgId:%d table %s block info part is corrupted in file %s", REPO_ID(pRepo),
               TABLE_CHAR_NAME(pReadH->pTable), pFile->fname);
     terrno = TSDB_CODE_TDB_FILE_CORRUPTED;
     return -1;
@@ -270,7 +290,7 @@ int tsdbLoadBlockDataCols(SReadHandle *pReadH, SBlock *pBlock, SBlockInfo *pBloc
   for (int i = 1; i < nSubBlock; i++) {
     pSubBlock++;
     if (tsdbLoadBlockDataColsImpl(pReadH, pSubBlock, pReadH->pDataCols[1], colIds, numOfCols) < 0) return -1;
-    if (tdMergeDataCols(pReadH->pDataCols[0], pReadH->pDataCols[1], pReadH->pDataCols[1]->numOfRows) < 0) goto _err;
+    if (tdMergeDataCols(pReadH->pDataCols[0], pReadH->pDataCols[1], pReadH->pDataCols[1]->numOfRows) < 0) return -1;
   }
 
   ASSERT(pReadH->pDataCols[0]->numOfRows == pBlock->numOfRows);
@@ -284,8 +304,12 @@ int tsdbLoadBlockDataInfo(SReadHandle *pReadH, SBlock *pBlock) {
   ASSERT(pBlock->numOfSubBlocks <= 1);
 
   STsdbRepo *pRepo = pReadH->pRepo;
-  SFile *    pFile =
-      (pBlock->last) ? TSDB_READ_FILE(pReadH, TSDB_FILE_TYPE_LAST) : TSDB_READ_FILE(pReadH, TSDB_FILE_TYPE_DATA);
+  SFile *    pFile = NULL;
+  if (pBlock->last) {
+    pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), TSDB_FILE_TYPE_LAST);
+  } else {
+    pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), TSDB_FILE_TYPE_DATA);
+  }
 
   if (lseek(pFile->fd, pBlock->offset, SEEK_SET) < 0)  {
     tsdbError("vgId:%d failed to lseek file %s to offset %" PRId64 " since %s", REPO_ID(pRepo), pFile->fname,
@@ -316,6 +340,9 @@ int tsdbLoadBlockDataInfo(SReadHandle *pReadH, SBlock *pBlock) {
   }
 
   ASSERT(pReadH->pBlockData->numOfCols == pBlock->numOfCols);
+  ASSERT(pReadH->pBlockData->delimiter == TSDB_FILE_DELIMITER);
+  ASSERT(pReadH->pBlockData->numOfCols == pBlock->numOfCols);
+
   return 0;
 }
 
@@ -323,8 +350,12 @@ static int tsdbLoadBlockDataImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols 
   ASSERT(pBlock->numOfSubBlocks  <= 1);
 
   STsdbRepo *pRepo = pReadH->pRepo;
-  SFile *pFile =
-      (pBlock->last) ? TSDB_READ_FILE(pReadH, TSDB_FILE_TYPE_LAST) : TSDB_READ_FILE(pReadH, TSDB_FILE_TYPE_DATA);
+  SFile *    pFile = NULL;
+  if (pBlock->last) {
+    pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), TSDB_FILE_TYPE_LAST);
+  } else {
+    pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), TSDB_FILE_TYPE_DATA);
+  }
 
   if (tsdbAllocBuf(&(pReadH->pBuf), pBlock->len) < 0) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
@@ -347,8 +378,9 @@ static int tsdbLoadBlockDataImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols 
   }
 
   int tsize = TSDB_BLOCK_DATA_LEN(pBlock->numOfCols);
-  if (ret < pBlock->len || !taosCheckChecksumWhole((uint8_t *)pReadH->pBuf, tsize)) {
-    tsdbError("vgId:%d block data part from file %s is corrupted", REPO_ID(pRepo), pFile->fname);
+  if (ret < pBlock->len || !taosCheckChecksumWhole((uint8_t *)(pReadH->pBuf), tsize)) {
+    tsdbError("vgId:%d block data part from file %s at offset %" PRId64 " len %d is corrupted", REPO_ID(pRepo),
+              pFile->fname, pBlock->offset, pBlock->len);
     terrno = TSDB_CODE_TDB_FILE_CORRUPTED;
     return -1;
   }
@@ -362,8 +394,8 @@ static int tsdbLoadBlockDataImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols 
   ASSERT(pBlock->numOfRows <= pDataCols->maxPoints);
   pDataCols->numOfRows = pBlock->numOfRows;
 
-  int ccol = 0;
-  int dcol = 0;
+  int ccol = 0;  // loop iter over SBlockCols
+  int dcol = 0;  // loop iter over pDataCols
   while (dcol < pDataCols->numOfCols) {
     SDataCol *pDataCol = &(pDataCols->cols[dcol]);
     if (dcol != 0 && ccol >= pBlockData->numOfCols) {
@@ -422,24 +454,32 @@ static int tsdbLoadBlockDataColsImpl(SReadHandle *pReadH, SBlock *pBlock, SDataC
                                      int numOfColIds) {
   ASSERT(pBlock->numOfSubBlocks <= 1);
   ASSERT(colIds[0] == 0);
+  ASSERT(pBlock->numOfRows <= pDataCols->maxPoints);
 
-  SFile *pFile =
-      pBlock->last ? TSDB_READ_FILE(pReadH, TSDB_FILE_TYPE_LAST) : TSDB_READ_FILE(pReadH, TSDB_FILE_TYPE_DATA);
+  SFile *pFile = NULL;
+  if (pBlock->last) {
+    pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), TSDB_FILE_TYPE_LAST);
+  } else {
+    pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), TSDB_FILE_TYPE_DATA);
+  }
   SBlockCol blockCol = {0};
 
-  // If only load timestamp column, no need to load SBlockData part
-  if (numOfColIds > 1 && tsdbLoadBlockDataInfo(pReadH, pBlock) < 0) return -1;
+  // if only load the key timestamp column, no need to load SBlockData part
+  if (numOfColIds > 1) {
+    if (tsdbLoadBlockDataInfo(pReadH, pBlock) < 0) return -1;
+  }
 
   tdResetDataCols(pDataCols);
   pDataCols->numOfRows = pBlock->numOfRows;
 
-  int dcol = 0;
-  int ccol = 0;
+  int dcol = 0;  // loop iter over pDataCols
+  int ccol = 0;  // loop iter over SBlockCol
   for (int i = 0; i < numOfColIds; i++) {
     int16_t    colId = colIds[i];
     SDataCol * pDataCol = NULL;
     SBlockCol *pBlockCol = NULL;
 
+    // linear search over pDataCols of colId
     while (true) {
       if (dcol >= pDataCols->numOfCols) {
         pDataCol = NULL;
@@ -458,6 +498,7 @@ static int tsdbLoadBlockDataColsImpl(SReadHandle *pReadH, SBlock *pBlock, SDataC
     if (pDataCol == NULL) continue;
     ASSERT(pDataCol->colId == colId);
 
+    // linear search over SBlockCols
     if (colId == 0) {  // load the key row
       blockCol.colId = colId;
       blockCol.len = pBlock->keyLen;
@@ -497,7 +538,7 @@ static int tsdbLoadBlockDataColsImpl(SReadHandle *pReadH, SBlock *pBlock, SDataC
 
 static int tsdbDecodeBlockIdxArray(SReadHandle *pReadH) {
   void * pBuf = pReadH->pBuf;
-  SFile *pFile = TSDB_READ_FILE(pReadH, TSDB_FILE_TYPE_HEAD);
+  SFile *pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), TSDB_FILE_TYPE_HEAD);
 
   pReadH->nBlockIdx = 0;
   while (POINTER_DISTANCE(pBuf, pReadH->pBuf) < (int)(pFile->info.len - sizeof(TSCKSUM))) {
@@ -508,7 +549,8 @@ static int tsdbDecodeBlockIdxArray(SReadHandle *pReadH) {
 
     pBuf = tsdbDecodeBlockIdx(pBuf, &(pReadH->pBlockIdx[pReadH->nBlockIdx]));
     if (pBuf == NULL) {
-      tsdbError("vgId:%d failed to decode block idx part from file %s", REPO_ID(pRepo), pFile->fname);
+      tsdbError("vgId:%d failed to decode block idx part from file %s at idx %d", REPO_ID(pRepo), pFile->fname,
+                pReadH->nBlockIdx);
       terrno = TSDB_CODE_TDB_FILE_CORRUPTED;
       return -1;
     }
@@ -516,21 +558,9 @@ static int tsdbDecodeBlockIdxArray(SReadHandle *pReadH) {
     pReadH->nBlockIdx++;
     ASSERT(pReadH->nBlockIdx == 1 || (pReadH->pBlockIdx[pReadH->nBlockIdx-1].tid < (pReadH->pBlockIdx[pReadH->nBlockIdx-2].tid));
   }
+
+  ASSERT(pReadH->nBlockIdx > 0);
   return 0;
-}
-
-int tsdbAllocBuf(void **ppBuf, int size) {
-  void *pBuf = *pBuf;
-
-  int tsize = taosTSizeof(pBuf);
-  if (tsize == 0) tsize = 1024;
-
-  while (tsize < size) {
-    tsize *= 2;
-  }
-
-  *ppBuf = taosTRealloc(pBuf, tsize);
-  if (*ppBuf == NULL) return -1;
 }
 
 static int tsdbVerifyBlockInfo(SBlockInfo *pBlockInfo, SBlockIdx *pBlockIdx) {
@@ -561,21 +591,18 @@ static int tsdbCheckAndDecodeColumnData(SDataCol *pDataCol, void *content, int32
       return -1;
     }
     pDataCol->len = tlen;
-    if (pDataCol->type == TSDB_DATA_TYPE_BINARY || pDataCol->type == TSDB_DATA_TYPE_NCHAR) {
-      dataColSetOffset(pDataCol, numOfRows);
-    } else {
-      ASSERT(pDataCol->len == pDataCol->bytes * numOfRows);
-    }
   } else {
     // No need to decompress, just memcpy it
     pDataCol->len = len - sizeof(TSCKSUM);
     memcpy(pDataCol->pData, content, pDataCol->len);
-    if (pDataCol->type == TSDB_DATA_TYPE_BINARY || pDataCol->type == TSDB_DATA_TYPE_NCHAR) {
-      dataColSetOffset(pDataCol, numOfRows);
-    } else {
-      ASSERT(pDataCol->len == pDataCol->bytes * numOfRows);
-    }
   }
+
+  if (pDataCol->type == TSDB_DATA_TYPE_BINARY || pDataCol->type == TSDB_DATA_TYPE_NCHAR) {
+    dataColSetOffset(pDataCol, numOfRows);
+  } else {
+    ASSERT(pDataCol->len == pDataCol->bytes * numOfRows);
+  }
+
   return 0;
 }
 
@@ -591,9 +618,10 @@ static int tsdbLoadColData(SReadHandle *pReadH, SFile *pFile, SBlock *pBlock, SB
     return -1;
   }
 
-  int64_t offset = pBlock->offset + TSDB_GET_COMPCOL_LEN(pBlock->numOfCols) + pBlockCol->offset;
+  int64_t offset = pBlock->offset + TSDB_BLOCK_DATA_LEN(pBlock->numOfCols) + pBlockCol->offset;
   if (lseek(pFile->fd, (off_t)offset, SEEK_SET) < 0) {
-    tsdbError("vgId:%d failed to lseek file %s since %s", REPO_ID(pRepo), pFile->fname, strerror(errno));
+    tsdbError("vgId:%d failed to lseek file %s to offset %" PRId64 " since %s", REPO_ID(pRepo), pFile->fname, offset,
+              strerror(errno));
     terrno = TAOS_SYSTEM_ERROR(errno);
     return -1;
   }
