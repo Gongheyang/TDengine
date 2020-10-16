@@ -958,7 +958,7 @@ static int tsdbCommitTableDataImpl(STSCommitHandle *pTSCh, int tid) {
 
   while (true) {
     TSKEY keyNext = tsdbNextIterKey(pIter->pIter);
-    if (keyNext > maxKey) break;
+    if (keyNext > pReadH->maxKey) break;
 
     void *ptr = taosbsearch((void *)keyNext, (void *)(pReadH->pBlockInfo->blocks + sidx), eidx - sidx, sizeof(SBlock),
                             NULL, TD_GE);
