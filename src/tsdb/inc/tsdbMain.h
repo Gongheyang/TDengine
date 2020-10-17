@@ -513,7 +513,7 @@ int          tsdbLoadBlockDataInfo(SReadHandle* pReadH, SBlock* pBlock);
 static FORCE_INLINE int tsdbAllocBuf(void **ppBuf, uint32_t size) {
   ASSERT(size > 0);
 
-  void *pBuf = *pBuf;
+  void *pBuf = *ppBuf;
 
   uint32_t tsize = taosTSizeof(pBuf);
   if (tsize >= size) return 0;
