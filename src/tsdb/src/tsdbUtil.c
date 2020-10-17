@@ -112,20 +112,3 @@ void tsdbResetFGroupFd(SFileGroup *pFGroup) {
     TSDB_FILE_IN_FGROUP(pFGroup, type)->fd = -1;
   }
 }
-
-int tsdbAllocBuf(void **ppBuf, uint32_t size) {
-  ASSERT(size > 0);
-
-  void *pBuf = *pBuf;
-
-  uint32_t tsize = taosTSizeof(pBuf);
-  if (tsize >= size) return 0;
-
-  if (tsize == 0) tsize = 1024;
-  while (tsize < size) {
-    tsize *= 2;
-  }
-
-  *ppBuf = taosTRealloc(pBuf, tsize);
-  if (*ppBuf == NULL) return -1;
-}

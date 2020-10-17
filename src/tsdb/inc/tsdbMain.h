@@ -286,8 +286,6 @@ typedef struct {
 typedef struct {
   STsdbRepo*  pRepo;
   SFileGroup  fGroup;
-  TSKEY       minKey;
-  TSKEY       maxKey;
   SBlockIdx*  pBlockIdx;
   int         nBlockIdx;
   int         cBlockIdx;
@@ -301,6 +299,7 @@ typedef struct {
 } SReadHandle;
 
 #define TSDB_BLOCK_DATA_LEN(nCols) (sizeof(SBlockData) + sizeof(SBlockCol) * (nCols) + sizeof(TSCKSUM))
+#define TSDB_BLOCK_INFO_LEN(nBlocks) (sizeof(SBlockInfo) + sizeof(SBlock) * (nBlocks) + sizeof(TSCKSUM))
 
 // Operations
 // ------------------ tsdbMeta.c
@@ -509,8 +508,27 @@ int tsdbLoadBlockDataCols(SReadHandle* pReadH, SBlock* pBlock, SBlockInfo* pBloc
 int          tsdbLoadBlockDataInfo(SReadHandle* pReadH, SBlock* pBlock);
 
 #define TSDB_FILE_IN_FGROUP(pGroup, type) (&((pGroup)->files[(type)]))
+#define TSDB_KEY_BEYOND_RANGE(key, maxKey) ((key) < 0 || (key) > (maxKey))
 
-int tsdbAllocBuf(void **ppBuf, uint32_t size);
+static FORCE_INLINE int tsdbAllocBuf(void **ppBuf, uint32_t size) {
+  ASSERT(size > 0);
+
+  void *pBuf = *pBuf;
+
+  uint32_t tsize = taosTSizeof(pBuf);
+  if (tsize >= size) return 0;
+
+  if (tsize == 0) tsize = 1024;
+  while (tsize < size) {
+    tsize *= 2;
+  }
+
+  *ppBuf = taosTRealloc(pBuf, tsize);
+  if (*ppBuf == NULL) return -1;
+}
+
+int   tsdbEncodeBlockIdx(void** buf, SBlockIdx* pBlockIdx);
+void* tsdbDecodeBlockIdx(void* buf, SBlockIdx* pBlockIdx);
 
 #ifdef __cplusplus
 }
