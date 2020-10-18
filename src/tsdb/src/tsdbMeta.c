@@ -468,11 +468,11 @@ void tsdbFreeMeta(STsdbMeta *pMeta) {
 }
 
 int tsdbOpenMeta(STsdbRepo *pRepo) {
-  char *     fname = NULL;
+  char       fname[TSDB_FILENAME_LEN] = "\0";
   STsdbMeta *pMeta = pRepo->tsdbMeta;
   ASSERT(pMeta != NULL);
 
-  if (tsdbGetFileName(pRepo->rootDir, TSDB_FILE_TYPE_META, 0, 0, 0, &fname) < 0) goto _err;
+  if (tsdbGetFileName(pRepo->rootDir, TSDB_FILE_TYPE_META, 0, 0, 0, fname) < 0) goto _err;
 
   pMeta->pStore = tdOpenKVStore(fname, tsdbRestoreTable, tsdbOrgMeta, (void *)pRepo);
   if (pMeta->pStore == NULL) {
@@ -481,11 +481,9 @@ int tsdbOpenMeta(STsdbRepo *pRepo) {
   }
 
   tsdbDebug("vgId:%d open TSDB meta succeed", REPO_ID(pRepo));
-  taosTFree(fname);
   return 0;
 
 _err:
-  taosTFree(fname);
   return -1;
 }
 

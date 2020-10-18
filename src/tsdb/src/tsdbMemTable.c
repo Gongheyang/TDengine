@@ -12,6 +12,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+#include <errno.h>
+#include <inttypes.h>
 
 #include "tsdb.h"
 #include "tsdbMain.h"
@@ -23,6 +25,7 @@ static SMemTable * tsdbNewMemTable(STsdbRepo *pRepo);
 static void        tsdbFreeMemTable(SMemTable *pMemTable);
 static STableData *tsdbNewTableData(STsdbCfg *pCfg, STable *pTable);
 static void        tsdbFreeTableData(STableData *pTableData);
+static int         tsdbAdjustMemMaxTables(SMemTable *pMemTable, int maxTables);
 static char *      tsdbGetTsTupleKey(const void *data);
 
 // ---------------- INTERNAL FUNCTIONS ----------------

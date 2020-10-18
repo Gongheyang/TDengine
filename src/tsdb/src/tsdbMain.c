@@ -12,6 +12,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+#include <dirent.h>
+#include <errno.h>
+#include <inttypes.h>
+#include <sys/types.h>
 
 // no test file errors here
 #include "tsdbMain.h"
@@ -212,7 +216,7 @@ uint32_t tsdbGetFileInfo(TSDB_REPO_T *repo, char *name, uint32_t *index, uint32_
   // STsdbMeta *pMeta = pRepo->tsdbMeta;
   STsdbFileH *pFileH = pRepo->tsdbFileH;
   uint32_t    magic = 0;
-  char *      fname = NULL;
+  char        fname[TSDB_FILENAME_LEN] = "\0";
 
   struct stat fState;
 
@@ -229,7 +233,7 @@ uint32_t tsdbGetFileInfo(TSDB_REPO_T *repo, char *name, uint32_t *index, uint32_
 
     if (pFileH->nFGroups == 0 || fid > pFileH->pFGroup[pFileH->nFGroups - 1].fileId) {
       if (*index <= TSDB_META_FILE_INDEX && TSDB_META_FILE_INDEX <= eindex) {
-        tsdbGetFileName(pRepo->rootDir, TSDB_FILE_TYPE_META, 0, 0, 0, &fname);
+        tsdbGetFileName(pRepo->rootDir, TSDB_FILE_TYPE_META, 0, 0, 0, fname);
         *index = TSDB_META_FILE_INDEX;
         magic = TSDB_META_FILE_MAGIC(pRepo->tsdbMeta);
       } else {
@@ -239,11 +243,11 @@ uint32_t tsdbGetFileInfo(TSDB_REPO_T *repo, char *name, uint32_t *index, uint32_
       SFileGroup *pFGroup =
           taosbsearch(&fid, pFileH->pFGroup, pFileH->nFGroups, sizeof(SFileGroup), keyFGroupCompFunc, TD_GE);
       if (pFGroup->fileId == fid) {
-        fname = strdup(pFGroup->files[(*index) % TSDB_FILE_TYPE_MAX].fname);
+        strncpy(fname, pFGroup->files[(*index) % TSDB_FILE_TYPE_MAX].fname, TSDB_FILENAME_LEN);
         magic = pFGroup->files[(*index) % TSDB_FILE_TYPE_MAX].info.magic;
       } else {
         if ((pFGroup->fileId + 1) * TSDB_FILE_TYPE_MAX - 1 < (int)eindex) {
-          fname = strdup(pFGroup->files[0].fname);
+          strncpy(fname, pFGroup->files[0].fname, TSDB_FILENAME_LEN);
           *index = pFGroup->fileId * TSDB_FILE_TYPE_MAX;
           magic = pFGroup->files[0].info.magic;
         } else {
@@ -253,10 +257,8 @@ uint32_t tsdbGetFileInfo(TSDB_REPO_T *repo, char *name, uint32_t *index, uint32_
     }
     strcpy(name, fname + prefixLen);
   } else {  // get the named file at the specified index. If not there, return 0
-    fname = malloc(prefixLen + strlen(name) + 2);
     sprintf(fname, "%s/%s", prefix, name);
     if (access(fname, F_OK) != 0) {
-      taosFree(fname);
       taosFree(sdup);
       return 0;
     }
@@ -265,20 +267,17 @@ uint32_t tsdbGetFileInfo(TSDB_REPO_T *repo, char *name, uint32_t *index, uint32_
     } else {
       tsdbGetFileInfoImpl(fname, &magic, size);
     }
-    taosFree(fname);
     taosFree(sdup);
     return magic;
   }
 
   if (stat(fname, &fState) < 0) {
-    taosTFree(fname);
     return 0;
   }
 
   *size = fState.st_size;
   // magic = *size;
 
-  taosTFree(fname);
   return magic;
 }
 
@@ -517,15 +516,14 @@ static int32_t tsdbSetRepoEnv(char *rootDir, STsdbCfg *pCfg) {
 
   free(dirName);
 
-  char *fname = tsdbGetMetaFileName(rootDir);
+  char fname[TSDB_FILENAME_LEN] = "\0";
+  tsdbGetFileName(rootDir, TSDB_FILE_TYPE_META, 0, 0, 0, fname);
   if (fname == NULL) return -1;
   if (tdCreateKVStore(fname) < 0) {
     tsdbError("vgId:%d failed to open KV store since %s", pCfg->tsdbId, tstrerror(terrno));
-    free(fname);
     return -1;
   }
 
-  free(fname);
   return 0;
 }
 
@@ -541,7 +539,7 @@ static int32_t tsdbSaveConfig(char *rootDir, STsdbCfg *pCfg) {
   char  buf[TSDB_FILE_HEAD_SIZE] = "\0";
   char *pBuf = buf;
 
-  tsdbGetFileName(rootDir, TSDB_FILE_TYPE_CFG, 0, 0, 0, &fname);
+  tsdbGetFileName(rootDir, TSDB_FILE_TYPE_CFG, 0, 0, 0, fname);
 
   fd = open(fname, O_WRONLY | O_CREAT, 0755);
   if (fd < 0) {
@@ -581,7 +579,7 @@ static int tsdbLoadConfig(char *rootDir, STsdbCfg *pCfg) {
   int  fd = -1;
   char buf[TSDB_FILE_HEAD_SIZE] = "\0";
 
-  tsdbGetFileName(rootDir, TSDB_FILE_TYPE_CFG, 0, 0, 0, &fname);
+  tsdbGetFileName(rootDir, TSDB_FILE_TYPE_CFG, 0, 0, 0, fname);
 
   fd = open(fname, O_RDONLY);
   if (fd < 0) {
@@ -769,31 +767,43 @@ static int tsdbRestoreInfo(STsdbRepo *pRepo) {
   SFileGroup *pFGroup = NULL;
 
   SFileGroupIter iter;
-  SRWHelper      rhelper = {0};
-
-  if (tsdbInitReadHelper(&rhelper, pRepo) < 0) goto _err;
+  SReadHandle *  pReadH = tsdbNewReadHandle(pRepo);
+  if (pReadH == NULL) return -1;
 
   tsdbInitFileGroupIter(pFileH, &iter, TSDB_ORDER_DESC);
   while ((pFGroup = tsdbGetFileGroupNext(&iter)) != NULL) {
     if (pFGroup->state) continue;
-    if (tsdbSetAndOpenHelperFile(&rhelper, pFGroup) < 0) goto _err;
-    if (tsdbLoadCompIdx(&rhelper, NULL) < 0) goto _err;
+    if (tsdbSetAndOpenReadFGroup(pReadH, pFGroup) < 0) {
+      tsdbFreeReadHandle(pReadH);
+      return -1;
+    }
+
+    if (tsdbLoadBlockIdx(pReadH) < 0) {
+      tsdbCloseAndUnsetReadFile(pReadH);
+      tsdbFreeReadHandle(pReadH);
+      return -1;
+    }
+
     for (int i = 1; i < pMeta->maxTables; i++) {
       STable *pTable = pMeta->tables[i];
       if (pTable == NULL) continue;
-      if (tsdbSetHelperTable(&rhelper, pTable, pRepo) < 0) goto _err;
-      SBlockIdx *pIdx = &(rhelper.curCompIdx);
+      if (tsdbSetReadTable(pReadH, pTable) < 0) {
+        tsdbCloseAndUnsetReadFile(pReadH);
+        tsdbFreeReadHandle(pReadH);
+        return -1;
+      }
+      
+      if (pReadH->pCurBlockIdx != NULL && pTable->lastKey < pReadH->pCurBlockIdx->maxKey) {
+        pTable->lastKey = pReadH->pCurBlockIdx->maxKey;
 
-      if (pIdx->offset > 0 && pTable->lastKey < pIdx->maxKey) pTable->lastKey = pIdx->maxKey;
+      }
     }
+
+    tsdbCloseAndUnsetReadFile(pReadH);
   }
 
-  tsdbDestroyHelper(&rhelper);
+  tsdbFreeReadHandle(pReadH);
   return 0;
-
-_err:
-  tsdbDestroyHelper(&rhelper);
-  return -1;
 }
 
 static int tsdbInitSubmitBlkIter(SSubmitBlk *pBlock, SSubmitBlkIter *pIter) {

@@ -15,6 +15,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -85,7 +86,7 @@ static int              tsdbApplyFileChange(STsdbFileChange *pChange, bool isCom
 static void             tsdbSeekTSCommitHandle(STSCommitHandle *pTSCh, TSKEY key);
 static int              tsdbEncodeSFileGroup(void **buf, SFileGroup *pFGroup);
 static void *           tsdbDecodeSFileGroup(void *buf, SFileGroup *pFGroup);
-static void tsdbGetNextCommitFileGroup(STsdbRepo *pRepo, int vid, SFileGroup *pOldGroup, SFileGroup *pNewGroup);
+static void tsdbGetNextCommitFileGroup(STsdbRepo *pRepo, SFileGroup *pOldGroup, SFileGroup *pNewGroup);
 static int  tsdbCommitTableData(STSCommitHandle *pTSCh, int tid);
 static int  tsdbWriteBlockToRightFile(STSCommitHandle *pTSCh, SDataCols *pDataCols, SBlock *pBlock);
 static int  tsdbSetAndOpenCommitFGroup(STSCommitHandle *pTSCh, SFileGroup *pOldGroup, SFileGroup *pNewGroup);
@@ -111,7 +112,8 @@ static int  tsdbMergeDataBlock(STSCommitHandle *pTSCh, SBlock *pBlock);
 static void tsdbLoadMergeFromCache(STSCommitHandle *pTSCh, TSKEY maxKey);
 static int  tsdbInsertSubBlock(STSCommitHandle *pTSCh, SBlock *pBlock);
 
-int tsdbCommitData(STsdbRepo *pRepo) {
+void *tsdbCommitData(void *arg) {
+  STsdbRepo *pRepo = (STsdbRepo *)arg;
   ASSERT(pRepo->commit == 1 && pRepo->imem != NULL);
 
   SCommitHandle  commitHandle = {0};
@@ -119,20 +121,20 @@ int tsdbCommitData(STsdbRepo *pRepo) {
 
   pCommitH->pRepo = pRepo;
 
-  if (tsdbStartCommit(pCommitH) < 0) return -1;
+  if (tsdbStartCommit(pCommitH) < 0) return NULL;
 
   if (tsdbCommitTimeSeriesData(pCommitH) < 0) {
     tsdbEndCommit(pCommitH, true);
-    return -1;
+    return NULL;
   }
 
   if (tsdbCommitMetaData(pCommitH) < 0) {
     tsdbEndCommit(pCommitH, true);
-    return -1;
+    return NULL;
   }
 
   tsdbEndCommit(pCommitH, false);
-  return 0;
+  return NULL;
 }
 
 static int tsdbStartCommit(SCommitHandle *pCommitH) {
@@ -151,7 +153,7 @@ static int tsdbStartCommit(SCommitHandle *pCommitH) {
 
   pCommitH->fd = -1;
 
-  tsdbGetFileName(pRepo->rootDir, TSDB_FILE_TYPE_MANIFEST, pCfg->tsdbId, 0, 0, &(pCommitH->fname));
+  tsdbGetFileName(pRepo->rootDir, TSDB_FILE_TYPE_MANIFEST, pCfg->tsdbId, 0, 0, pCommitH->fname);
   pCommitH->fd = open(pCommitH->fname, O_CREAT | O_WRONLY | O_APPEND, 0755);
   if (pCommitH->fd < 0) {
     tsdbError("vgId:%d failed to open file %s since %s", REPO_ID(pRepo), pCommitH->fname, strerror(errno));
@@ -538,7 +540,7 @@ static int tsdbLogTSFileChange(SCommitHandle *pCommitH, int fid) {
     pDataFileChange->ofgroup = *pFGroup;
   }
 
-  tsdbGetNextCommitFileGroup(&(pDataFileChange->ofgroup), &(pDataFileChange->nfgroup));
+  tsdbGetNextCommitFileGroup(pRepo, &(pDataFileChange->ofgroup), &(pDataFileChange->nfgroup));
 
   if (tsdbLogFileChange(pCommitH, pChange) < 0) {
     free(pNode);
@@ -560,7 +562,7 @@ static int tsdbLogMetaFileChange(SCommitHandle *pCommitH) {
     return -1;
   }
 
-  STsdbFileChange *pChange = pNode->data;
+  STsdbFileChange *pChange = (STsdbFileChange *)pNode->data;
   pChange->type = TSDB_META_FILE_CHANGE;
 
   SMetaFileChange *pMetaChange = (SMetaFileChange *)(pChange->change);
@@ -600,7 +602,7 @@ static int tsdbLogRetentionChange(SCommitHandle *pCommitH, int mfid) {
         free(pNode);
         return -1;
       }
-      tdListAppendNode(pCommitH->pModLog, &pChange);
+      tdListAppendNode(pCommitH->pModLog, pNode);
     } else {
       break;
     }
@@ -653,20 +655,21 @@ static int tsdbEncodeSFileGroup(void **buf, SFileGroup *pFGroup) {
   return tsize;
 }
 
-static void *tsdbDecodeSFileGroup(void *buf, SFileGroup *pFGroup) {
+static UNUSED_FUNC void *tsdbDecodeSFileGroup(void *buf, SFileGroup *pFGroup) {
   buf = taosDecodeVariantI32(buf, &(pFGroup->fileId));
 
   for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
     SFile *pFile = &(pFGroup->files[type]);
+    char *fname = pFile->fname;
 
-    buf = taosDecodeString(buf, &(pFile->fname));
+    buf = taosDecodeString(buf, &fname);
     buf = tsdbDecodeSFileInfo(buf, &(pFile->info));
   }
 
   return buf;
 }
 
-static void tsdbGetNextCommitFileGroup(STsdbRepo *pRepo, int vid, SFileGroup *pOldGroup, SFileGroup *pNewGroup) {
+static void tsdbGetNextCommitFileGroup(STsdbRepo *pRepo, SFileGroup *pOldGroup, SFileGroup *pNewGroup) {
   pNewGroup->fileId = pOldGroup->fileId;
 
   for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
@@ -675,9 +678,9 @@ static void tsdbGetNextCommitFileGroup(STsdbRepo *pRepo, int vid, SFileGroup *pO
 
     size_t len =strlen(pOldFile->fname);
     if (len == 0 || pOldFile->fname[len - 1] == '1') {
-      tsdbGetFileName(pRepo->rootDir, type, vid, pOldGroup->fileId, 0, pNewFile->fname);
+      tsdbGetFileName(pRepo->rootDir, type, REPO_ID(pRepo), pOldGroup->fileId, 0, pNewFile->fname);
     } else {
-      tsdbGetFileName(pRepo->rootDir, type, vid, pOldGroup->fileId, 1, pNewFile->fname);
+      tsdbGetFileName(pRepo->rootDir, type, REPO_ID(pRepo), pOldGroup->fileId, 1, pNewFile->fname);
     }
   }
 }
@@ -685,7 +688,6 @@ static void tsdbGetNextCommitFileGroup(STsdbRepo *pRepo, int vid, SFileGroup *pO
 static int tsdbCommitTableData(STSCommitHandle *pTSCh, int tid) {
   SCommitIter *pIter = pTSCh->pIters + tid;
   SReadHandle *pReadH = pTSCh->pReadH;
-  SDataCols *  pDataCols = pTSCh->pDataCols;
   TSKEY        keyNext = tsdbNextIterKey(pIter->pIter);
 
   taosRLockLatch(&(pIter->pTable->latch));
@@ -701,7 +703,7 @@ static int tsdbCommitTableData(STSCommitHandle *pTSCh, int tid) {
     return 0;
   }
 
-  if (tsdbLoadBlockInfo(pReadH) < 0) {
+  if (tsdbLoadBlockInfo(pReadH, NULL) < 0) {
     taosRUnLockLatch(&(pIter->pTable->latch));
     return -1;
   }
@@ -789,8 +791,8 @@ static void tsdbCloseAndUnsetCommitFGroup(STSCommitHandle *pTSCh, bool hasError)
   tsdbCloseAndUnsetReadFile(pTSCh->pReadH);
 
   for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
-    SFile *pOldFile = TSDB_FILE_IN_FGROUP(pOldGroup, type);
-    SFile *pNewFile = TSDB_FILE_IN_FGROUP(pNewGroup, type);
+    // SFile *pOldFile = TSDB_FILE_IN_FGROUP(pOldGroup, type);
+    SFile *pNewFile = TSDB_FILE_IN_FGROUP(pTSCh->pFGroup, type);
 
     if (pNewFile->fd >= 0) {
       if (!hasError) {
@@ -805,16 +807,17 @@ static void tsdbCloseAndUnsetCommitFGroup(STSCommitHandle *pTSCh, bool hasError)
 static int tsdbWriteBlockInfo(STSCommitHandle *pTSCh) {
   ASSERT(pTSCh->nBlocks > 0);
   SReadHandle *pReadH = pTSCh->pReadH;
+  STsdbRepo *  pRepo = pReadH->pRepo;
   SBlockInfo * pBlockInfo = pTSCh->pBlockInfo;
   SFile *      pFile = TSDB_FILE_IN_FGROUP(pTSCh->pFGroup, TSDB_FILE_TYPE_HEAD);
-  int          tlen = TSDB_BLOCK_INFO_LEN(pTSCh->nBlocks, pTSCh->nSubBlocks);
+  int          tlen = TSDB_BLOCK_INFO_LEN(pTSCh->nBlocks+pTSCh->nSubBlocks);
 
   pBlockInfo->delimiter = TSDB_FILE_DELIMITER;
   pBlockInfo->uid = TABLE_UID(pReadH->pTable);
   pBlockInfo->tid = TABLE_TID(pReadH->pTable);
 
   if (pTSCh->nSubBlocks > 0) {
-    if (tsdbAllocBuf(&(pTSCh->pBlockInfo), tlen) < 0) {
+    if (tsdbAllocBuf((void **)(&(pTSCh->pBlockInfo)), tlen) < 0) {
       terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
       return -1;
     }
@@ -866,7 +869,7 @@ static int tsdbWriteBlockIdx(STSCommitHandle *pTSCh) {
 
   // label checksum
   len += sizeof(TSCKSUM);
-  if (tsdbAllocBuf(&(pReadH->pBuf), len) < 0) {
+  if (tsdbAllocBuf((void **)(&(pReadH->pBuf)), len) < 0) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
     return -1;
   }
@@ -891,8 +894,8 @@ static int tsdbWriteBlockIdx(STSCommitHandle *pTSCh) {
   pFile->info.size += len;
   pFile->info.offset = (uint32_t)offset;
   pFile->info.len = len;
-  pFile->info.magic = taosCalcChecksum(pFile->info.magic,
-                                       (uint8_t *)POINTER_SHIFT(pReadH->pBuf, len - sizeof(TSCKSUM), sizeof(TSCKSUM)));
+  pFile->info.magic = taosCalcChecksum(pFile->info.magic, (uint8_t *)POINTER_SHIFT(pReadH->pBuf, len - sizeof(TSCKSUM)),
+                                       sizeof(TSCKSUM));
 
   ASSERT(pFile->info.size == pFile->info.offset + pFile->info.len);
 
@@ -912,7 +915,6 @@ static int tsdbSetCommitTable(STSCommitHandle *pTSCh, STable *pTable) {
 static int tsdbCommitTableDataImpl(STSCommitHandle *pTSCh, int tid) {
   SCommitIter *pIter = pTSCh->pIters + tid;
   SReadHandle *pReadH = pTSCh->pReadH;
-  SDataCols *  pDataCols = pTSCh->pDataCols;
   SBlockIdx *  pOldIdx = pReadH->pCurBlockIdx;
   TSKEY        keyNext = tsdbNextIterKey(pIter->pIter);
 
@@ -1025,7 +1027,7 @@ static int tsdbWriteBlockToFile(STSCommitHandle *pTSCh, int ftype, SDataCols *pD
   ASSERT(pDataCols->numOfRows > 0 && pDataCols->numOfRows <= pCfg->maxRowsPerFileBlock);
   ASSERT(isLast ? pDataCols->numOfRows < pCfg->minRowsPerFileBlock : true);
 
-  if (tsdbAllocBuf(&(pReadH->pBlockData), csize) < 0) {
+  if (tsdbAllocBuf((void **)(&(pReadH->pBlockData)), csize) < 0) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
     return -1;
   }
@@ -1042,7 +1044,7 @@ static int tsdbWriteBlockToFile(STSCommitHandle *pTSCh, int ftype, SDataCols *pD
 
       nColsNotAllNull++;
       csize = TSDB_BLOCK_DATA_LEN(nColsNotAllNull);
-      if (tsdbAllocBuf(&(pReadH->pBlockData), csize) < 0) {
+      if (tsdbAllocBuf((void **)(&(pReadH->pBlockData)), csize) < 0) {
         terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
         return -1;
       }
@@ -1065,7 +1067,7 @@ static int tsdbWriteBlockToFile(STSCommitHandle *pTSCh, int ftype, SDataCols *pD
     int32_t blen = olen + COMP_OVERFLOW_BYTES; // allocated buffer length
     int32_t clen = 0;
 
-    if (tsdbAllocBuf(&(pReadH->pBuf), coffset + blen + sizeof(TSCKSUM)) < 0) {
+    if (tsdbAllocBuf((void **)(&(pReadH->pBuf)), coffset + blen + sizeof(TSCKSUM)) < 0) {
       terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
       return -1;
     }
@@ -1074,7 +1076,7 @@ static int tsdbWriteBlockToFile(STSCommitHandle *pTSCh, int ftype, SDataCols *pD
 
     if (pCfg->compression) {
       if (pCfg->compression == TWO_STAGE_COMP) {
-        if (tsdbAllocBuf(&(pReadH->pCBuf), blen) < 0) {
+        if (tsdbAllocBuf((void **)(&(pReadH->pCBuf)), blen) < 0) {
           terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
           return -1;
         }
@@ -1084,7 +1086,7 @@ static int tsdbWriteBlockToFile(STSCommitHandle *pTSCh, int ftype, SDataCols *pD
                                                          blen, pCfg->compression, pReadH->pCBuf, blen);
     } else {
       clen = olen;
-      memcpy(pData, olen);
+      memcpy(pData, pDataCol->pData, olen);
     }
 
     ASSERT(clen > 0 && clen <= blen);
@@ -1155,7 +1157,7 @@ static int tsdbEncodeBlockIdxArray(STSCommitHandle *pTSCh) {
   for (int i = 0; i < pTSCh->nBlockIdx; i++) {
     int tlen = tsdbEncodeBlockIdx(NULL, pTSCh->pBlockIdx + i);
 
-    if (tsdbAllocBuf(&(pReadH->pBuf), tlen + len) < 0) {
+    if (tsdbAllocBuf((void **)(&(pReadH->pBuf)), tlen + len) < 0) {
       terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
       return -1;
     }
@@ -1179,7 +1181,7 @@ static int tsdbUpdateFileGroupInfo(SFileGroup *pFileGroup) {
 }
 
 static int tsdbAppendBlockIdx(STSCommitHandle *pTSCh) {
-  if (tsdbAllocBuf(&(pTSCh->pBlockIdx), sizeof(SBlockIdx) * (pTSCh->nBlockIdx + 1)) < 0) {
+  if (tsdbAllocBuf((void **)(&(pTSCh->pBlockIdx)), sizeof(SBlockIdx) * (pTSCh->nBlockIdx + 1)) < 0) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
     return -1;
   }
@@ -1245,7 +1247,7 @@ static int tsdbAddSuperBlock(STSCommitHandle *pTSCh, SBlock *pBlock) {
   ASSERT(pBlock->numOfSubBlocks > 0);
 
   int tsize = TSDB_BLOCK_INFO_LEN(pTSCh->nBlocks + 1);
-  if (tsdbAllocBuf(&(pTSCh->pBlockInfo), tsize) < 0) {
+  if (tsdbAllocBuf((void **)(&(pTSCh->pBlockInfo)), tsize) < 0) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
     return -1;
   }
@@ -1260,7 +1262,7 @@ static int tsdbAddSubBlocks(STSCommitHandle *pTSCh, SBlock *pBlocks, int nBlocks
   int tBlocks = pTSCh->nSubBlocks + nBlocks;
   int tsize = sizeof(SBlock) * tBlocks;
 
-  if (tsdbAllocBuf(&(pTSCh->pSubBlock), tsize) < 0) {
+  if (tsdbAllocBuf((void **)(&(pTSCh->pSubBlock)), tsize) < 0) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
     return -1;
   }
@@ -1280,7 +1282,6 @@ static int tsdbMergeLastBlock(STSCommitHandle *pTSCh, SBlock *pBlock) {
   SCommitIter *pIter = pTSCh->pIters + TABLE_TID(pTable);
   int          dbrows = TSDB_DEFAULT_ROWS_TO_COMMIT(pCfg->maxRowsPerFileBlock);
   SBlock       newBlock = {0};
-  SFile *      pFile = NULL;
 
   TSKEY keyNext = tsdbNextIterKey(pIter->pIter);
   if (keyNext > pBlock->keyLast) { // append merge last block
@@ -1373,7 +1374,7 @@ static int tsdbMergeDataBlock(STSCommitHandle *pTSCh, SBlock *pBlock) {
   }
 
   // Commit data to keyLimit included
-  if (tsdbLoadKeyCol(pReadH, pBlock, NULL) < 0) return -1;
+  if (tsdbLoadKeyCol(pReadH, NULL, pBlock) < 0) return -1;
   rows = tsdbLoadDataFromCache(pIter->pTable, &titer, pBlock->keyLast, INT32_MAX, NULL,
                                pReadH->pDataCols[0]->cols[0].pData, pBlock->numOfRows);
 

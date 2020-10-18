@@ -17,37 +17,28 @@
 
 #include "tsdbMain.h"
 
-#define TSDB_DATA_DIR_NAME "data"
 
 const char *tsdbFileSuffix[] = {".head", ".data", ".last", ".manifest", "meta", "config"};
 
-int tsdbGetFileName(char *rootDir, int type, int vid, int fid, int seq, char **fname) {
-  if (*fname == NULL) {
-    *fname = (char *)malloc(TSDB_FILENAME_LEN);
-    if (*fname == NULL) {
-      terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
-      return -1;
-    }
-  }
-
+int tsdbGetFileName(char *rootDir, int type, int vid, int fid, int seq, char *fname) {
   switch (type) {
     case TSDB_FILE_TYPE_HEAD:
     case TSDB_FILE_TYPE_DATA:
     case TSDB_FILE_TYPE_LAST:
       if (seq == 0) {  // For backward compatibility
-        snprintf(*fname, TSDB_FILENAME_LEN, "%s/%s/v%df%d%s", rootDir, TSDB_DATA_DIR_NAME, vid, fid,
+        snprintf(fname, TSDB_FILENAME_LEN, "%s/%s/v%df%d%s", rootDir, TSDB_DATA_DIR_NAME, vid, fid,
                  tsdbFileSuffix[type]);
       } else {
-        snprintf(*fname, TSDB_FILENAME_LEN, "%s/%s/v%df%d%s-%d", rootDir, TSDB_DATA_DIR_NAME, vid, fid,
+        snprintf(fname, TSDB_FILENAME_LEN, "%s/%s/v%df%d%s-%d", rootDir, TSDB_DATA_DIR_NAME, vid, fid,
                  tsdbFileSuffix[type], seq);
       }
       break;
     case TSDB_FILE_TYPE_MANIFEST:
-      snprintf(*fname, TSDB_FILENAME_LEN, "%s/v%d%s", rootDir, vid, tsdbFileSuffix[type]);
+      snprintf(fname, TSDB_FILENAME_LEN, "%s/v%d%s", rootDir, vid, tsdbFileSuffix[type]);
       break;
     case TSDB_FILE_TYPE_META:
     case TSDB_FILE_TYPE_CFG:
-      snprintf(*fname, TSDB_FILENAME_LEN, "%s/%s", rootDir, tsdbFileSuffix[type]);
+      snprintf(fname, TSDB_FILENAME_LEN, "%s/%s", rootDir, tsdbFileSuffix[type]);
       break;
     default:
       ASSERT(0);

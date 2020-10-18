@@ -14,6 +14,7 @@
  */
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -31,8 +32,7 @@ static int tsdbDecodeBlockIdxArray(SReadHandle *pReadH);
 static int tsdbVerifyBlockInfo(SBlockInfo *pBlockInfo, SBlockIdx *pBlockIdx);
 static int tsdbCheckAndDecodeColumnData(SDataCol *pDataCol, void *content, int32_t len, int8_t comp, int numOfRows,
                                         int maxPoints, char *buffer, int bsize);
-static int tsdbLoadColData(SReadHandle *pReadH, SFile *pFile, SBlock *pBlock, SBlockCol *pBlockCol,
-                           SDataCol *pDataCol);
+static int tsdbLoadColData(SReadHandle *pReadH, SFile *pFile, SBlock *pBlock, SBlockCol *pBlockCol, SDataCol *pDataCol);
 
 SReadHandle *tsdbNewReadHandle(STsdbRepo *pRepo) {
   SReadHandle *pReadH = (SReadHandle *)calloc(1, sizeof(*pReadH));
@@ -61,6 +61,7 @@ SReadHandle *tsdbNewReadHandle(STsdbRepo *pRepo) {
 
 void tsdbFreeReadHandle(SReadHandle *pReadH) {
   if (pReadH) {
+    tsdbCloseAndUnsetReadFile(pReadH);
     taosTZfree(pReadH->pBlockIdx);
     taosTZfree(pReadH->pBlockInfo);
     taosTZfree(pReadH->pBlockData);
@@ -79,7 +80,7 @@ int tsdbSetAndOpenReadFGroup(SReadHandle *pReadH, SFileGroup *pFGroup) {
 
   pReadH->fGroup = *pFGroup;
 
-  tsdbResetFGroupFd(&(pReadH->fGroup));
+  tsdbCloseAndUnsetReadFile(pReadH);
 
   for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
     SFile *pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), type);
@@ -123,7 +124,7 @@ int tsdbLoadBlockIdx(SReadHandle *pReadH) {
 
   ASSERT(pFile->info.size == pFile->info.offset + pFile->info.len);
 
-  if (tsdbAllocBuf(&(pReadH->pBuf), pFile->info.len) < 0) {
+  if (tsdbAllocBuf((void **)(&(pReadH->pBuf)), pFile->info.len) < 0) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
     return -1;
   }
@@ -207,7 +208,7 @@ int tsdbSetReadTable(SReadHandle *pReadH, STable *pTable) {
   return 0;
 }
 
-int tsdbLoadBlockInfo(SReadHandle *pReadH) {
+int tsdbLoadBlockInfo(SReadHandle *pReadH, void *pMem) {
   ASSERT(pReadH != NULL);
 
   if (pReadH->pCurBlockIdx == NULL) return 0;
@@ -218,7 +219,7 @@ int tsdbLoadBlockInfo(SReadHandle *pReadH) {
 
   ASSERT(pFile->fd > 0 && pBlockIdx->len > 0);
 
-  if (tsdbAllocBuf(&((void *)(pReadH->pBlockInfo)), pBlockIdx->len) < 0) {
+  if (pMem == NULL && tsdbAllocBuf((void **)(&(pReadH->pBlockInfo)), pBlockIdx->len) < 0) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
     return -1;
   }
@@ -230,7 +231,9 @@ int tsdbLoadBlockInfo(SReadHandle *pReadH) {
     return -1;
   }
 
-  ssize_t ret = taosTRead(pFile->fd, (void *)(pReadH->pBlockInfo), pBlockIdx->len);
+  if (pMem == NULL) pMem = (void *)(pReadH->pBlockInfo);
+
+  ssize_t ret = taosTRead(pFile->fd, pMem, pBlockIdx->len);
   if (ret < 0) {
     tsdbError("vgId:%d failed to read block info part of table %s from file %s since %s", REPO_ID(pRepo),
               TABLE_CHAR_NAME(pReadH->pTable), pFile->fname, strerror(errno));
@@ -238,7 +241,7 @@ int tsdbLoadBlockInfo(SReadHandle *pReadH) {
     return -1;
   }
 
-  if (ret < pBlockIdx->len || tsdbVerifyBlockInfo(pReadH->pBlockInfo, pBlockIdx) < 0) {
+  if (ret < pBlockIdx->len || tsdbVerifyBlockInfo((SBlockInfo *)pMem, pBlockIdx) < 0) {
     tsdbError("vgId:%d table %s block info part is corrupted in file %s", REPO_ID(pRepo),
               TABLE_CHAR_NAME(pReadH->pTable), pFile->fname);
     terrno = TSDB_CODE_TDB_FILE_CORRUPTED;
@@ -311,28 +314,28 @@ int tsdbLoadBlockDataInfo(SReadHandle *pReadH, SBlock *pBlock) {
 
   if (lseek(pFile->fd, pBlock->offset, SEEK_SET) < 0)  {
     tsdbError("vgId:%d failed to lseek file %s to offset %" PRId64 " since %s", REPO_ID(pRepo), pFile->fname,
-              pBlock->offset, strerror(errno));
+              (int64_t)pBlock->offset, strerror(errno));
     terrno = TAOS_SYSTEM_ERROR(errno);
     return -1;
   }
 
   int tsize = TSDB_BLOCK_DATA_LEN(pBlock->numOfCols);
-  if (tsdbAllocBuf(&(pReadH->pBlockData), tsize) < 0) {
+  if (tsdbAllocBuf((void **)(&(pReadH->pBlockData)), tsize) < 0) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
     return -1;
   }
 
-  int ret = taosTRead(pFile->fd, tsize);
+  int ret = taosTRead(pFile->fd, (void *)pReadH->pBlockData, tsize);
   if (ret < 0) {
     tsdbError("vgId:%d failed to read block data info part from file %s offset %" PRId64 " len %d since %s",
-              REPO_ID(pRepo), pFile->fname, pBlock->offset, tsize, strerror(errno));
+              REPO_ID(pRepo), pFile->fname, (int64_t)pBlock->offset, tsize, strerror(errno));
     terrno = TAOS_SYSTEM_ERROR(errno);
     return -1;
   }
 
   if (ret < tsize || !taosCheckChecksumWhole((uint8_t *)(pReadH->pBlockData), tsize)) {
     tsdbError("vgId:%d block data info part is corrupted in file %s offset %" PRId64 " len %d", REPO_ID(pRepo),
-              pFile->fname, pBlock->offset, tsize);
+              pFile->fname, (int64_t)pBlock->offset, tsize);
     terrno = TSDB_CODE_TDB_FILE_CORRUPTED;
     return -1;
   }
@@ -349,6 +352,34 @@ int tsdbLoadKeyCol(SReadHandle *pReadH, SBlockInfo *pBlockInfo, SBlock *pBlock) 
   return tsdbLoadBlockDataCols(pReadH, pBlock, pBlockInfo, &colId, 1);
 }
 
+void tsdbGetDataStatis(SReadHandle *pReadH, SDataStatis *pStatis, int numOfCols) {
+  SBlockData *pBlockData = pReadH->pBlockData;
+
+  for (int i = 0, j = 0; i < numOfCols;) {
+    if (j >= pBlockData->numOfCols) {
+      pStatis[i].numOfNull = -1;
+      i++;
+      continue;
+    }
+
+    if (pStatis[i].colId == pBlockData->cols[j].colId) {
+      pStatis[i].sum = pBlockData->cols[j].sum;
+      pStatis[i].max = pBlockData->cols[j].max;
+      pStatis[i].min = pBlockData->cols[j].min;
+      pStatis[i].maxIndex = pBlockData->cols[j].maxIndex;
+      pStatis[i].minIndex = pBlockData->cols[j].minIndex;
+      pStatis[i].numOfNull = pBlockData->cols[j].numOfNull;
+      i++;
+      j++;
+    } else if (pStatis[i].colId < pBlockData->cols[j].colId) {
+      pStatis[i].numOfNull = -1;
+      i++;
+    } else {
+      j++;
+    }
+  }
+}
+
 static int tsdbLoadBlockDataImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols *pDataCols) {
   ASSERT(pBlock->numOfSubBlocks  <= 1);
 
@@ -360,14 +391,14 @@ static int tsdbLoadBlockDataImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols 
     pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), TSDB_FILE_TYPE_DATA);
   }
 
-  if (tsdbAllocBuf(&(pReadH->pBuf), pBlock->len) < 0) {
+  if (tsdbAllocBuf((void **)(&(pReadH->pBuf)), pBlock->len) < 0) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
     return -1;
   }
 
   if (lseek(pFile->fd, pBlock->offset, SEEK_SET) < 0) {
     tsdbError("vgId:%d failed to lseek file %s to offset %" PRId64 " since %s", REPO_ID(pRepo), pFile->fname,
-              pBlock->offset, strerror(errno));
+              (int64_t)pBlock->offset, strerror(errno));
     terrno = TAOS_SYSTEM_ERROR(errno);
     return -1;
   }
@@ -375,7 +406,7 @@ static int tsdbLoadBlockDataImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols 
   int ret = taosTRead(pFile->fd, (void *)(pReadH->pBuf), pBlock->len);
   if (ret < 0) {
     tsdbError("vgId:%d failed to read block data part from file %s at offset %" PRId64 " len %d since %s",
-              REPO_ID(pRepo), pFile->fname, pBlock->offset, pBlock->len, strerror(errno));
+              REPO_ID(pRepo), pFile->fname, (int64_t)pBlock->offset, pBlock->len, strerror(errno));
     terrno = TAOS_SYSTEM_ERROR(errno);
     return -1;
   }
@@ -383,7 +414,7 @@ static int tsdbLoadBlockDataImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols 
   int tsize = TSDB_BLOCK_DATA_LEN(pBlock->numOfCols);
   if (ret < pBlock->len || !taosCheckChecksumWhole((uint8_t *)(pReadH->pBuf), tsize)) {
     tsdbError("vgId:%d block data part from file %s at offset %" PRId64 " len %d is corrupted", REPO_ID(pRepo),
-              pFile->fname, pBlock->offset, pBlock->len);
+              pFile->fname, (int64_t)pBlock->offset, pBlock->len);
     terrno = TSDB_CODE_TDB_FILE_CORRUPTED;
     return -1;
   }
@@ -391,7 +422,7 @@ static int tsdbLoadBlockDataImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols 
   SBlockData *pBlockData = (SBlockData *)pReadH->pBuf;
 
   ASSERT(pBlockData->delimiter == TSDB_FILE_DELIMITER);
-  ASSERT(pBlockData->numOfCols = pBlock->numOfCols);
+  ASSERT(pBlockData->numOfCols == pBlock->numOfCols);
 
   tdResetDataCols(pDataCols);
   ASSERT(pBlock->numOfRows <= pDataCols->maxPoints);
@@ -427,7 +458,7 @@ static int tsdbLoadBlockDataImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols 
           zsize += (sizeof(VarDataLenT) * pBlock->numOfRows);
         }
 
-        if (tsdbAllocBuf(&(pReadH->pCBuf), zsize) < 0) {
+        if (tsdbAllocBuf((void **)(&(pReadH->pCBuf)), zsize) < 0) {
           terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
           return -1;
         }
@@ -540,12 +571,13 @@ static int tsdbLoadBlockDataColsImpl(SReadHandle *pReadH, SBlock *pBlock, SDataC
 }
 
 static int tsdbDecodeBlockIdxArray(SReadHandle *pReadH) {
-  void * pBuf = pReadH->pBuf;
-  SFile *pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), TSDB_FILE_TYPE_HEAD);
+  void *     pBuf = pReadH->pBuf;
+  STsdbRepo *pRepo = pReadH->pRepo;
+  SFile *    pFile = TSDB_FILE_IN_FGROUP(&(pReadH->fGroup), TSDB_FILE_TYPE_HEAD);
 
   pReadH->nBlockIdx = 0;
   while (POINTER_DISTANCE(pBuf, pReadH->pBuf) < (int)(pFile->info.len - sizeof(TSCKSUM))) {
-    if (tsdbAllocBuf(&((void *)(pReadH->pBlockIdx)), sizeof(SBlockIdx) * (pReadH->nBlockIdx + 1)) < 0) {
+    if (tsdbAllocBuf((void **)(&(pReadH->pBlockIdx)), sizeof(SBlockIdx) * (pReadH->nBlockIdx + 1)) < 0) {
       terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
       return -1;
     }
@@ -559,7 +591,7 @@ static int tsdbDecodeBlockIdxArray(SReadHandle *pReadH) {
     }
 
     pReadH->nBlockIdx++;
-    ASSERT(pReadH->nBlockIdx == 1 || (pReadH->pBlockIdx[pReadH->nBlockIdx-1].tid < (pReadH->pBlockIdx[pReadH->nBlockIdx-2].tid));
+    ASSERT(pReadH->nBlockIdx == 1 || (pReadH->pBlockIdx[pReadH->nBlockIdx-1].tid < pReadH->pBlockIdx[pReadH->nBlockIdx-2].tid));
   }
 
   ASSERT(pReadH->nBlockIdx > 0);
@@ -616,7 +648,7 @@ static int tsdbLoadColData(SReadHandle *pReadH, SFile *pFile, SBlock *pBlock, SB
   STsdbRepo *pRepo = pReadH->pRepo;
   STsdbCfg * pCfg = &(pRepo->config);
 
-  if (tsdbAllocBuf(&(pReadH->pBuf), pBlockCol->len) < 0) {
+  if (tsdbAllocBuf((void **)(&(pReadH->pBuf)), pBlockCol->len) < 0) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
     return -1;
   }
@@ -643,7 +675,7 @@ static int tsdbLoadColData(SReadHandle *pReadH, SFile *pFile, SBlock *pBlock, SB
       zsize += (sizeof(VarDataLenT) * pBlock->numOfRows);
     }
 
-    if (tsdbAllocBuf(&(pReadH->pCBuf), zsize) < 0) {
+    if (tsdbAllocBuf((void **)(&(pReadH->pCBuf)), zsize) < 0) {
       terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
       return -1;
     }

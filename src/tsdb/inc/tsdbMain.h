@@ -14,15 +14,18 @@
  */
 #ifndef _TD_TSDB_MAIN_H_
 #define _TD_TSDB_MAIN_H_
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
-#include "os.h"
 #include "hash.h"
+#include "os.h"
 #include "tcoding.h"
 #include "tglobal.h"
 #include "tkvstore.h"
 #include "tlist.h"
-#include "tlog.h"
 #include "tlockfree.h"
+#include "tlog.h"
 #include "tsdb.h"
 #include "tskiplist.h"
 #include "tutil.h"
@@ -33,7 +36,9 @@ extern "C" {
 
 extern int tsdbDebugFlag;
 
-#define tsdbFatal(...) { if (tsdbDebugFlag & DEBUG_FATAL) { taosPrintLog("TDB FATAL ", 255, __VA_ARGS__); }}
+#define tsdbFatal(...)                              \
+  {                                                 \
+    if (tsdbDebugFlag & DEBUG_FATAL) { taosPrintLog("TDB FATAL ", 255, __VA_ARGS__); }}
 #define tsdbError(...) { if (tsdbDebugFlag & DEBUG_ERROR) { taosPrintLog("TDB ERROR ", 255, __VA_ARGS__); }}
 #define tsdbWarn(...)  { if (tsdbDebugFlag & DEBUG_WARN)  { taosPrintLog("TDB WARN ", 255, __VA_ARGS__); }}
 #define tsdbInfo(...)  { if (tsdbDebugFlag & DEBUG_INFO)  { taosPrintLog("TDB ", 255, __VA_ARGS__); }}
@@ -467,7 +472,7 @@ void        tsdbGetFidKeyRange(int daysPerFile, int8_t precision, int fileId, TS
 #define IS_REPO_LOCKED(r) (r)->repoLocked
 #define TSDB_SUBMIT_MSG_HEAD_SIZE sizeof(SSubmitMsg)
 
-int         tsdbGetFileName(char* rootDir, int type, int vid, int fid, int seq, char** fname);
+int         tsdbGetFileName(char* rootDir, int type, int vid, int fid, int seq, char* fname);
 int         tsdbLockRepo(STsdbRepo* pRepo);
 int         tsdbUnlockRepo(STsdbRepo* pRepo);
 char*       tsdbGetDataDirName(char* rootDir);
@@ -502,7 +507,7 @@ int          tsdbSetAndOpenReadFGroup(SReadHandle* pReadH, SFileGroup* pFGroup);
 void         tsdbCloseAndUnsetReadFile(SReadHandle* pReadH);
 int          tsdbLoadBlockIdx(SReadHandle* pReadH);
 int          tsdbSetReadTable(SReadHandle* pReadH, STable* pTable);
-int          tsdbLoadBlockInfo(SReadHandle* pReadH);
+int          tsdbLoadBlockInfo(SReadHandle* pReadH, void* pMem);
 int          tsdbLoadBlockData(SReadHandle* pReadH, SBlock* pBlock, SBlockInfo* pBlockInfo);
 int tsdbLoadBlockDataCols(SReadHandle* pReadH, SBlock* pBlock, SBlockInfo* pBlockInfo, int16_t* colIds, int numOfCols);
 int          tsdbLoadBlockDataInfo(SReadHandle* pReadH, SBlock* pBlock);
@@ -532,6 +537,19 @@ int   tsdbEncodeBlockIdx(void** buf, SBlockIdx* pBlockIdx);
 void* tsdbDecodeBlockIdx(void* buf, SBlockIdx* pBlockIdx);
 int   tsdbLoadKeyCol(SReadHandle* pReadH, SBlockInfo* pBlockInfo, SBlock* pBlock);
 int   tsdbGetCurrMinFid(int8_t precision, int32_t keep, int32_t days);
+#define TSDB_DATA_DIR_NAME "data"
+void *tsdbCommitData(void *arg);
+void tsdbGetDataStatis(SReadHandle *pReadH, SDataStatis *pStatis, int numOfCols);
+
+static FORCE_INLINE int compTSKEY(const void* key1, const void* key2) {
+  if (*(TSKEY*)key1 > *(TSKEY*)key2) {
+    return 1;
+  } else if (*(TSKEY*)key1 == *(TSKEY*)key2) {
+    return 0;
+  } else {
+    return -1;
+  }
+}
 
 #ifdef __cplusplus
 }

@@ -13,8 +13,11 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 #define _DEFAULT_SOURCE
+#include <dirent.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <regex.h>
+#include <sys/types.h>
 
 #define TAOS_RANDOM_FILE_FAIL_TEST
 
@@ -69,6 +72,7 @@ void tsdbFreeFileH(STsdbFileH *pFileH) {
   }
 }
 
+// TODO: refactor this function
 int tsdbOpenFileH(STsdbRepo *pRepo) {
   ASSERT(pRepo != NULL && pRepo->tsdbFileH != NULL);
 
@@ -125,7 +129,7 @@ int tsdbOpenFileH(STsdbRepo *pRepo) {
 
       if (fid < mfid) {
         for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
-          tsdbGetFileName(pRepo->rootDir, pCfg->tsdbId, fid, type, fname);
+          tsdbGetFileName(pRepo->rootDir, type, pCfg->tsdbId, fid, 0, fname);
           (void)remove(fname);
         }
         continue;
@@ -342,7 +346,7 @@ int tsdbCreateFile(SFile *pFile, STsdbRepo *pRepo, int fid, int type) {
   memset((void *)pFile, 0, sizeof(SFile));
   pFile->fd = -1;
 
-  tsdbGetFileName(pRepo->rootDir, REPO_ID(pRepo), fid, type, pFile->fname);
+  tsdbGetFileName(pRepo->rootDir, type, REPO_ID(pRepo), fid, type, pFile->fname);
 
   if (access(pFile->fname, F_OK) == 0) {
     tsdbError("vgId:%d file %s already exists", REPO_ID(pRepo), pFile->fname);
@@ -525,7 +529,7 @@ int tsdbGetCurrMinFid(int8_t precision, int32_t keep, int32_t days) {
 static int tsdbInitFile(SFile *pFile, STsdbRepo *pRepo, int fid, int type) {
   uint32_t version;
 
-  tsdbGetFileName(pRepo->rootDir, REPO_ID(pRepo), fid, type, pFile->fname);
+  tsdbGetFileName(pRepo->rootDir, type, REPO_ID(pRepo), fid, 0, pFile->fname);
 
   pFile->fd = -1;
   if (tsdbOpenFile(pFile, O_RDONLY) < 0) goto _err;
