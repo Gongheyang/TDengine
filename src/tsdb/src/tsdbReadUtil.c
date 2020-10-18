@@ -344,6 +344,11 @@ int tsdbLoadBlockDataInfo(SReadHandle *pReadH, SBlock *pBlock) {
   return 0;
 }
 
+int tsdbLoadKeyCol(SReadHandle *pReadH, SBlockInfo *pBlockInfo, SBlock *pBlock) {
+  int16_t colId = 0;
+  return tsdbLoadBlockDataCols(pReadH, pBlock, pBlockInfo, &colId, 1);
+}
+
 static int tsdbLoadBlockDataImpl(SReadHandle *pReadH, SBlock *pBlock, SDataCols *pDataCols) {
   ASSERT(pBlock->numOfSubBlocks  <= 1);
 

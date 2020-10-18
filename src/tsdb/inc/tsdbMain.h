@@ -529,6 +529,7 @@ static FORCE_INLINE int tsdbAllocBuf(void **ppBuf, uint32_t size) {
 
 int   tsdbEncodeBlockIdx(void** buf, SBlockIdx* pBlockIdx);
 void* tsdbDecodeBlockIdx(void* buf, SBlockIdx* pBlockIdx);
+int   tsdbLoadKeyCol(SReadHandle* pReadH, SBlockInfo* pBlockInfo, SBlock* pBlock);
 
 #ifdef __cplusplus
 }
