@@ -31,7 +31,8 @@ static int tsdbDecodeBlockIdxArray(SReadHandle *pReadH);
 static int tsdbVerifyBlockInfo(SBlockInfo *pBlockInfo, SBlockIdx *pBlockIdx);
 static int tsdbCheckAndDecodeColumnData(SDataCol *pDataCol, void *content, int32_t len, int8_t comp, int numOfRows,
                                         int maxPoints, char *buffer, int bsize);
-static int tsdbLoadColData(SReadHandle *pReadH, SFile *pFile, SBlock *pBlock, SBlockCol *pBlockCol, SDataCol *pDataCol);
+static int tsdbLoadColData(SReadHandle *pReadH, SFile *pFile, SBlock *pBlock, SBlockCol *pBlockCol,
+                           SDataCol *pDataCol);
 
 SReadHandle *tsdbNewReadHandle(STsdbRepo *pRepo) {
   SReadHandle *pReadH = (SReadHandle *)calloc(1, sizeof(*pReadH));
@@ -75,7 +76,6 @@ int tsdbSetAndOpenReadFGroup(SReadHandle *pReadH, SFileGroup *pFGroup) {
   ASSERT(pReadH != NULL && pFGroup != NULL);
 
   STsdbRepo *pRepo = pReadH->pRepo;
-  STsdbCfg * pCfg = &(pRepo->config);
 
   pReadH->fGroup = *pFGroup;
 

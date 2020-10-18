@@ -13,6 +13,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 #define _DEFAULT_SOURCE
+#include <errno.h>
 #include <regex.h>
 
 #define TAOS_RANDOM_FILE_FAIL_TEST
@@ -29,7 +30,6 @@ static int   compFGroup(const void *arg1, const void *arg2);
 static int   keyFGroupCompFunc(const void *key, const void *fgroup);
 static void  tsdbInitFileGroup(SFileGroup *pFGroup, STsdbRepo *pRepo);
 static TSKEY tsdbGetCurrMinKey(int8_t precision, int32_t keep);
-static int   tsdbGetCurrMinFid(int8_t precision, int32_t keep, int32_t days);
 
 // ---------------- INTERNAL FUNCTIONS ----------------
 STsdbFileH *tsdbNewFileH(STsdbCfg *pCfg) {
@@ -518,6 +518,9 @@ _err:
   *size = 0;
 }
 
+int tsdbGetCurrMinFid(int8_t precision, int32_t keep, int32_t days) {
+  return (int)(TSDB_KEY_FILEID(tsdbGetCurrMinKey(precision, keep), days, precision));
+}
 // ---------------- LOCAL FUNCTIONS ----------------
 static int tsdbInitFile(SFile *pFile, STsdbRepo *pRepo, int fid, int type) {
   uint32_t version;
@@ -589,8 +592,4 @@ static void tsdbInitFileGroup(SFileGroup *pFGroup, STsdbRepo *pRepo) {
 
 static TSKEY tsdbGetCurrMinKey(int8_t precision, int32_t keep) {
   return (TSKEY)(taosGetTimestamp(precision) - keep * tsMsPerDay[precision]);
-}
-
-static int tsdbGetCurrMinFid(int8_t precision, int32_t keep, int32_t days) {
-  return (int)(TSDB_KEY_FILEID(tsdbGetCurrMinKey(precision, keep), days, precision));
 }

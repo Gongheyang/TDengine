@@ -13,6 +13,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
@@ -44,6 +45,7 @@ typedef struct {
   SBlock *     pSubBlock;
   int          nSubBlocks;
   SDataCols *  pDataCols;
+  int          miter;
 } STSCommitHandle;
 
 typedef struct {
@@ -62,6 +64,52 @@ typedef struct {
   SFileGroup ofgroup;
   SFileGroup nfgroup;
 } SDataFileChange;
+
+static int              tsdbStartCommit(SCommitHandle *pCommitH);
+static void             tsdbEndCommit(SCommitHandle *pCommitH, bool hasError);
+static int              tsdbCommitTimeSeriesData(SCommitHandle *pCommitH);
+static int              tsdbCommitMetaData(SCommitHandle *pCommitH);
+static SCommitIter *    tsdbCreateCommitIters(STsdbRepo *pRepo);
+static void             tsdbDestroyCommitIters(SCommitIter *iters, int maxTables);
+static int              tsdbCommitToFileGroup(STSCommitHandle *pTSCh, SFileGroup *pOldGroup, SFileGroup *pNewGroup);
+static int              tsdbHasDataToCommit(STSCommitHandle *pTSCh, TSKEY minKey, TSKEY maxKey);
+static STSCommitHandle *tsdbNewTSCommitHandle(STsdbRepo *pRepo);
+static void             tsdbFreeTSCommitHandle(STSCommitHandle *pTSCh);
+static int              tsdbLogFileChange(SCommitHandle *pCommitH, STsdbFileChange *pChange);
+static int              tsdbEncodeFileChange(void **buf, STsdbFileChange *pChange);
+static void *           tsdbDecodeFileChange(void *buf, STsdbFileChange *pChange);
+static int              tsdbLogTSFileChange(SCommitHandle *pCommitH, int fid);
+static int              tsdbLogMetaFileChange(SCommitHandle *pCommitH);
+static int              tsdbLogRetentionChange(SCommitHandle *pCommitH, int mfid);
+static int              tsdbApplyFileChange(STsdbFileChange *pChange, bool isCommitEnd);
+static void             tsdbSeekTSCommitHandle(STSCommitHandle *pTSCh, TSKEY key);
+static int              tsdbEncodeSFileGroup(void **buf, SFileGroup *pFGroup);
+static void *           tsdbDecodeSFileGroup(void *buf, SFileGroup *pFGroup);
+static void tsdbGetNextCommitFileGroup(STsdbRepo *pRepo, int vid, SFileGroup *pOldGroup, SFileGroup *pNewGroup);
+static int  tsdbCommitTableData(STSCommitHandle *pTSCh, int tid);
+static int  tsdbWriteBlockToRightFile(STSCommitHandle *pTSCh, SDataCols *pDataCols, SBlock *pBlock);
+static int  tsdbSetAndOpenCommitFGroup(STSCommitHandle *pTSCh, SFileGroup *pOldGroup, SFileGroup *pNewGroup);
+static void tsdbCloseAndUnsetCommitFGroup(STSCommitHandle *pTSCh, bool hasError);
+static int  tsdbWriteBlockInfo(STSCommitHandle *pTSCh);
+static int  tsdbWriteBlockIdx(STSCommitHandle *pTSCh);
+static int  tsdbSetCommitTable(STSCommitHandle *pTSCh, STable *pTable);
+static int  tsdbCommitTableDataImpl(STSCommitHandle *pTSCh, int tid);
+static int  tsdbCopyBlocks(STSCommitHandle *pTSCh, int sidx, int eidx);
+static int  tsdbAppendCommit(STSCommitHandle *pTSCh);
+static int  tsdbMergeCommit(STSCommitHandle *pTSCh, SBlock *pBlock);
+static int  tsdbWriteBlockToFile(STSCommitHandle *pTSCh, int ftype, SDataCols *pDataCols, SBlock *pBlock,
+                                 bool isSuperBlock);
+static int  tsdbEncodeBlockIdxArray(STSCommitHandle *pTSCh);
+static int  tsdbUpdateFileGroupInfo(SFileGroup *pFileGroup);
+static int  tsdbAppendBlockIdx(STSCommitHandle *pTSCh);
+static int  tsdbCopyBlock(STSCommitHandle *pTSCh, SBlock *pBlock);
+static int  compareKeyBlock(const void *arg1, const void *arg2);
+static int  tsdbAddSuperBlock(STSCommitHandle *pTSCh, SBlock *pBlock);
+static int  tsdbAddSubBlocks(STSCommitHandle *pTSCh, SBlock *pBlocks, int nBlocks);
+static int  tsdbMergeLastBlock(STSCommitHandle *pTSCh, SBlock *pBlock);
+static int  tsdbMergeDataBlock(STSCommitHandle *pTSCh, SBlock *pBlock);
+static void tsdbLoadMergeFromCache(STSCommitHandle *pTSCh, TSKEY maxKey);
+static int  tsdbInsertSubBlock(STSCommitHandle *pTSCh, SBlock *pBlock);
 
 int tsdbCommitData(STsdbRepo *pRepo) {
   ASSERT(pRepo->commit == 1 && pRepo->imem != NULL);
@@ -103,7 +151,7 @@ static int tsdbStartCommit(SCommitHandle *pCommitH) {
 
   pCommitH->fd = -1;
 
-  tsdbGetFileName(pRepo->rootDir, TSDB_FILE_TYPE_MANIFEST, pCfg->tsdbId, 0, 0, pCommitH->fname);
+  tsdbGetFileName(pRepo->rootDir, TSDB_FILE_TYPE_MANIFEST, pCfg->tsdbId, 0, 0, &(pCommitH->fname));
   pCommitH->fd = open(pCommitH->fname, O_CREAT | O_WRONLY | O_APPEND, 0755);
   if (pCommitH->fd < 0) {
     tsdbError("vgId:%d failed to open file %s since %s", REPO_ID(pRepo), pCommitH->fname, strerror(errno));
@@ -450,7 +498,7 @@ static int tsdbEncodeFileChange(void **buf, STsdbFileChange *pChange) {
 
     tsize += taosEncodeString(buf, pMetaChange->oname);
     tsize += taosEncodeString(buf, pMetaChange->nname);
-    tsize += tdEncodeStoreInfo(buf, pMetaChange->info);
+    tsize += tdEncodeStoreInfo(buf, &(pMetaChange->info));
   } else if (pChange->type == TSDB_DATA_FILE_CHANGE) {
     SDataFileChange *pDataChange = (SDataFileChange *)pChange->change;
 
@@ -463,7 +511,7 @@ static int tsdbEncodeFileChange(void **buf, STsdbFileChange *pChange) {
   return tsize;
 }
 
-static void *tsdbDecodeFileChange(void *buf, STsdbFileChange *pChange) {
+static UNUSED_FUNC void *tsdbDecodeFileChange(void *buf, STsdbFileChange *pChange) {
   // TODO
   return buf;
 }
@@ -534,7 +582,7 @@ static int tsdbLogRetentionChange(SCommitHandle *pCommitH, int mfid) {
   STsdbFileH *pFileH = pRepo->tsdbFileH;
 
   for (int i = 0; i < pFileH->nFGroups; i++) {
-    SFileGroup *pFGroup = pFileH->pFGroup[i];
+    SFileGroup *pFGroup = pFileH->pFGroup + i;
     if (pFGroup->fileId < mfid) {
       SListNode *pNode = (SListNode *)calloc(1, sizeof(SListNode) + sizeof(STsdbFileChange) + sizeof(SDataFileChange));
       if (pNode == NULL) {
@@ -546,7 +594,7 @@ static int tsdbLogRetentionChange(SCommitHandle *pCommitH, int mfid) {
       pChange->type = TSDB_DATA_FILE_CHANGE;
 
       SDataFileChange *pDataFileChange = (SDataFileChange *)pChange->change;
-      pDataFileChange->ofgroup = pFGroup;
+      pDataFileChange->ofgroup = *pFGroup;
 
       if (tsdbLogFileChange(pCommitH, pChange) < 0) {
         free(pNode);
@@ -566,7 +614,7 @@ static int tsdbApplyFileChange(STsdbFileChange *pChange, bool isCommitEnd) {
     SMetaFileChange *pMetaChange = (SMetaFileChange *)pChange->change;
 
     if (isCommitEnd) {
-      if (strncmp(pMetaChange->oname, pMetaChange->nname) != 0) {
+      if (strncmp(pMetaChange->oname, pMetaChange->nname, TSDB_FILENAME_LEN) != 0) {
         (void)remove(pMetaChange->oname);
       }
     } else { // roll back
@@ -618,7 +666,7 @@ static void *tsdbDecodeSFileGroup(void *buf, SFileGroup *pFGroup) {
   return buf;
 }
 
-static void tsdbGetNextCommitFileGroup(SFileGroup *pOldGroup, SFileGroup *pNewGroup) {
+static void tsdbGetNextCommitFileGroup(STsdbRepo *pRepo, int vid, SFileGroup *pOldGroup, SFileGroup *pNewGroup) {
   pNewGroup->fileId = pOldGroup->fileId;
 
   for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {
@@ -1243,7 +1291,7 @@ static int tsdbMergeLastBlock(STSCommitHandle *pTSCh, SBlock *pBlock) {
     if (pBlock->numOfRows + pDataCols->numOfRows < pCfg->minRowsPerFileBlock &&
         pBlock->numOfSubBlocks < TSDB_MAX_SUBBLOCKS && true /*TODO: check if same file*/) {
       if (tsdbWriteBlockToFile(pTSCh, TSDB_FILE_TYPE_LAST, pDataCols, &newBlock, false) < 0) return -1;
-      // TODO: refactor code here
+      if (tsdbCopyBlock(pTSCh, pBlock) < 0) return -1;
       if (tsdbInsertSubBlock(pTSCh, &newBlock) < 0) return -1; 
     } else {
       if (tsdbLoadBlockData(pReadH, pBlock, NULL) < 0) return -1;
@@ -1270,13 +1318,13 @@ static int tsdbMergeLastBlock(STSCommitHandle *pTSCh, SBlock *pBlock) {
       ASSERT(pDataCols->numOfRows == rows);
       if (tsdbWriteBlockToFile(pTSCh, TSDB_FILE_TYPE_LAST, pDataCols, &newBlock, false) < 0) return -1;
       if (tsdbCopyBlock(pTSCh, pBlock) < 0) return -1;
-      if (tsdbInsertSubBlock() < 0) return -1;  // TODO
+      if (tsdbInsertSubBlock(pTSCh, &newBlock) < 0) return -1;
     } else {
       if (tsdbLoadBlockData(pReadH, pBlock, NULL) < 0) return -1;
       while (true) {
-        tdResetDataCols(pDataCols);
-        rows = tsdbLoadMergeFromCache(pTSCh, pTSCh->maxKey);
-        if (rows == 0) break;
+        pTSCh->miter = 0;
+        tsdbLoadMergeFromCache(pTSCh, pTSCh->maxKey);
+        if (pDataCols->numOfRows == 0) break;
         if (tsdbWriteBlockToRightFile(pTSCh, pDataCols, &newBlock) < 0) return -1;
         if (tsdbAddSuperBlock(pTSCh, &newBlock) < 0) return -1;
       }
@@ -1342,13 +1390,13 @@ static int tsdbMergeDataBlock(STSCommitHandle *pTSCh, SBlock *pBlock) {
     ASSERT(pDataCols->numOfRows == rows);
     if (tsdbWriteBlockToFile(pTSCh, TSDB_FILE_TYPE_DATA, pDataCols, &newBlock, false) < 0) return -1;
     if (tsdbCopyBlock(pTSCh, pBlock) < 0) return -1;
-    if (tsdbInsertSubBlock() < 0) return -1;  // TODO
+    if (tsdbInsertSubBlock(pTSCh, &newBlock) < 0) return -1;
   } else {
     if (tsdbLoadBlockData(pReadH, pBlock, NULL) < 0) return -1;
     while (true) {
-      tdResetDataCols(pDataCols);
-      rows = tsdbLoadMergeFromCache(pTSCh, keyLimit);
-      if (rows == 0) break;
+      pTSCh->miter = 0;
+      tsdbLoadMergeFromCache(pTSCh, keyLimit);
+      if (pDataCols->numOfRows == 0) break;
       if (tsdbWriteBlockToFile(pTSCh, TSDB_FILE_TYPE_DATA, pDataCols, &newBlock, true) < 0) return -1;
       if (tsdbAddSuperBlock(pTSCh, &newBlock) < 0) return -1;
     }
@@ -1357,7 +1405,93 @@ static int tsdbMergeDataBlock(STSCommitHandle *pTSCh, SBlock *pBlock) {
   return 0;
 }
 
-static int tsdbLoadMergeFromCache(STSCommitHandle *pTSCh, TSKEY maxKey) {
-  // TODO
+static void tsdbLoadMergeFromCache(STSCommitHandle *pTSCh, TSKEY maxKey) {
+  SReadHandle *pReadH = pTSCh->pReadH;
+  STsdbRepo *  pRepo = pReadH->pRepo;
+  SDataCols *  pMCols = pReadH->pDataCols[0];
+  SDataCols *  pDataCols = pTSCh->pDataCols;
+  int          dbrows = TSDB_DEFAULT_ROWS_TO_COMMIT(pRepo->config.maxRowsPerFileBlock);
+  SCommitIter *pIter = pTSCh->pIters + TABLE_TID(pReadH->pTable);
+  TSKEY        key1 = 0;
+  TSKEY        key2 = 0;
+  SDataRow     row = NULL;
+  TSKEY        keyNext = 0;
+  STSchema *   pSchema = NULL;
+
+  tdResetDataCols(pDataCols);
+
+  if (pTSCh->miter >= pMCols->numOfRows) {
+    key1 = INT64_MAX;
+  } else {
+    key1 = dataColsKeyAt(pMCols, pTSCh->miter);
+  }
+
+  keyNext = tsdbNextIterKey(pIter->pIter);
+  if (TSDB_KEY_BEYOND_RANGE(keyNext, maxKey)) {
+    key2 = INT64_MAX;
+  } else {
+    row = tsdbNextIterRow(pIter->pIter);
+    key2 = keyNext;
+  }
+
+  while (true) {
+    if ((key1 == INT64_MAX && key2 == INT64_MAX) || pDataCols->numOfRows >= dbrows) break;
+
+    if (key1 <= key2) {
+      for (int i = 0; i < pMCols->numOfCols; i++) {
+        dataColAppendVal(pDataCols->cols + i, tdGetColDataOfRow(pMCols->cols + i, pTSCh->miter), pDataCols->numOfRows,
+                         pDataCols->maxPoints);
+      }
+      pDataCols->numOfRows++;
+      pTSCh->miter++;
+      if (key1 == key2) {
+        tSkipListIterNext(pIter->pIter);
+        keyNext = tsdbNextIterKey(pIter->pIter);
+        if (TSDB_KEY_BEYOND_RANGE(keyNext, maxKey)) {
+          key2 = INT64_MAX;
+        } else {
+          row = tsdbNextIterRow(pIter->pIter);
+          key2 = keyNext;
+        }
+      }
+    } else {
+      if (pSchema == NULL || schemaVersion(pSchema) != dataRowVersion(row)) {
+        pSchema = tsdbGetTableSchemaImpl(pIter->pTable, false, false, dataRowVersion(row));
+        ASSERT(pSchema != NULL);
+      }
+
+      tdAppendDataRowToDataCol(row, pSchema, pDataCols);
+      tSkipListIterNext(pIter->pIter);
+
+      // update row and key2
+      keyNext = tsdbNextIterKey(pIter->pIter);
+      if (TSDB_KEY_BEYOND_RANGE(keyNext, maxKey)) {
+        key2 = INT64_MAX;
+      } else {
+        row = tsdbNextIterRow(pIter->pIter);
+        key2 = keyNext;
+      }
+    }
+  }
+}
+
+static int tsdbInsertSubBlock(STSCommitHandle *pTSCh, SBlock *pBlock) {
+  ASSERT(pBlock->numOfSubBlocks == 0 && pTSCh->nBlocks > 0);
+
+  SBlock *pSuperBlock = pTSCh->pBlockInfo->blocks + pTSCh->nBlocks - 1;
+
+  ASSERT(pSuperBlock->numOfSubBlocks > 0 && pSuperBlock->numOfSubBlocks < TSDB_MAX_SUBBLOCKS);
+  if (pSuperBlock->numOfSubBlocks == 1) {
+    SBlock oBlock = *pSuperBlock;
+    oBlock.numOfSubBlocks = 0;
+    pSuperBlock->offset = sizeof(SBlock) * pTSCh->nSubBlocks;
+    if (tsdbAddSubBlocks(pTSCh, &oBlock, 1) < 0) return -1;
+  }
+  pSuperBlock->numOfSubBlocks++;
+  pSuperBlock->numOfRows += pBlock->numOfRows;
+  pSuperBlock->keyFirst = MIN(pSuperBlock->keyFirst, pBlock->keyFirst);
+  pSuperBlock->keyLast = MAX(pSuperBlock->keyLast, pBlock->keyLast);
+  if (tsdbAddSubBlocks(pTSCh, pBlock, 1) < 0) return -1;
+
   return 0;
 }

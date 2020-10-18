@@ -525,11 +525,13 @@ static FORCE_INLINE int tsdbAllocBuf(void **ppBuf, uint32_t size) {
 
   *ppBuf = taosTRealloc(pBuf, tsize);
   if (*ppBuf == NULL) return -1;
+  return 0;
 }
 
 int   tsdbEncodeBlockIdx(void** buf, SBlockIdx* pBlockIdx);
 void* tsdbDecodeBlockIdx(void* buf, SBlockIdx* pBlockIdx);
 int   tsdbLoadKeyCol(SReadHandle* pReadH, SBlockInfo* pBlockInfo, SBlock* pBlock);
+int   tsdbGetCurrMinFid(int8_t precision, int32_t keep, int32_t days);
 
 #ifdef __cplusplus
 }

@@ -24,14 +24,6 @@ static void        tsdbFreeMemTable(SMemTable *pMemTable);
 static STableData *tsdbNewTableData(STsdbCfg *pCfg, STable *pTable);
 static void        tsdbFreeTableData(STableData *pTableData);
 static char *      tsdbGetTsTupleKey(const void *data);
-static void *      tsdbCommitData(void *arg);
-static int         tsdbCommitMeta(STsdbRepo *pRepo);
-static void        tsdbEndCommit(STsdbRepo *pRepo);
-static int         tsdbHasDataToCommit(SCommitIter *iters, int nIters, TSKEY minKey, TSKEY maxKey);
-static int tsdbCommitToFile(STsdbRepo *pRepo, int fid, SCommitIter *iters, SRWHelper *pHelper, SDataCols *pDataCols);
-static SCommitIter *tsdbCreateCommitIters(STsdbRepo *pRepo);
-static void         tsdbDestroyCommitIters(SCommitIter *iters, int maxTables);
-static int          tsdbAdjustMemMaxTables(SMemTable *pMemTable, int maxTables);
 
 // ---------------- INTERNAL FUNCTIONS ----------------
 int tsdbInsertRowToMem(STsdbRepo *pRepo, SDataRow row, STable *pTable) {

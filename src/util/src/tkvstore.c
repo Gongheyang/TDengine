@@ -17,6 +17,11 @@
 
 #define TAOS_RANDOM_FILE_FAIL_TEST
 
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #include "os.h"
 #include "hash.h"
 #include "taoserror.h"
@@ -40,7 +45,6 @@ typedef struct {
 
 static int       tdInitKVStoreHeader(int fd, char *fname);
 static SKVStore *tdNewKVStore(char *fname, iterFunc iFunc, afterFunc aFunc, void *appH);
-static char *    tdGetKVStoreSnapshotFname(char *fdata);
 static char *    tdGetKVStoreNewFname(char *fdata);
 static void      tdFreeKVStore(SKVStore *pStore);
 static int       tdUpdateKVStoreHeader(int fd, char *fname, SStoreInfo *pInfo);
@@ -418,17 +422,6 @@ static void tdFreeKVStore(SKVStore *pStore) {
     taosHashCleanup(pStore->map);
     free(pStore);
   }
-}
-
-static char *tdGetKVStoreSnapshotFname(char *fdata) {
-  size_t size = strlen(fdata) + strlen(TD_KVSTORE_SNAP_SUFFIX) + 1;
-  char * fname = malloc(size);
-  if (fname == NULL) {
-    terrno = TSDB_CODE_COM_OUT_OF_MEMORY;
-    return NULL;
-  }
-  sprintf(fname, "%s%s", fdata, TD_KVSTORE_SNAP_SUFFIX);
-  return fname;
 }
 
 static char *tdGetKVStoreNewFname(char *fdata) {
