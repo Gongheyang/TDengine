@@ -21,8 +21,6 @@ extern "C" {
 
 #include <stdint.h>
 
-#define KVSTORE_FILE_VERSION ((uint32_t)0)
-
 typedef int (*iterFunc)(void *, void *cont, int contLen);
 typedef void (*afterFunc)(void *);
 
@@ -48,6 +46,7 @@ typedef struct {
 } SKVStore;
 
 #define KVSTORE_MAGIC(s) (s)->info.magic
+#define KVSTORE_FILE_VERSION ((uint32_t)0)
 
 int       tdCreateKVStore(char *fname);
 int       tdDestroyKVStore(char *fname);
