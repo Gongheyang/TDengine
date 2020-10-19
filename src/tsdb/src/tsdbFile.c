@@ -13,11 +13,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 #define _DEFAULT_SOURCE
-#include <dirent.h>
-#include <errno.h>
-#include <inttypes.h>
 #include <regex.h>
-#include <sys/types.h>
 
 #define TAOS_RANDOM_FILE_FAIL_TEST
 

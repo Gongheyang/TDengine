@@ -12,11 +12,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-#include <dirent.h>
-#include <errno.h>
-#include <inttypes.h>
-#include <sys/types.h>
-
 // no test file errors here
 #include "tsdbMain.h"
 #include "os.h"

@@ -13,13 +13,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <errno.h>
-#include <fcntl.h>
-#include <inttypes.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-
 #include "tchecksum.h"
 #include "tscompression.h"
 #include "tsdbMain.h"
