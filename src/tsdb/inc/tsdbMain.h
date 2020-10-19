@@ -14,18 +14,15 @@
  */
 #ifndef _TD_TSDB_MAIN_H_
 #define _TD_TSDB_MAIN_H_
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 
-#include "hash.h"
 #include "os.h"
+#include "hash.h"
 #include "tcoding.h"
 #include "tglobal.h"
 #include "tkvstore.h"
 #include "tlist.h"
-#include "tlockfree.h"
 #include "tlog.h"
+#include "tlockfree.h"
 #include "tsdb.h"
 #include "tskiplist.h"
 #include "tutil.h"

@@ -94,7 +94,7 @@ SKVStore *tdOpenKVStore(char *fname, iterFunc iFunc, afterFunc aFunc, void *appH
   SKVStore *pStore = tdNewKVStore(fname, iFunc, aFunc, appH);
   if (pStore == NULL) return NULL;
 
-  pStore->fd = open(pStore->fname, O_RDWR);
+  pStore->fd = open(pStore->fname, O_RDONLY);
   if (pStore->fd < 0) {
     uError("failed to open file %s since %s", pStore->fname, strerror(errno));
     terrno = TAOS_SYSTEM_ERROR(errno);
@@ -118,7 +118,7 @@ SKVStore *tdOpenKVStore(char *fname, iterFunc iFunc, afterFunc aFunc, void *appH
   return pStore;
 
 _err:
-  if (pStore->fd > 0) {
+  if (pStore->fd >= 0) {
     close(pStore->fd);
     pStore->fd = -1;
   }
@@ -168,6 +168,7 @@ int tdUpdateKVStoreRecord(SKVStore *pStore, uint64_t uid, void *cont, int contLe
   rInfo.offset = lseek(pStore->fd, 0, SEEK_CUR);
   if (rInfo.offset < 0) {
     uError("failed to lseek file %s since %s", pStore->fname, strerror(errno));
+    terrno = TAOS_SYSTEM_ERROR(errno);
     return -1;
   }
 
@@ -194,7 +195,7 @@ int tdUpdateKVStoreRecord(SKVStore *pStore, uint64_t uid, void *cont, int contLe
   pStore->ninfo.size += (sizeof(SKVRecord) + contLen);
   SKVRecord *pRecord = taosHashGet(pStore->map, (void *)&uid, sizeof(uid));
   if (pRecord != NULL) {  // just to insert
-    pStore->ninfo.tombSize += pRecord->size;
+    pStore->ninfo.tombSize += (pRecord->size + sizeof(SKVRecord));
   } else {
     pStore->ninfo.nRecords++;
   }
@@ -380,7 +381,10 @@ static int tdInitKVStoreHeader(int fd, char *fname) {
 
 static SKVStore *tdNewKVStore(char *fname, iterFunc iFunc, afterFunc aFunc, void *appH) {
   SKVStore *pStore = (SKVStore *)calloc(1, sizeof(SKVStore));
-  if (pStore == NULL) goto _err;
+  if (pStore == NULL) {
+    terrno = TSDB_CODE_COM_OUT_OF_MEMORY;
+    goto _err;
+  }
 
   pStore->fname = strdup(fname);
   if (pStore->fname == NULL) {
@@ -459,10 +463,16 @@ static int tdRestoreKVStore(SKVStore *pStore) {
   while (true) {
     ssize_t tsize = taosTRead(pStore->fd, tbuf, sizeof(SKVRecord));
     if (tsize == 0) break;
-    if (tsize < sizeof(SKVRecord)) {
-      uError("failed to read %" PRIzu " bytes from file %s at offset %" PRId64 "since %s", sizeof(SKVRecord), pStore->fname,
-             pStore->info.size, strerror(errno));
+    if (tsize < 0) {
+      uError("failed to read %" PRIzu " bytes from file %s at offset %" PRId64 "since %s", sizeof(SKVRecord),
+             pStore->fname, pStore->info.size, strerror(errno));
       terrno = TAOS_SYSTEM_ERROR(errno);
+      goto _err;
+    }
+    if (tsize < sizeof(SKVRecord)) {
+      uError("file %s is corrupted offset %" PRId64 " len %" PRIzu, pStore->fname, pStore->info.size,
+             sizeof(SKVRecord));
+      terrno = TSDB_CODE_COM_FILE_CORRUPTED;
       goto _err;
     }
 
@@ -478,6 +488,11 @@ static int tdRestoreKVStore(SKVStore *pStore) {
       pStore->info.tombSize += (rInfo.size + sizeof(SKVRecord) * 2);
     } else {
       ASSERT(rInfo.offset > 0 && rInfo.size > 0);
+      SKVRecord *pRecord = taosHashGet(pStore->map, (void *)(&rInfo.uid), sizeof(rInfo.uid));
+      if (pRecord != NULL) {
+        pStore->info.tombSize += (sizeof(SKVRecord) + pRecord->size);
+      }
+
       if (taosHashPut(pStore->map, (void *)(&rInfo.uid), sizeof(rInfo.uid), &rInfo, sizeof(rInfo)) < 0) {
         uError("failed to put record in KV store %s", pStore->fname);
         terrno = TSDB_CODE_COM_OUT_OF_MEMORY;
@@ -520,10 +535,18 @@ static int tdRestoreKVStore(SKVStore *pStore) {
       goto _err;
     }
 
-    if (taosTRead(pStore->fd, buf, (size_t)pRecord->size) < pRecord->size) {
+    ssize_t tsize = taosTRead(pStore->fd, buf, (size_t)pRecord->size);
+    if (tsize < 0) {
       uError("failed to read %" PRId64 " bytes from file %s since %s, offset %" PRId64, pRecord->size, pStore->fname,
              strerror(errno), pRecord->offset);
       terrno = TAOS_SYSTEM_ERROR(errno);
+      goto _err;
+    }
+    
+    if (tsize < pRecord->size) {
+      uError("file %s is corrupted, offset %" PRId64 " size %" PRId64, pStore->fname,
+             pRecord->offset + sizeof(SKVRecord), pRecord->size);
+      terrno = TSDB_CODE_COM_FILE_CORRUPTED;
       goto _err;
     }
 
