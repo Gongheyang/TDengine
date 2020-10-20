@@ -411,6 +411,7 @@ int doProcessSql(SSqlObj *pSql) {
       pCmd->command == TSDB_SQL_FETCH ||
       pCmd->command == TSDB_SQL_RETRIEVE ||
       pCmd->command == TSDB_SQL_INSERT ||
+      pCmd->command == TSDB_SQL_DELETE ||
       pCmd->command == TSDB_SQL_CONNECT ||
       pCmd->command == TSDB_SQL_HB ||
       pCmd->command == TSDB_SQL_META ||
@@ -528,6 +529,18 @@ int tscBuildSubmitMsg(SSqlObj *pSql, SSqlInfo *pInfo) {
   return TSDB_CODE_SUCCESS;
 }
 
+int tscBuildDelMsg(SSqlObj *pSql, SSqlInfo *pInfo) {
+  SQueryInfo *pQueryInfo = tscGetQueryInfoDetail(&pSql->cmd, 0);
+  STableMeta* pTableMeta = tscGetMetaInfo(pQueryInfo, 0)->pTableMeta;
+  
+  char* pMsg = pSql->cmd.payload;
+
+  // NOTE: shell message size should not include SMsgDesc
+  int32_t size = pSql->cmd.payloadLen - sizeof(SMsgDesc);
+  int32_t vgId = pTableMeta->vgroupInfo.vgId;
+  pSql->cmd.msgType = TSDB_MSG_TYPE_DELETE;
+  return TSDB_CODE_SUCCESS;
+} 
 /*
  * for table query, simply return the size <= 1k
  */
@@ -2287,7 +2300,9 @@ int tscGetSTableVgroupInfo(SSqlObj *pSql, int32_t clauseIndex) {
 void tscInitMsgsFp() {
   tscBuildMsg[TSDB_SQL_SELECT] = tscBuildQueryMsg;
   tscBuildMsg[TSDB_SQL_INSERT] = tscBuildSubmitMsg;
+  tscBuildMsg[TSDB_SQL_DELETE] = tscBuildDelMsg;
   tscBuildMsg[TSDB_SQL_FETCH] = tscBuildFetchMsg;
+  
 
   tscBuildMsg[TSDB_SQL_CREATE_DB] = tscBuildCreateDbMsg;
   tscBuildMsg[TSDB_SQL_CREATE_USER] = tscBuildUserMsg;

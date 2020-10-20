@@ -578,6 +578,30 @@ void doDestroyQuerySql(SQuerySQL *pQuerySql) {
   free(pQuerySql);
 }
 
+/*
+ * extract the del info out of sql string
+ */
+SDelSQL *tSetDelSQLElems(tVariantList *pFrom, tSQLExpr *pWhere) {
+  //assert(pSelection != NULL);
+  SDelSQL *pDelSql = calloc(1, sizeof(SDelSQL));
+  pDelSql->from = pFrom;
+  pDelSql->pWhere = pWhere;
+  return pDelSql;
+}
+
+void doDestroyDelSql(SDelSQL *pDelSql) {
+  if (pDelSql == NULL) {
+    return;
+  }
+  tSQLExprDestroy(pDelSql->pWhere);
+  pDelSql->pWhere = NULL;
+  
+  tVariantListDestroy(pDelSql->from);
+  pDelSql->from = NULL;
+  
+  free(pDelSql);
+}
+
 void destroyAllSelectClause(SSubclauseInfo *pClause) {
   if (pClause == NULL || pClause->numOfClause == 0) {
     return;
@@ -662,8 +686,9 @@ void SQLInfoDestroy(SSqlInfo *pInfo) {
   } else if (pInfo->type == TSDB_SQL_ALTER_TABLE) {
     tVariantListDestroy(pInfo->pAlterInfo->varList);
     tFieldListDestroy(pInfo->pAlterInfo->pAddColumns);
-    
     taosTFree(pInfo->pAlterInfo);
+  } else if (pInfo->type == TSDB_SQL_DELETE) {
+    doDestroyDelSql(pInfo->pDelInfo);
   } else {
     if (pInfo->pDCLInfo != NULL && pInfo->pDCLInfo->nAlloc > 0) {
       free(pInfo->pDCLInfo->a);
@@ -702,6 +727,8 @@ SSqlInfo* setSQLInfo(SSqlInfo *pInfo, void *pSqlExprInfo, SStrToken *pMeterName,
   if (type == TSDB_SQL_SELECT) {
     pInfo->subclauseInfo = *(SSubclauseInfo*) pSqlExprInfo;
     free(pSqlExprInfo);
+  } else if (type == TSDB_SQL_DELETE){
+    pInfo->pDelInfo = pSqlExprInfo;
   } else {
     pInfo->pCreateTableInfo = pSqlExprInfo;
   }

@@ -85,6 +85,11 @@ typedef struct SQuerySQL {
   SStrToken            selectToken;  // sql string
 } SQuerySQL;
 
+typedef struct SDelSQL {
+  tVariantList*        from;
+  struct tSQLExpr*     pWhere;
+} SDelSQL;
+
 typedef struct SCreateTableSQL {
   struct SStrToken name;  // meter name, create table [meterName] xxx
   bool             existCheck;
@@ -188,6 +193,7 @@ typedef struct SSqlInfo {
     SCreateTableSQL *pCreateTableInfo;
     SAlterTableSQL * pAlterInfo;
     tDCLSQL *        pDCLInfo;
+    SDelSQL *        pDelInfo;
   };
   
   SSubclauseInfo subclauseInfo;
@@ -268,11 +274,14 @@ SQuerySQL *tSetQuerySQLElems(SStrToken *pSelectToken, tSQLExprList *pSelection, 
                              tVariantList *pGroupby, tVariantList *pSortOrder, SIntervalVal *pInterval,
                              SStrToken *pSliding, tVariantList *pFill, SLimitVal *pLimit, SLimitVal *pGLimit);
 
+
 SCreateTableSQL *tSetCreateSQLElems(tFieldList *pCols, tFieldList *pTags, SStrToken *pMetricName,
                                     tVariantList *pTagVals, SQuerySQL *pSelect, int32_t type);
 
 void      tSQLExprNodeDestroy(tSQLExpr *pExpr);
 tSQLExpr *tSQLExprNodeClone(tSQLExpr *pExpr);
+
+SDelSQL *tSetDelSQLElems(tVariantList *pFrom, tSQLExpr *pWhere);
 
 SAlterTableSQL *tAlterTableSQLElems(SStrToken *pMeterName, tFieldList *pCols, tVariantList *pVals, int32_t type);
 
@@ -280,6 +289,8 @@ tSQLExprListList *tSQLListListAppend(tSQLExprListList *pList, tSQLExprList *pExp
 
 void destroyAllSelectClause(SSubclauseInfo *pSql);
 void doDestroyQuerySql(SQuerySQL *pSql);
+
+void doDestroyDelSql(SDelSQL *pSql);
 
 SSqlInfo *      setSQLInfo(SSqlInfo *pInfo, void *pSqlExprInfo, SStrToken *pMeterName, int32_t type);
 SSubclauseInfo *setSubclause(SSubclauseInfo *pClause, void *pSqlExprInfo);

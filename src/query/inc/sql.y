@@ -376,6 +376,16 @@ tagitem(A) ::= PLUS(X) FLOAT(Y).  {
     tVariantCreate(&A, &X);
 }
 
+///////////////////////////////////DELETE TABLE statement//////////////////////////////////
+
+%type delete {SDelSQL*}
+%destructor delete { doDestroyDelSql($$); }
+
+delete(A) ::= DELETE from(X) where_opt(Y).            {
+  A = tSetDelSQLElems(X, Y);
+}
+cmd ::= delete(A).   { setSQLInfo(pInfo, A, NULL, TSDB_SQL_DELETE);  }
+
 //////////////////////// The SELECT statement /////////////////////////////////
 %type select {SQuerySQL*}
 %destructor select {doDestroyQuerySql($$);}
@@ -699,6 +709,7 @@ cmd ::= ALTER TABLE ids(X) cpxName(F) SET TAG ids(Y) EQ tagitem(Z).     {
     SAlterTableSQL* pAlterTable = tAlterTableSQLElems(&X, NULL, A, TSDB_ALTER_TABLE_UPDATE_TAG_VAL);
     setSQLInfo(pInfo, pAlterTable, NULL, TSDB_SQL_ALTER_TABLE);
 }
+
 
 ////////////////////////////////////////kill statement///////////////////////////////////////
 cmd ::= KILL CONNECTION INTEGER(Y).   {setKillSQL(pInfo, TSDB_SQL_KILL_CONNECTION, &Y);}

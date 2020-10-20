@@ -455,7 +455,7 @@ void tscTableMetaCallBack(void *param, TAOS_RES *res, int code) {
         // in case of insert, redo parsing the sql string and build new submit data block for two reasons:
         // 1. the table Id(tid & uid) may have been update, the submit block needs to be updated accordingly.
         // 2. vnode may need the schema information along with submit block to update its local table schema.
-        if (pCmd->command == TSDB_SQL_INSERT || pCmd->command == TSDB_SQL_SELECT) {
+        if (pCmd->command == TSDB_SQL_INSERT || pCmd->command == TSDB_SQL_SELECT || pCmd->command == TSDB_SQL_DELETE) {
           tscDebug("%p redo parse sql string and proceed", pSql);
           pCmd->parseFinished = false;
           tscResetSqlCmdObj(pCmd, false);
@@ -477,6 +477,8 @@ void tscTableMetaCallBack(void *param, TAOS_RES *res, int code) {
             tscHandleInsertRetry(pSql);
           } else if (pCmd->command == TSDB_SQL_SELECT) {  // in case of other query type, continue
             tscProcessSql(pSql);
+          } else if (pCmd->command == TSDB_SQL_DELETE) {
+             // handle delete    
           }
         }else {  // in all other cases, simple retry
           tscProcessSql(pSql);

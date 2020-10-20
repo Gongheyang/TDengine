@@ -90,6 +90,8 @@ static int32_t parseWhereClause(SQueryInfo* pQueryInfo, tSQLExpr** pExpr, SSqlOb
 static int32_t parseFillClause(SSqlCmd* pCmd, SQueryInfo* pQueryInfo, SQuerySQL* pQuerySQL);
 static int32_t parseOrderbyClause(SSqlCmd* pCmd, SQueryInfo* pQueryInfo, SQuerySQL* pQuerySql, SSchema* pSchema);
 
+static int32_t setDelInfo(SSqlObj* pSql, struct SSqlInfo* pInfo);
+
 static int32_t tsRewriteFieldNameIfNecessary(SSqlCmd* pCmd, SQueryInfo* pQueryInfo);
 static int32_t setAlterTableInfo(SSqlObj* pSql, struct SSqlInfo* pInfo);
 static int32_t validateSqlFunctionInStreamSql(SSqlCmd* pCmd, SQueryInfo* pQueryInfo);
@@ -105,6 +107,7 @@ static bool validateOneTags(SSqlCmd* pCmd, TAOS_FIELD* pTagField);
 static bool hasTimestampForPointInterpQuery(SQueryInfo* pQueryInfo);
 static bool hasNormalColumnFilter(SQueryInfo* pQueryInfo);
 
+static int32_t getTimeFromExpr(tSQLExpr *pExpr, int16_t timePrecision, int64_t *result);
 static int32_t parseLimitClause(SSqlCmd* pCmd, SQueryInfo* pQueryInfo, int32_t index, SQuerySQL* pQuerySql, SSqlObj* pSql);
 static int32_t parseCreateDBOptions(SSqlCmd* pCmd, SCreateDBInfo* pCreateDbSql);
 static int32_t getColumnIndexByName(SSqlCmd* pCmd, const SStrToken* pToken, SQueryInfo* pQueryInfo, SColumnIndex* pIndex);
@@ -570,7 +573,13 @@ int32_t tscToSQLCmd(SSqlObj* pSql, struct SSqlInfo* pInfo) {
       pCmd->parseFinished = 1;
       return TSDB_CODE_SUCCESS;  // do not build query message here
     }
-
+    case TSDB_SQL_DELETE: {
+      if ((code = setDelInfo(pSql, pInfo)) != TSDB_CODE_SUCCESS) {
+        return code;
+      }                     
+      pCmd->parseFinished = 1;
+      break;
+    }
     case TSDB_SQL_ALTER_TABLE: {
       if ((code = setAlterTableInfo(pSql, pInfo)) != TSDB_CODE_SUCCESS) {
         return code;
@@ -578,6 +587,7 @@ int32_t tscToSQLCmd(SSqlObj* pSql, struct SSqlInfo* pInfo) {
 
       break;
     }
+                               
 
     case TSDB_SQL_KILL_QUERY:
     case TSDB_SQL_KILL_STREAM:
@@ -3696,7 +3706,68 @@ static int32_t handleExprInQueryCond(SSqlCmd* pCmd, SQueryInfo* pQueryInfo, tSQL
 
   return ret;
 }
+int32_t handleExprInDelCond(SSqlCmd* pCmd, SQueryInfo *pQueryInfo, tSQLExpr* pExpr) {
+  return TSDB_CODE_SUCCESS;
+}
 
+int32_t getDelCond(SSqlCmd* pCmd, SQueryInfo *pQueryInfo, tSQLExpr* pExpr) {
+  if (pExpr == NULL) {
+    return TSDB_CODE_SUCCESS;
+  }
+  const char* msg1 = "invalid time stamp"; 
+  const char* msg2 = "illegal column name";
+
+  if (pExpr->nSQLOptr == TK_IN) {
+    tSQLExpr* pLeft = pExpr->pLeft;
+    tSQLExpr* pRight = pExpr->pRight;
+    SColumnIndex index = COLUMN_INDEX_INITIALIZER;
+    if (getColumnIndexByName(pCmd, &pLeft->colInfo, pQueryInfo, &index) != TSDB_CODE_SUCCESS) {
+      return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2);
+    }
+    STableMetaInfo* pTableMetaInfo = tscGetMetaInfo(pQueryInfo, index.tableIndex);
+    int16_t timePrecision = tscGetTableInfo(pTableMetaInfo->pTableMeta).precision;
+    
+    if (index.columnIndex == PRIMARYKEY_TIMESTAMP_COL_INDEX) {
+      if (pRight == NULL || pRight->nSQLOptr != TK_SET || pRight->pParam == NULL) {
+        return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2);
+      }
+      int32_t nParam = pRight->pParam->nExpr;
+      int64_t *tsBuf = malloc(sizeof(int64_t) * nParam);
+      for (int i = 0; i < nParam; i++) {
+        int64_t ts;
+        if (getTimeFromExpr(pRight->pParam->a[i].pNode, timePrecision, &ts) != TSDB_CODE_SUCCESS) {
+          free(tsBuf);   
+          return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg1);
+        } else {
+          tsBuf[i] = ts; 
+        } 
+      }
+      qsort(tsBuf, nParam, sizeof(tsBuf[0]), compareInt64Val);
+    } else {
+      return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2);
+    }
+  } else {
+    return TSDB_CODE_TSC_INVALID_SQL; 
+  }
+  //const char* msg1 = "del condition must use 'or'";
+  //tSQLExpr* pLeft = pExpr->pLeft;
+  //tSQLExpr* pRight = pExpr->pRight;
+   
+  //int32_t leftType = -1;
+  //int32_t rightType = -1;
+
+  //if (!isExprDirectParentOfLeafNode(pExpr)) {
+  //  int32_t ret = getDelCond(pCmd, pQueryInfo, pExpr->pLeft);
+  //  if (ret != TSDB_CODE_SUCCESS) {
+  //    return ret;
+  //  }
+  //  ret = getDelCond(pCmd, pQueryInfo, pExpr->pRight);
+  //  if (ret != TSDB_CODE_SUCCESS) {
+  //    return ret;
+  //  }
+  //} 
+  //return handleExprInDelCond(pCmd, pQueryInfo, pExpr); 
+}
 int32_t getQueryCondExpr(SSqlCmd* pCmd, SQueryInfo* pQueryInfo, tSQLExpr** pExpr, SCondExpr* pCondExpr,
                         int32_t* type, int32_t parentOptr) {
   if (pExpr == NULL) {
@@ -4171,6 +4242,63 @@ int32_t parseWhereClause(SQueryInfo* pQueryInfo, tSQLExpr** pExpr, SSqlObj* pSql
   return ret;
 }
 
+int32_t getTimeFromExpr(tSQLExpr *pExpr, int16_t timePrecision, int64_t *result) {
+  int64_t val = 0;
+  bool    parsed = false;
+  if (pExpr->val.nType == TSDB_DATA_TYPE_BINARY) {
+    pExpr->val.nLen = strdequote(pExpr->val.pz);
+
+    char* seg = strnchr(pExpr->val.pz, '-', pExpr->val.nLen, false);
+    if (seg != NULL) {
+      if (taosParseTime(pExpr->val.pz, &val, pExpr->val.nLen, TSDB_TIME_PRECISION_MICRO, tsDaylight) == TSDB_CODE_SUCCESS) {
+        parsed = true;
+      } else {
+        return TSDB_CODE_TSC_INVALID_SQL;
+      }
+    } else {
+      SStrToken token = {.z = pExpr->val.pz, .n = pExpr->val.nLen, .type = TK_ID};
+      int32_t   len = tSQLGetToken(pExpr->val.pz, &token.type);
+
+      if ((token.type != TK_INTEGER && token.type != TK_FLOAT) || len != pExpr->val.nLen) {
+        return TSDB_CODE_TSC_INVALID_SQL;
+      }
+    }
+  } else if (pExpr->nSQLOptr == TK_INTEGER && timePrecision == TSDB_TIME_PRECISION_MILLI) {
+    /*
+     * if the pExpr->nSQLOptr == TK_INTEGER/TK_FLOAT, the value is adaptive, we
+     * need the time precision in metermeta to transfer the value in MICROSECOND
+     *
+     * Additional check to avoid data overflow
+     */
+    if (pExpr->val.i64Key <= INT64_MAX / 1000) {
+      pExpr->val.i64Key *= 1000;
+    }
+  } else if (pExpr->nSQLOptr == TK_FLOAT && timePrecision == TSDB_TIME_PRECISION_MILLI) {
+    pExpr->val.dKey *= 1000;
+  }
+
+  if (!parsed) {
+    /*
+     * failed to parse timestamp in regular formation, try next
+     * it may be a epoch time in string format
+     */
+    tVariantDump(&pExpr->val, (char*)&val, TSDB_DATA_TYPE_BIGINT, true);
+
+    /*
+     * transfer it into MICROSECOND format if it is a string, since for
+     * TK_INTEGER/TK_FLOAT the value has been transferred
+     *
+     * additional check to avoid data overflow
+     */
+    if (pExpr->nSQLOptr == TK_STRING && timePrecision == TSDB_TIME_PRECISION_MILLI) {
+      if (val <= INT64_MAX / 1000) {
+        val *= 1000;
+      }
+    }
+  }
+  *result = val;
+  return TSDB_CODE_SUCCESS;
+}
 int32_t getTimeRange(STimeWindow* win, tSQLExpr* pRight, int32_t optr, int16_t timePrecision) {
   // this is join condition, do nothing
   if (pRight->nSQLOptr == TK_ID) {
@@ -4184,59 +4312,10 @@ int32_t getTimeRange(STimeWindow* win, tSQLExpr* pRight, int32_t optr, int16_t t
   if (pRight->nSQLOptr == TK_SET || optr == TK_IN) {
     return TSDB_CODE_TSC_INVALID_SQL;
   }
-
-  int64_t val = 0;
-  bool    parsed = false;
-  if (pRight->val.nType == TSDB_DATA_TYPE_BINARY) {
-    pRight->val.nLen = strdequote(pRight->val.pz);
-
-    char* seg = strnchr(pRight->val.pz, '-', pRight->val.nLen, false);
-    if (seg != NULL) {
-      if (taosParseTime(pRight->val.pz, &val, pRight->val.nLen, TSDB_TIME_PRECISION_MICRO, tsDaylight) == TSDB_CODE_SUCCESS) {
-        parsed = true;
-      } else {
-        return TSDB_CODE_TSC_INVALID_SQL;
-      }
-    } else {
-      SStrToken token = {.z = pRight->val.pz, .n = pRight->val.nLen, .type = TK_ID};
-      int32_t   len = tSQLGetToken(pRight->val.pz, &token.type);
-
-      if ((token.type != TK_INTEGER && token.type != TK_FLOAT) || len != pRight->val.nLen) {
-        return TSDB_CODE_TSC_INVALID_SQL;
-      }
-    }
-  } else if (pRight->nSQLOptr == TK_INTEGER && timePrecision == TSDB_TIME_PRECISION_MILLI) {
-    /*
-     * if the pRight->nSQLOptr == TK_INTEGER/TK_FLOAT, the value is adaptive, we
-     * need the time precision in metermeta to transfer the value in MICROSECOND
-     *
-     * Additional check to avoid data overflow
-     */
-    if (pRight->val.i64Key <= INT64_MAX / 1000) {
-      pRight->val.i64Key *= 1000;
-    }
-  } else if (pRight->nSQLOptr == TK_FLOAT && timePrecision == TSDB_TIME_PRECISION_MILLI) {
-    pRight->val.dKey *= 1000;
-  }
-
-  if (!parsed) {
-    /*
-     * failed to parse timestamp in regular formation, try next
-     * it may be a epoch time in string format
-     */
-    tVariantDump(&pRight->val, (char*)&val, TSDB_DATA_TYPE_BIGINT, true);
-
-    /*
-     * transfer it into MICROSECOND format if it is a string, since for
-     * TK_INTEGER/TK_FLOAT the value has been transferred
-     *
-     * additional check to avoid data overflow
-     */
-    if (pRight->nSQLOptr == TK_STRING && timePrecision == TSDB_TIME_PRECISION_MILLI) {
-      if (val <= INT64_MAX / 1000) {
-        val *= 1000;
-      }
-    }
+  int64_t val;
+  int32_t code = getTimeFromExpr(pRight, timePrecision, &val); 
+  if (code != TSDB_CODE_SUCCESS) {
+    return code;
   }
 
   int32_t delta = 1;
@@ -4560,6 +4639,51 @@ int32_t parseOrderbyClause(SSqlCmd* pCmd, SQueryInfo* pQueryInfo, SQuerySQL* pQu
   return TSDB_CODE_SUCCESS;
 }
 
+int32_t setDelInfo(SSqlObj *pSql, struct SSqlInfo* pInfo) {
+  const char* msg1 = "invalid table name";
+  const char* msg2 = "invalid delete sql";
+  const char* msg3 = "delete can not be supported by super table";
+  
+  int32_t code = TSDB_CODE_SUCCESS;
+
+  SDelSQL*       pDelSql = pInfo->pDelInfo;  
+  SSqlCmd*       pCmd = &pSql->cmd; 
+  SQueryInfo*    pQueryInfo = tscGetQueryInfoDetail(pCmd, 0);
+  STableMetaInfo* pTableMetaInfo = tscGetMetaInfo(pQueryInfo, 0);
+
+  SStrToken tblToken = {0};
+  if (pDelSql->from && pDelSql->from->nExpr > 0) {
+    tVariant* pVar = &pDelSql->from->a[0].pVar;
+    SStrToken token = {.z = pVar->pz, .n = pVar->nLen, TK_STRING};
+    tblToken = token;
+  } else {
+    return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg1); 
+  }
+
+  if (tscValidateName(&tblToken) != TSDB_CODE_SUCCESS) {
+    return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg1);
+  }
+
+  code = tscSetTableFullName(pTableMetaInfo, &tblToken, pSql);
+  if (code != TSDB_CODE_SUCCESS) {
+    return code;
+  }
+
+  code = tscGetTableMeta(pSql, pTableMetaInfo);
+  if (code != TSDB_CODE_SUCCESS) {
+    return code;
+  }
+
+  if (UTIL_TABLE_IS_SUPER_TABLE(pTableMetaInfo)) {
+    return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg3); 
+  }
+  if (pDelSql->pWhere != NULL) {
+    if (getDelCond(pCmd, pQueryInfo, pDelSql->pWhere) != TSDB_CODE_SUCCESS) {
+      return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2); 
+    }
+  } 
+  return TSDB_CODE_SUCCESS;
+}
 int32_t setAlterTableInfo(SSqlObj* pSql, struct SSqlInfo* pInfo) {
   const int32_t DEFAULT_TABLE_INDEX = 0;
 
