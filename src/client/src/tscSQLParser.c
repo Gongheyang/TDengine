@@ -3710,7 +3710,7 @@ int32_t handleExprInDelCond(SSqlCmd* pCmd, SQueryInfo *pQueryInfo, tSQLExpr* pEx
   return TSDB_CODE_SUCCESS;
 }
 
-int32_t getDelCond(SSqlCmd* pCmd, SQueryInfo *pQueryInfo, tSQLExpr* pExpr) {
+int32_t getDelCond(SSqlCmd* pCmd, SQueryInfo *pQueryInfo, tSQLExpr* pExpr, int64_t **tsBuf, int32_t *sz) {
   if (pExpr == NULL) {
     return TSDB_CODE_SUCCESS;
   }
@@ -3731,24 +3731,29 @@ int32_t getDelCond(SSqlCmd* pCmd, SQueryInfo *pQueryInfo, tSQLExpr* pExpr) {
       if (pRight == NULL || pRight->nSQLOptr != TK_SET || pRight->pParam == NULL) {
         return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2);
       }
+
       int32_t nParam = pRight->pParam->nExpr;
-      int64_t *tsBuf = malloc(sizeof(int64_t) * nParam);
+      *tsBuf = malloc(sizeof(int64_t) * nParam);
+      *sz    = nParam; 
+      if (*tsBuf == NULL) {
+        return TSDB_CODE_TSC_OUT_OF_MEMORY;
+      }
       for (int i = 0; i < nParam; i++) {
         int64_t ts;
         if (getTimeFromExpr(pRight->pParam->a[i].pNode, timePrecision, &ts) != TSDB_CODE_SUCCESS) {
-          free(tsBuf);   
           return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg1);
         } else {
-          tsBuf[i] = ts; 
+          (*tsBuf)[i] = ts; 
         } 
       }
-      qsort(tsBuf, nParam, sizeof(tsBuf[0]), compareInt64Val);
+      qsort(*tsBuf, nParam, sizeof((*tsBuf)[0]), getComparFunc(TSDB_DATA_TYPE_TIMESTAMP, 0));
     } else {
       return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2);
     }
   } else {
     return TSDB_CODE_TSC_INVALID_SQL; 
   }
+  return TSDB_CODE_SUCCESS;
   //const char* msg1 = "del condition must use 'or'";
   //tSQLExpr* pLeft = pExpr->pLeft;
   //tSQLExpr* pRight = pExpr->pRight;
@@ -4643,6 +4648,7 @@ int32_t setDelInfo(SSqlObj *pSql, struct SSqlInfo* pInfo) {
   const char* msg1 = "invalid table name";
   const char* msg2 = "invalid delete sql";
   const char* msg3 = "delete can not be supported by super table";
+  const char* msg4 = "delete only supported by record";
   
   int32_t code = TSDB_CODE_SUCCESS;
 
@@ -4674,15 +4680,43 @@ int32_t setDelInfo(SSqlObj *pSql, struct SSqlInfo* pInfo) {
     return code;
   }
 
+  STableMeta* pTableMeta = pTableMetaInfo->pTableMeta; 
+
   if (UTIL_TABLE_IS_SUPER_TABLE(pTableMetaInfo)) {
     return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg3); 
   }
+
+  int64_t *tsBuf = NULL;
+  int32_t sz = 0;
   if (pDelSql->pWhere != NULL) {
-    if (getDelCond(pCmd, pQueryInfo, pDelSql->pWhere) != TSDB_CODE_SUCCESS) {
+    if (getDelCond(pCmd, pQueryInfo, pDelSql->pWhere, &tsBuf, &sz) != TSDB_CODE_SUCCESS) {
+      free(tsBuf);
       return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2); 
     }
-  } 
-  return TSDB_CODE_SUCCESS;
+  } else {
+    return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg4); 
+  }
+
+  if ((code = tscAllocPayload(pCmd, sizeof(SDeleteMsg)  + sz * sizeof(tsBuf[0]) + 64)) != TSDB_CODE_SUCCESS) {
+    return code;
+  }
+  
+  SDeleteMsg *pDelMsg = (SDeleteMsg *)pCmd->payload; 
+  pDelMsg->head.contLen = htonl(sizeof(SDeleteMsg) + sz * sizeof(tsBuf[0]));
+  pDelMsg->head.vgId    = htonl(pTableMeta->vgroupInfo.vgId);
+  pDelMsg->uid          = htobe64(pTableMeta->id.uid); 
+  pDelMsg->tid          = htonl(pTableMeta->id.tid); 
+  pDelMsg->tversion     = htons(pTableMeta->tversion); 
+  pDelMsg->delValLen    = htonl(sz);
+  int64_t* data = (int64_t *)(pDelMsg->data);
+  for (int32_t i = 0; i < sz; i++) {
+    *data = htobe64(*data);
+    data += 1;
+  }
+  pCmd->payloadLen = sizeof(SDeleteMsg) + sz * sizeof(tsBuf[0]);
+  free(tsBuf);
+  
+  return code;
 }
 int32_t setAlterTableInfo(SSqlObj* pSql, struct SSqlInfo* pInfo) {
   const int32_t DEFAULT_TABLE_INDEX = 0;

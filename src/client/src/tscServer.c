@@ -409,6 +409,7 @@ int doProcessSql(SSqlObj *pSql) {
 
   if (pCmd->command == TSDB_SQL_SELECT ||
       pCmd->command == TSDB_SQL_FETCH ||
+      pCmd->command == TSDB_SQL_DELETE ||
       pCmd->command == TSDB_SQL_RETRIEVE ||
       pCmd->command == TSDB_SQL_INSERT ||
       pCmd->command == TSDB_SQL_DELETE ||
@@ -521,6 +522,7 @@ int tscBuildSubmitMsg(SSqlObj *pSql, SSqlInfo *pInfo) {
   pShellMsg->numOfBlocks = htonl(pSql->cmd.numOfTablesInSubmit);  // number of tables to be inserted
 
   // pSql->cmd.payloadLen is set during copying data into payload
+
   pSql->cmd.msgType = TSDB_MSG_TYPE_SUBMIT;
   tscDumpEpSetFromVgroupInfo(&pTableMeta->corVgroupInfo, &pSql->epSet);
 
@@ -533,12 +535,14 @@ int tscBuildDelMsg(SSqlObj *pSql, SSqlInfo *pInfo) {
   SQueryInfo *pQueryInfo = tscGetQueryInfoDetail(&pSql->cmd, 0);
   STableMeta* pTableMeta = tscGetMetaInfo(pQueryInfo, 0)->pTableMeta;
   
-  char* pMsg = pSql->cmd.payload;
-
+  //char* pMsg = pSql->cmd.payload;
   // NOTE: shell message size should not include SMsgDesc
-  int32_t size = pSql->cmd.payloadLen - sizeof(SMsgDesc);
+  //int32_t size = pSql->cmd.payloadLen - sizeof(SMsgDesc);
   int32_t vgId = pTableMeta->vgroupInfo.vgId;
-  pSql->cmd.msgType = TSDB_MSG_TYPE_DELETE;
+
+  pSql->cmd.msgType    = TSDB_MSG_TYPE_DELETE;
+  tscDumpEpSetFromVgroupInfo(&pTableMeta->corVgroupInfo, &pSql->epSet);
+  tscDebug("%p build delete msg, vgId:%d numberOfEP:%d", pSql, vgId, pSql->epSet.numOfEps);
   return TSDB_CODE_SUCCESS;
 } 
 /*

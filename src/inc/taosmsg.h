@@ -303,6 +303,15 @@ typedef struct {
 } SUpdateTableTagValMsg;
 
 typedef struct {
+  SMsgHead  head;
+  int64_t   uid;
+  int32_t   tid;
+  int16_t   tversion;
+  int32_t   delValLen;
+  char      data[];
+} SDeleteMsg;
+
+typedef struct {
   char clientVersion[TSDB_VERSION_LEN];
   char msgVersion[TSDB_VERSION_LEN];
   char db[TSDB_TABLE_FNAME_LEN];
