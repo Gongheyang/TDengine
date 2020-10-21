@@ -297,7 +297,7 @@ void tscProcessMsgFromServer(SRpcMsg *rpcMsg, SRpcEpSet *pEpSet) {
   }
 
   int32_t cmd = pCmd->command;
-  if ((cmd == TSDB_SQL_SELECT || cmd == TSDB_SQL_FETCH || cmd == TSDB_SQL_INSERT || cmd == TSDB_SQL_UPDATE_TAGS_VAL) &&
+  if ((cmd == TSDB_SQL_SELECT || cmd == TSDB_SQL_FETCH || cmd == TSDB_SQL_INSERT || cmd == TSDB_SQL_UPDATE_TAGS_VAL || cmd == TSDB_SQL_DELETE) &&
       (rpcMsg->code == TSDB_CODE_TDB_INVALID_TABLE_ID ||
        rpcMsg->code == TSDB_CODE_VND_INVALID_VGROUP_ID ||
        rpcMsg->code == TSDB_CODE_RPC_NETWORK_UNAVAIL ||
@@ -377,8 +377,19 @@ void tscProcessMsgFromServer(SRpcMsg *rpcMsg, SRpcEpSet *pEpSet) {
       pRes->numOfRows += pMsg->affectedRows;
       tscDebug("%p SQL cmd:%s, code:%s inserted rows:%d rspLen:%d", pSql, sqlCmd[pCmd->command], 
           tstrerror(pRes->code), pMsg->affectedRows, pRes->rspLen);
+    } else if (rpcMsg->msgType == TSDB_MSG_TYPE_DELETE_RSP && pRes->pRsp != NULL) {
+      SShellSubmitRspMsg *pMsg = (SShellSubmitRspMsg*)pRes->pRsp;
+      pMsg->code = htonl(pMsg->code);
+      pMsg->numOfRows = 10; //htonl(pMsg->numOfRows);
+      pMsg->affectedRows = 10; //htonl(pMsg->affectedRows);
+      pMsg->failedRows = htonl(pMsg->failedRows);
+      pMsg->numOfFailedBlocks = htonl(pMsg->numOfFailedBlocks);
+      pRes->numOfRows += pMsg->affectedRows;
+      tscDebug("%p SQL cmd:%s, code:%s delete rows:%d rspLen:%d", pSql, sqlCmd[pCmd->command], 
+          tstrerror(pRes->code), pMsg->affectedRows, pRes->rspLen);
     } else {
       tscDebug("%p SQL cmd:%s, code:%s rspLen:%d", pSql, sqlCmd[pCmd->command], tstrerror(pRes->code), pRes->rspLen);
+      
     }
   }
   

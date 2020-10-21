@@ -47,6 +47,7 @@ typedef struct SCreateBuilder {
   int32_t (*fp)(void *para, char* result);
   Stage callStage;
 } SCreateBuilder; 
+
 static void tscSetLocalQueryResult(SSqlObj *pSql, const char *val, const char *columnName, int16_t type, size_t valueLength);
 
 static int32_t getToStringLength(const char *pData, int32_t length, int32_t type) {
