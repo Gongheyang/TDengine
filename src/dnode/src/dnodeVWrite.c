@@ -98,7 +98,7 @@ void dnodeCleanupVnodeWrite() {
 void dnodeDispatchToVnodeWriteQueue(SRpcMsg *pMsg) {
   char *pCont = (char *)pMsg->pCont;
 
-  if (pMsg->msgType == TSDB_MSG_TYPE_SUBMIT || pMsg->msgType == TSDB_MSG_TYPE_DELETE) {
+  if (pMsg->msgType == TSDB_MSG_TYPE_SUBMIT /*|| pMsg->msgType == TSDB_MSG_TYPE_DELETE*/) {
     SMsgDesc *pDesc = (SMsgDesc *)pCont;
     pDesc->numOfVnodes = htonl(pDesc->numOfVnodes);
     pCont += sizeof(SMsgDesc);

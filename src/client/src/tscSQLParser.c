@@ -4647,8 +4647,8 @@ int32_t parseOrderbyClause(SSqlCmd* pCmd, SQueryInfo* pQueryInfo, SQuerySQL* pQu
 int32_t setDelInfo(SSqlObj *pSql, struct SSqlInfo* pInfo) {
   const char* msg1 = "invalid table name";
   const char* msg2 = "invalid delete sql";
-  const char* msg3 = "delete can not be supported by super table";
-  const char* msg4 = "delete only supported by record";
+  const char* msg3 = "data deletion is not supported on super table";
+  const char* msg4 = "Only data deletion by row is not supported ";
   
   int32_t code = TSDB_CODE_SUCCESS;
 
