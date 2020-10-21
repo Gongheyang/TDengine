@@ -151,6 +151,16 @@ STableInfo *tsdbGetTableInfo(TSDB_REPO_T *pRepo, STableId tid);
  */
 int32_t tsdbInsertData(TSDB_REPO_T *repo, SSubmitMsg *pMsg, SShellSubmitRspMsg *pRsp);
 
+// -- FOR DELETE DATA
+/**
+ * Delete data from a table in a repository
+ * @param pRepo the TSDB repository handle
+ * @param pData the rows to delete (will give a more specific description)
+ *
+ * @return the number of row deleted, -1 for failure and the error number is set
+ */
+int32_t tsdbDeleteData(TSDB_REPO_T *repo, SDeleteMsg *pMsg, SShellSubmitRspMsg *pRsp);
+
 // -- FOR QUERY TIME SERIES DATA
 
 typedef void *TsdbQueryHandleT;  // Use void to hide implementation details

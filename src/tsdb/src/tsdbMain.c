@@ -211,6 +211,10 @@ int32_t tsdbInsertData(TSDB_REPO_T *repo, SSubmitMsg *pMsg, SShellSubmitRspMsg *
   return 0;
 }
 
+int32_t tsdbDeleteData(TSDB_REPO_T *repo, SDeleteMsg *pMsg, SShellSubmitRspMsg *pRsp) {
+  //STsdbRepo *    pRepo = (STsdbRepo *)repo;
+  return -1; 
+}
 uint32_t tsdbGetFileInfo(TSDB_REPO_T *repo, char *name, uint32_t *index, uint32_t eindex, int64_t *size) {
   STsdbRepo *pRepo = (STsdbRepo *)repo;
   // STsdbMeta *pMeta = pRepo->tsdbMeta;

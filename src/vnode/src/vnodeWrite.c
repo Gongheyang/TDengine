@@ -131,6 +131,17 @@ static int32_t vnodeProcessSubmitMsg(SVnodeObj *pVnode, void *pCont, SRspRet *pR
 }
 static int32_t vnodeProcessDeleteMsg(SVnodeObj *pVnode, void *pCont, SRspRet *pRet) {
   int32_t code = TSDB_CODE_SUCCESS;
+
+  vTrace("vgId:%d, delete msg is processed", pVnode->vgId);
+
+  // save insert result into item
+  SShellSubmitRspMsg *pRsp = NULL;
+  if (pRet) {
+    pRet->len = sizeof(SShellSubmitRspMsg);
+    pRet->rsp = rpcMallocCont(pRet->len);
+    pRsp = pRet->rsp;
+  }
+  if (tsdbDeleteData(pVnode->tsdb, pCont, pRsp) < 0) code = terrno;
   return code; 
 }
 
