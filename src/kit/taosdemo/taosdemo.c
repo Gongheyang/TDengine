@@ -543,13 +543,6 @@ int main(int argc, char *argv[]) {
                                 "./output.txt",  // output_file
                                 0,               // mode
                                 {
-                                "int",           // datatype
-                                "int",
-                                "int",
-                                "int",
-                                "int",
-                                "int",
-                                "int",
                                 "float"
                                 },
                                 8,               // len_of_binary
@@ -569,7 +562,7 @@ int main(int argc, char *argv[]) {
      reflected in arguments. */
   // For demo use, change default values for some parameters;
   arguments.num_of_tables = 10000;
-  arguments.num_of_CPR = 3; 
+  arguments.num_of_CPR = 1; 
   arguments.num_of_threads = 10;
   arguments.num_of_DPT = 100000;
   arguments.num_of_RPR = 1000;
@@ -695,12 +688,12 @@ int main(int argc, char *argv[]) {
   }
   char command[BUFFER_SIZE] = "\0";
 
-  sprintf(command, "drop database %s;", db_name);
-  TAOS_RES* res = taos_query(taos, command);
-  taos_free_result(res);
+//  sprintf(command, "drop database %s;", db_name);
+//  TAOS_RES* res = taos_query(taos, command);
+//  taos_free_result(res);
 
-  sprintf(command, "create database %s replica %d;", db_name, replica);
-  res = taos_query(taos, command);
+  sprintf(command, "create database if not exists %s replica %d;", db_name, replica);
+  TAOS_RES* res = taos_query(taos, command);
   taos_free_result(res);
 
   char cols[STRING_LEN] = "\0";
@@ -724,7 +717,7 @@ int main(int argc, char *argv[]) {
   if (use_metric) {
     /* Create metric table */
     printf("Creating meters super table...\n");
-    snprintf(command, BUFFER_SIZE, "create table if not exists %s.meters (ts timestamp%s) tags (areaid int, loc binary(10))", db_name, cols);
+    snprintf(command, BUFFER_SIZE, "create table if not exists %s.meters (ts timestamp%s) tags (uuid binary(50))", db_name, cols);
     queryDB(taos, command);
     printf("meters created!\n");
   }
@@ -850,10 +843,9 @@ int main(int argc, char *argv[]) {
     double dt = getCurrentTime() - dts;
     printf("Spent %.4f seconds to drop %d tables\n", dt, ntables);
 
-    FILE *fp = fopen(arguments.output_file, "a");
-    fprintf(fp, "Spent %.4f seconds to drop %d tables\n", dt, ntables);
-    fclose(fp);
-
+    FILE *fp1 = fopen(arguments.output_file, "a");
+    fprintf(fp1, "Spent %.4f seconds to drop %d tables\n", dt, ntables);
+    fclose(fp1);
   }
   
 
@@ -878,6 +870,10 @@ int main(int argc, char *argv[]) {
     pthread_join(read_id, NULL);
     taos_close(rInfo->taos);
   }
+
+  printf("###################################################################\n\n");
+  printf("Press enter key to EXIT");
+  (void)getchar();
 
   return 0;
 }
@@ -1002,17 +998,9 @@ void * createTable(void *sarg)
     /* Create all the tables; */
     printf("Creating table from %d to %d\n", winfo->start_table_id, winfo->end_table_id);
     for (int i = winfo->start_table_id; i <= winfo->end_table_id; i++) {
-      int j;
-      if (i % 10 == 0) {
-        j = 10;
-      } else {
-        j = i % 10;
-      }
-    if (j % 2 == 0) {
-      snprintf(command, BUFFER_SIZE, "create table if not exists %s.%s%d using %s.meters tags (%d,\"%s\");", winfo->db_name, winfo->tb_prefix, i, winfo->db_name, j, "shanghai");
-    } else {
-      snprintf(command, BUFFER_SIZE, "create table if not exists %s.%s%d using %s.meters tags (%d,\"%s\");", winfo->db_name, winfo->tb_prefix, i, winfo->db_name, j, "beijing");
-    }
+      float a = 5.0;
+      float x = (float)rand()/(float)(RAND_MAX * a);
+      snprintf(command, BUFFER_SIZE, "INSERT INTO %s.%s%050d using %s.meters tags (\"%050d\") VALUES(now, %f);", winfo->db_name, winfo->tb_prefix, i, winfo->db_name, i, x);
       queryDB(winfo->taos, command);
     }
   }
@@ -1245,7 +1233,7 @@ void *syncWrite(void *sarg) {
       int64_t tmp_time = time_counter;
 
       char *pstr = buffer;
-      pstr += sprintf(pstr, "insert into %s.%s%d values", winfo->db_name, winfo->tb_prefix, tID);
+      pstr += sprintf(pstr, "insert into %s.%s%050d values", winfo->db_name, winfo->tb_prefix, tID);
       int k;
       for (k = 0; k < winfo->nrecords_per_request;) {
         int rand_num = rand() % 100;
