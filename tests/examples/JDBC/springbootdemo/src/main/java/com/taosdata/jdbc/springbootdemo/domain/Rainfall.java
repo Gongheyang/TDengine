@@ -6,10 +6,8 @@ import java.sql.Timestamp;
 
 public class Rainfall {
 
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss.SSS",timezone = "GMT+8")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss.SSS", timezone = "GMT+8")
     private Timestamp ts;
-    private String name;
-    private String code;
     private float rainfall;
     private String station_code;
     private String station_name;
@@ -20,22 +18,6 @@ public class Rainfall {
 
     public void setTs(Timestamp ts) {
         this.ts = ts;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getCode() {
-        return code;
-    }
-
-    public void setCode(String code) {
-        this.code = code;
     }
 
     public float getRainfall() {

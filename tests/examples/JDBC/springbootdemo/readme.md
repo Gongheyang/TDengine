@@ -4,7 +4,7 @@
 ```properties
 # datasource config
 spring.datasource.driver-class-name=com.taosdata.jdbc.TSDBDriver
-spring.datasource.url=jdbc:TAOS://127.0.0.1:6030/log
+spring.datasource.url=jdbc:TAOS://192.168.1.59:6030/rainstation
 spring.datasource.username=root
 spring.datasource.password=taosdata
 

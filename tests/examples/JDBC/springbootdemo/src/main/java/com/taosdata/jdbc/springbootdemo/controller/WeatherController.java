@@ -57,7 +57,6 @@ public class WeatherController {
      */
     @PostMapping("/batch")
     public int batchSaveWeather(@RequestBody List<Weather> weatherList) {
-
         return weatherService.save(weatherList);
     }
 
