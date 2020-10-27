@@ -717,7 +717,7 @@ int main(int argc, char *argv[]) {
   if (use_metric) {
     /* Create metric table */
     printf("Creating meters super table...\n");
-    snprintf(command, BUFFER_SIZE, "create table if not exists %s.meters (ts timestamp%s) tags (uuid binary(50))", db_name, cols);
+    snprintf(command, BUFFER_SIZE, "create table if not exists %s.st0 (ts timestamp%s) tags (uuid binary(50))", db_name, cols);
     queryDB(taos, command);
     printf("meters created!\n");
   }
@@ -1000,7 +1000,7 @@ void * createTable(void *sarg)
     for (int i = winfo->start_table_id; i <= winfo->end_table_id; i++) {
       float a = 5.0;
       float x = (float)rand()/(float)(RAND_MAX * a);
-      snprintf(command, BUFFER_SIZE, "INSERT INTO %s.%s%050d using %s.meters tags (\"%050d\") VALUES(now, %f);", winfo->db_name, winfo->tb_prefix, i, winfo->db_name, i, x);
+      snprintf(command, BUFFER_SIZE, "INSERT INTO %s.%s%d using %s.st0 tags (\"%050d\") VALUES(now, %f);", winfo->db_name, winfo->tb_prefix, i, winfo->db_name, i, x);
       queryDB(winfo->taos, command);
     }
   }
@@ -1155,7 +1155,7 @@ void *readMetric(void *sarg) {
       }
       strcat(condition, tempS);
 
-      sprintf(command, "select %s from meters where %s", aggreFunc[j], condition);
+      sprintf(command, "select %s from st0 where %s", aggreFunc[j], condition);
 
       printf("Where condition: %s\n", condition);
       fprintf(fp, "%s\n", command);
