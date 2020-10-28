@@ -34,8 +34,8 @@ typedef bool (*__filter_func_t)(struct SColumnFilterElem* pFilter, char* val1, c
 typedef int32_t (*__block_search_fn_t)(char* data, int32_t num, int64_t key, int32_t order);
 
 typedef struct SPosInfo {
-  int32_t pageId:20;
-  int32_t rowId:12;
+  int32_t pageId;
+  int32_t rowId;
 } SPosInfo;
 
 typedef struct SGroupResInfo {
