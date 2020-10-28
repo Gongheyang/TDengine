@@ -335,7 +335,7 @@ void *taosCacheTransfer(SCacheObj *pCacheObj, void **data) {
 }
 
 void taosCacheRelease(SCacheObj *pCacheObj, void **data, bool _remove) {
-  if (pCacheObj == NULL || taosHashGetSize(pCacheObj->pHashTable) + pCacheObj->numOfElemsInTrash == 0) {
+  if (pCacheObj == NULL) {
     return;
   }
 
