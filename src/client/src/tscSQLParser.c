@@ -3733,61 +3733,61 @@ int32_t getDelCond(SSqlCmd* pCmd, SQueryInfo *pQueryInfo, tSQLExpr* pExpr, int64
   const char* msg1 = "invalid time stamp"; 
   const char* msg2 = "illegal column name";
 
-  if (pExpr->nSQLOptr == TK_IN) {
-    tSQLExpr* pLeft = pExpr->pLeft;
-    tSQLExpr* pRight = pExpr->pRight;
-    SColumnIndex index = COLUMN_INDEX_INITIALIZER;
-    if (getColumnIndexByName(pCmd, &pLeft->colInfo, pQueryInfo, &index) != TSDB_CODE_SUCCESS) {
-      return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2);
-    }
-    STableMetaInfo* pTableMetaInfo = tscGetMetaInfo(pQueryInfo, index.tableIndex);
-    int16_t timePrecision = tscGetTableInfo(pTableMetaInfo->pTableMeta).precision;
-    
-    if (index.columnIndex == PRIMARYKEY_TIMESTAMP_COL_INDEX) {
-      if (pRight == NULL || pRight->nSQLOptr != TK_SET || pRight->pParam == NULL) {
-        return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2);
-      }
+  tSQLExpr* pLeft = pExpr->pLeft;
+  tSQLExpr* pRight = pExpr->pRight;
+  if (pLeft == NULL || pLeft->nSQLOptr != TK_ID) {
+    return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2);
+  }  
+  if (pRight == NULL) {
+    return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg1);
+  } 
 
-      int32_t nParam = pRight->pParam->nExpr;
-      *tsBuf = malloc(sizeof(int64_t) * nParam);
-      *sz    = nParam; 
-      if (*tsBuf == NULL) {
-        return TSDB_CODE_TSC_OUT_OF_MEMORY;
-      }
-      for (int i = 0; i < nParam; i++) {
-        int64_t ts;
-        if (getTimeFromExpr(pRight->pParam->a[i].pNode, timePrecision, &ts) != TSDB_CODE_SUCCESS) {
-          return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg1);
-        } else {
-          (*tsBuf)[i] = ts; 
-        } 
-      }
-      qsort(*tsBuf, nParam, sizeof((*tsBuf)[0]), getComparFunc(TSDB_DATA_TYPE_TIMESTAMP, 0));
-    } else {
-      return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2);
+  SColumnIndex index = COLUMN_INDEX_INITIALIZER;
+  if (getColumnIndexByName(pCmd, &pLeft->colInfo, pQueryInfo, &index) != TSDB_CODE_SUCCESS) {
+    return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2);
+  }
+  STableMetaInfo* pTableMetaInfo = tscGetMetaInfo(pQueryInfo, index.tableIndex);
+  int16_t timePrecision = tscGetTableInfo(pTableMetaInfo->pTableMeta).precision;
+  if (index.columnIndex != PRIMARYKEY_TIMESTAMP_COL_INDEX) {
+    return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2);
+  }
+  int32_t nParam = -1; 
+
+  if (pExpr->nSQLOptr == TK_IN) {
+    if (pRight->nSQLOptr != TK_SET || pRight->pParam == NULL) { 
+      return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg1);
     }
+    nParam = pRight->pParam->nExpr;
+    *tsBuf = malloc(sizeof(int64_t) * nParam);
+    if (*tsBuf == NULL) {
+      return TSDB_CODE_TSC_OUT_OF_MEMORY;
+    }
+    for (int i = 0; i < nParam; i++) {
+      int64_t ts;
+      if (getTimeFromExpr(pRight->pParam->a[i].pNode, timePrecision, &ts) != TSDB_CODE_SUCCESS) {
+        return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg1);
+      } else {
+        (*tsBuf)[i] = ts; 
+      } 
+    }
+    qsort(*tsBuf, nParam, sizeof((*tsBuf)[0]), getComparFunc(TSDB_DATA_TYPE_TIMESTAMP, 0));
+    *sz = nParam; 
+  } else if (pExpr->nSQLOptr == TK_EQ) {
+    nParam = 1; 
+    *tsBuf = malloc(sizeof(int64_t) * nParam);
+    if (*tsBuf == NULL) {
+      return TSDB_CODE_TSC_OUT_OF_MEMORY;
+    }
+    int64_t ts;
+    if (getTimeFromExpr(pRight, timePrecision, &ts) != TSDB_CODE_SUCCESS) {
+      return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg1);
+    }
+    (*tsBuf)[nParam - 1] = ts;
+    *sz = nParam; 
   } else {
     return TSDB_CODE_TSC_INVALID_SQL; 
   }
   return TSDB_CODE_SUCCESS;
-  //const char* msg1 = "del condition must use 'or'";
-  //tSQLExpr* pLeft = pExpr->pLeft;
-  //tSQLExpr* pRight = pExpr->pRight;
-   
-  //int32_t leftType = -1;
-  //int32_t rightType = -1;
-
-  //if (!isExprDirectParentOfLeafNode(pExpr)) {
-  //  int32_t ret = getDelCond(pCmd, pQueryInfo, pExpr->pLeft);
-  //  if (ret != TSDB_CODE_SUCCESS) {
-  //    return ret;
-  //  }
-  //  ret = getDelCond(pCmd, pQueryInfo, pExpr->pRight);
-  //  if (ret != TSDB_CODE_SUCCESS) {
-  //    return ret;
-  //  }
-  //} 
-  //return handleExprInDelCond(pCmd, pQueryInfo, pExpr); 
 }
 int32_t getQueryCondExpr(SSqlCmd* pCmd, SQueryInfo* pQueryInfo, tSQLExpr** pExpr, SCondExpr* pCondExpr,
                         int32_t* type, int32_t parentOptr) {
@@ -4664,7 +4664,7 @@ int32_t setDelInfo(SSqlObj *pSql, struct SSqlInfo* pInfo) {
   const char* msg1 = "invalid table name";
   const char* msg2 = "invalid delete sql";
   const char* msg3 = "data deletion is not supported on super table";
-  const char* msg4 = "Only data deletion by row is not supported ";
+  const char* msg4 = "Only data deletion by timestamp is supported ";
   
   int32_t code = TSDB_CODE_SUCCESS;
 
