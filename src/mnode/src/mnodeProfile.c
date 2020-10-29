@@ -111,7 +111,6 @@ void mnodeReleaseConn(SConnObj *pConn) {
 }
 
 SConnObj *mnodeAccquireConn(int32_t connId, char *user, uint32_t ip, uint16_t port) {
-  uint64_t expireTime = CONN_KEEP_TIME * 1000 + (uint64_t)taosGetTimestampMs();
   SConnObj *pConn = taosCacheAcquireByKey(tsMnodeConnCache, &connId, sizeof(int32_t));
   if (pConn == NULL) {
     mDebug("connId:%d, is already destroyed, user:%s ip:%s:%u", connId, user, taosIpStr(ip), port);
@@ -126,7 +125,7 @@ SConnObj *mnodeAccquireConn(int32_t connId, char *user, uint32_t ip, uint16_t po
   }
 
   // mDebug("connId:%d, is incoming, user:%s ip:%s:%u", connId, pConn->user, taosIpStr(pConn->ip), pConn->port);
-  pConn->lastAccess = expireTime;
+  pConn->lastAccess = CONN_KEEP_TIME * 1000 + (uint64_t)taosGetTimestampMs();
   return pConn;
 }
 
@@ -183,7 +182,7 @@ static int32_t mnodeGetConnsMeta(STableMetaMsg *pMeta, SShowObj *pShow, void *pC
   // app name
   pShow->bytes[cols] = TSDB_APPNAME_LEN + VARSTR_HEADER_SIZE;
   pSchema[cols].type = TSDB_DATA_TYPE_BINARY;
-  strcpy(pSchema[cols].name, "app_name");
+  strcpy(pSchema[cols].name, "program");
   pSchema[cols].bytes = htons(pShow->bytes[cols]);
   cols++;
 
@@ -626,7 +625,7 @@ static int32_t mnodeProcessKillConnectionMsg(SMnodeMsg *pMsg) {
 
   SCMKillConnMsg *pKill = pMsg->rpcMsg.pCont;
   int32_t connId = atoi(pKill->queryId);
-  SConnObj *      pConn = taosCacheAcquireByKey(tsMnodeConnCache, &connId, sizeof(int32_t));
+  SConnObj *pConn = taosCacheAcquireByKey(tsMnodeConnCache, &connId, sizeof(int32_t));
   if (pConn == NULL) {
     mError("connId:%s, failed to kill, conn not exist", pKill->queryId);
     return TSDB_CODE_MND_INVALID_CONN_ID;

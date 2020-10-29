@@ -33,15 +33,11 @@ struct SColumnFilterElem;
 typedef bool (*__filter_func_t)(struct SColumnFilterElem* pFilter, char* val1, char* val2);
 typedef int32_t (*__block_search_fn_t)(char* data, int32_t num, int64_t key, int32_t order);
 
-typedef struct SPosInfo {
-  int32_t pageId:20;
-  int32_t rowId:12;
-} SPosInfo;
-
 typedef struct SGroupResInfo {
   int32_t  groupId;
   int32_t  numOfDataPages;
-  SPosInfo pos;
+  int32_t  pageId;
+  int32_t  rowId;
 } SGroupResInfo;
 
 typedef struct SSqlGroupbyExpr {
@@ -53,9 +49,10 @@ typedef struct SSqlGroupbyExpr {
 } SSqlGroupbyExpr;
 
 typedef struct SWindowResult {
-  SPosInfo      pos;         // Position of current result in disk-based output buffer
+  int32_t       pageId;      // pageId & rowId is the position of current result in disk-based output buffer
+  int32_t       rowId:15;
+  bool          closed:1;    // this result status: closed or opened
   uint16_t      numOfRows;   // number of rows of current time window
-  bool          closed;      // this result status: closed or opened
   SResultInfo*  resultInfo;  // For each result column, there is a resultInfo
   union {STimeWindow win; char* key;};  // start key of current time window
 } SWindowResult;
@@ -213,6 +210,7 @@ typedef struct SQInfo {
   void*            pBuf;        // allocated buffer for STableQueryInfo, sizeof(STableQueryInfo)*numOfTables;
 
   pthread_mutex_t  lock;        // used to synchronize the rsp/query threads
+  tsem_t           ready;
   int32_t          dataReady;   // denote if query result is ready or not
   void*            rspContext;  // response context
 } SQInfo;

@@ -82,6 +82,7 @@ typedef struct SJoinSupporter {
   char*           pIdTagList;      // result of first stage tags
   int32_t         totalLen;
   int32_t         num;
+  SArray*         pVgroupTables;
 } SJoinSupporter;
 
 typedef struct SVgroupTableInfo {
@@ -149,14 +150,13 @@ int tscAllocPayload(SSqlCmd* pCmd, int size);
 
 TAOS_FIELD tscCreateField(int8_t type, const char* name, int16_t bytes);
 
-SFieldSupInfo* tscFieldInfoAppend(SFieldInfo* pFieldInfo, TAOS_FIELD* pField);
-SFieldSupInfo* tscFieldInfoInsert(SFieldInfo* pFieldInfo, int32_t index, TAOS_FIELD* field);
+SInternalField* tscFieldInfoAppend(SFieldInfo* pFieldInfo, TAOS_FIELD* pField);
+SInternalField* tscFieldInfoInsert(SFieldInfo* pFieldInfo, int32_t index, TAOS_FIELD* field);
 
-SFieldSupInfo* tscFieldInfoGetSupp(SFieldInfo* pFieldInfo, int32_t index);
+SInternalField* tscFieldInfoGetInternalField(SFieldInfo* pFieldInfo, int32_t index);
 TAOS_FIELD* tscFieldInfoGetField(SFieldInfo* pFieldInfo, int32_t index);
 
 void tscFieldInfoUpdateOffset(SQueryInfo* pQueryInfo);
-void tscFieldInfoCopy(SFieldInfo* dst, const SFieldInfo* src);
 void tscFieldInfoUpdateOffsetForInterResult(SQueryInfo* pQueryInfo);
 
 int16_t tscFieldInfoGetOffset(SQueryInfo* pQueryInfo, int32_t index);
@@ -216,7 +216,7 @@ SQueryInfo *tscGetQueryInfoDetailSafely(SSqlCmd *pCmd, int32_t subClauseIndex);
 void tscClearTableMetaInfo(STableMetaInfo* pTableMetaInfo, bool removeFromCache);
 
 STableMetaInfo* tscAddTableMetaInfo(SQueryInfo* pQueryInfo, const char* name, STableMeta* pTableMeta,
-    SVgroupsInfo* vgroupList, SArray* pTagCols);
+    SVgroupsInfo* vgroupList, SArray* pTagCols, SArray* pVgroupTables);
 
 STableMetaInfo* tscAddEmptyMetaInfo(SQueryInfo *pQueryInfo);
 int32_t tscAddSubqueryInfo(SSqlCmd *pCmd);
@@ -225,16 +225,19 @@ void tscInitQueryInfo(SQueryInfo* pQueryInfo);
 
 void tscClearSubqueryInfo(SSqlCmd* pCmd);
 void tscFreeVgroupTableInfo(SArray* pVgroupTables);
+SArray* tscCloneVgroupTableInfo(SArray* pVgroupTables);
+void tscRemoveVgroupTableGroup(SArray* pVgroupTable, int32_t index);
 
 int  tscGetSTableVgroupInfo(SSqlObj* pSql, int32_t clauseIndex);
 int  tscGetTableMeta(SSqlObj* pSql, STableMetaInfo* pTableMetaInfo);
 int  tscGetMeterMetaEx(SSqlObj* pSql, STableMetaInfo* pTableMetaInfo, bool createIfNotExists);
 
 void tscResetForNextRetrieve(SSqlRes* pRes);
-
-void tscAddTimestampColumn(SQueryInfo* pQueryInfo, int16_t functionId, int16_t tableIndex);
 void tscDoQuery(SSqlObj* pSql);
 
+SVgroupsInfo* tscVgroupInfoClone(SVgroupsInfo *pInfo);
+void* tscVgroupInfoClear(SVgroupsInfo *pInfo);
+void tscSCMVgroupInfoCopy(SCMVgroupInfo* dst, const SCMVgroupInfo* src);
 /**
  * The create object function must be successful expect for the out of memory issue.
  *

@@ -51,8 +51,8 @@ static bool validPassword(const char* passwd) {
   return validImpl(passwd, TSDB_PASSWORD_LEN - 1);
 }
 
-SSqlObj *taosConnectImpl(const char *ip, const char *user, const char *pass, const char *auth, const char *db,
-                         uint16_t port, void (*fp)(void *, TAOS_RES *, int), void *param, void **taos) {
+static SSqlObj *taosConnectImpl(const char *ip, const char *user, const char *pass, const char *auth, const char *db,
+                         uint16_t port, void (*fp)(void *, TAOS_RES *, int), void *param, TAOS **taos) {
   taos_init();
 
   if (!validUserName(user)) {
@@ -161,6 +161,7 @@ SSqlObj *taosConnectImpl(const char *ip, const char *user, const char *pass, con
   registerSqlObj(pSql);
   tsInsertHeadSize = sizeof(SMsgDesc) + sizeof(SSubmitMsg);
 
+  taosAddRef(tscRefId, pObj);
   return pSql;
 }
 
@@ -243,16 +244,19 @@ static void asyncConnCallback(void *param, TAOS_RES *tres, int code) {
 }
 
 TAOS *taos_connect_a(char *ip, char *user, char *pass, char *db, uint16_t port, void (*fp)(void *, TAOS_RES *, int),
-                     void *param, void **taos) {
-  SSqlObj* pSql = taosConnectImpl(ip, user, pass, NULL, db, port, asyncConnCallback, param, taos);
+                     void *param, TAOS **taos) {
+  STscObj *pObj = NULL;
+  SSqlObj *pSql = taosConnectImpl(ip, user, pass, NULL, db, port, asyncConnCallback, param, (void **)&pObj);
   if (pSql == NULL) {
     return NULL;
   }
-  
+
+  if (taos) *taos = pObj;
+
   pSql->fetchFp = fp;
   pSql->res.code = tscProcessSql(pSql);
   tscDebug("%p DB async connection is opening", taos);
-  return taos;
+  return pObj;
 }
 
 void taos_close(TAOS *taos) {
@@ -293,7 +297,8 @@ void taos_close(TAOS *taos) {
   }
 
   tscDebug("%p all sqlObj are freed, free tscObj and close dnodeConn:%p", pObj, pObj->pDnodeConn);
-  tscCloseTscObj(pObj);
+
+  taosRemoveRef(tscRefId, pObj);
 }
 
 void waitForQueryRsp(void *param, TAOS_RES *tres, int code) {
@@ -370,7 +375,7 @@ int taos_num_fields(TAOS_RES *res) {
 
   size_t numOfCols = tscNumOfFields(pQueryInfo);
   for(int32_t i = 0; i < numOfCols; ++i) {
-    SFieldSupInfo* pInfo = taosArrayGet(pQueryInfo->fieldsInfo.pSupportInfo, i);
+    SInternalField* pInfo = taosArrayGet(pQueryInfo->fieldsInfo.internalField, i);
     if (pInfo->visible) {
       num++;
     }
@@ -406,8 +411,24 @@ TAOS_FIELD *taos_fetch_fields(TAOS_RES *res) {
   if (numOfCols == 0) {
     return NULL;
   }
-  
-  return pQueryInfo->fieldsInfo.pFields->pData;
+
+  SFieldInfo *pFieldInfo = &pQueryInfo->fieldsInfo;
+
+  if (pFieldInfo->final == NULL) {
+    TAOS_FIELD* f = calloc(pFieldInfo->numOfOutput, sizeof(TAOS_FIELD));
+
+    int32_t j = 0;
+    for(int32_t i = 0; i < pFieldInfo->numOfOutput; ++i) {
+      SInternalField* pField = tscFieldInfoGetInternalField(pFieldInfo, i);
+      if (pField->visible) {
+        f[j++] = pField->field;
+      }
+    }
+
+    pFieldInfo->final = f;
+  }
+
+  return pFieldInfo->final;
 }
 
 int taos_retrieve(TAOS_RES *res) {
@@ -588,7 +609,8 @@ static UNUSED_FUNC bool tscKillQueryInDnode(SSqlObj* pSql) {
     return true;
   }
 
-  SQueryInfo* pQueryInfo = tscGetQueryInfoDetail(pCmd, 0);
+  SQueryInfo *pQueryInfo = tscGetQueryInfoDetail(pCmd, 0);
+
   if ((pQueryInfo == NULL) || tscIsTwoStageSTableQuery(pQueryInfo, 0)) {
     return true;
   }
@@ -702,6 +724,7 @@ static void tscKillSTableQuery(SSqlObj *pSql) {
   SSqlCmd* pCmd = &pSql->cmd;
 
   SQueryInfo* pQueryInfo = tscGetQueryInfoDetail(pCmd, pCmd->clauseIndex);
+
   if (!tscIsTwoStageSTableQuery(pQueryInfo, 0)) {
     return;
   }
@@ -750,6 +773,7 @@ void taos_stop_query(TAOS_RES *res) {
   pSql->res.code = TSDB_CODE_TSC_QUERY_CANCELLED;
 
   SQueryInfo *pQueryInfo = tscGetQueryInfoDetail(pCmd, pCmd->clauseIndex);
+
   if (tscIsTwoStageSTableQuery(pQueryInfo, 0)) {
     assert(pSql->pRpcCtx == NULL);
     tscKillSTableQuery(pSql);
@@ -878,7 +902,7 @@ int taos_validate_sql(TAOS *taos, const char *sql) {
   if (pSql->sqlstr == NULL) {
     pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
     tscError("%p failed to malloc sql string buffer", pSql);
-    tscDebug("%p Valid SQL result:%d, %s pObj:%p", pSql, pRes->code, taos_errstr(taos), pObj);
+    tscDebug("%p Valid SQL result:%d, %s pObj:%p", pSql, pRes->code, taos_errstr(pSql), pObj);
     taosTFree(pSql);
     return pRes->code;
   }
@@ -903,7 +927,7 @@ int taos_validate_sql(TAOS *taos, const char *sql) {
   }
 
   if (code != TSDB_CODE_SUCCESS) {
-    tscDebug("%p Valid SQL result:%d, %s pObj:%p", pSql, code, taos_errstr(taos), pObj);
+    tscDebug("%p Valid SQL result:%d, %s pObj:%p", pSql, code, taos_errstr(pSql), pObj);
   }
 
   taos_free_result(pSql);
@@ -1047,7 +1071,7 @@ int taos_load_table_info(TAOS *taos, const char *tableNameList) {
 
   tscDoQuery(pSql);
 
-  tscDebug("%p load multi table meta result:%d %s pObj:%p", pSql, pRes->code, taos_errstr(taos), pObj);
+  tscDebug("%p load multi table meta result:%d %s pObj:%p", pSql, pRes->code, taos_errstr(pSql), pObj);
   if ((code = pRes->code) != TSDB_CODE_SUCCESS) {
     tscFreeSqlObj(pSql);
   }

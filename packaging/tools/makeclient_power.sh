@@ -123,7 +123,7 @@ if [[ "$pagMode" != "lite" ]] && [[ "$cpuType" != "aarch32" ]]; then
   cp -r ${examples_dir}/R      ${install_dir}/examples
   sed -i '/password/ {s/taosdata/powerdb/g}'  ${install_dir}/examples/R/command.txt
   cp -r ${examples_dir}/go     ${install_dir}/examples  
-  sed -i '/root/ {s/taosdata/powerdb/g}'  ${install_dir}/examples/go/src/taosapp/taosapp.go
+  sed -i '/root/ {s/taosdata/powerdb/g}'  ${install_dir}/examples/go/taosdemo.go
 fi
 # Copy driver
 mkdir -p ${install_dir}/driver 
@@ -135,7 +135,7 @@ mkdir -p ${install_dir}/connector
 
 if [[ "$pagMode" != "lite" ]] && [[ "$cpuType" != "aarch32" ]]; then
   if [ "$osType" != "Darwin" ]; then
-    cp ${build_dir}/lib/*.jar      ${install_dir}/connector
+    cp ${build_dir}/lib/*.jar      ${install_dir}/connector ||:
   fi
   cp -r ${connector_dir}/grafanaplugin ${install_dir}/connector/
   cp -r ${connector_dir}/python  ${install_dir}/connector/
