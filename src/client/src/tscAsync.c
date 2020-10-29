@@ -478,9 +478,9 @@ void tscTableMetaCallBack(void *param, TAOS_RES *res, int code) {
           } else if (pCmd->command == TSDB_SQL_SELECT) {  // in case of other query type, continue
             tscProcessSql(pSql);
           } else if (pCmd->command == TSDB_SQL_DELETE) {
-             // handle delete    
+            tscProcessSql(pSql);
           }
-        }else {  // in all other cases, simple retry
+        } else {  // in all other cases, simple retry
           tscProcessSql(pSql);
         }
 

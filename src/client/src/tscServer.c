@@ -363,7 +363,7 @@ void tscProcessMsgFromServer(SRpcMsg *rpcMsg, SRpcEpSet *pEpSet) {
     }
 
     /*
-     * There is not response callback function for submit response.
+     * There is not response callback function for submit|delete response.
      * The actual inserted number of points is the first number.
      */
     if (rpcMsg->msgType == TSDB_MSG_TYPE_SUBMIT_RSP && pRes->pRsp != NULL) {
@@ -380,8 +380,8 @@ void tscProcessMsgFromServer(SRpcMsg *rpcMsg, SRpcEpSet *pEpSet) {
     } else if (rpcMsg->msgType == TSDB_MSG_TYPE_DELETE_RSP && pRes->pRsp != NULL) {
       SShellSubmitRspMsg *pMsg = (SShellSubmitRspMsg*)pRes->pRsp;
       pMsg->code = htonl(pMsg->code);
-      pMsg->numOfRows = 10; //htonl(pMsg->numOfRows);
-      pMsg->affectedRows = 10; //htonl(pMsg->affectedRows);
+      pMsg->numOfRows = htonl(pMsg->numOfRows);
+      pMsg->affectedRows = htonl(pMsg->affectedRows);
       pMsg->failedRows = htonl(pMsg->failedRows);
       pMsg->numOfFailedBlocks = htonl(pMsg->numOfFailedBlocks);
       pRes->numOfRows += pMsg->affectedRows;
