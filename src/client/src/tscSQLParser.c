@@ -3727,9 +3727,6 @@ int32_t handleExprInDelCond(SSqlCmd* pCmd, SQueryInfo *pQueryInfo, tSQLExpr* pEx
 }
 
 int32_t getDelCond(SSqlCmd* pCmd, SQueryInfo *pQueryInfo, tSQLExpr* pExpr, int64_t **tsBuf, int32_t *sz) {
-  if (pExpr == NULL) {
-    return TSDB_CODE_SUCCESS;
-  }
   const char* msg1 = "invalid time stamp"; 
   const char* msg2 = "illegal column name";
 
@@ -3758,10 +3755,10 @@ int32_t getDelCond(SSqlCmd* pCmd, SQueryInfo *pQueryInfo, tSQLExpr* pExpr, int64
       return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg1);
     }
     nParam = pRight->pParam->nExpr;
-    *tsBuf = malloc(sizeof(int64_t) * nParam);
-    if (*tsBuf == NULL) {
+    if ((*tsBuf = malloc(sizeof(int64_t) * nParam)) == NULL) {
       return TSDB_CODE_TSC_OUT_OF_MEMORY;
     }
+
     for (int i = 0; i < nParam; i++) {
       int64_t ts;
       if (getTimeFromExpr(pRight->pParam->a[i].pNode, timePrecision, &ts) != TSDB_CODE_SUCCESS) {
@@ -3774,10 +3771,10 @@ int32_t getDelCond(SSqlCmd* pCmd, SQueryInfo *pQueryInfo, tSQLExpr* pExpr, int64
     *sz = nParam; 
   } else if (pExpr->nSQLOptr == TK_EQ) {
     nParam = 1; 
-    *tsBuf = malloc(sizeof(int64_t) * nParam);
-    if (*tsBuf == NULL) {
+    if ((*tsBuf = malloc(sizeof(int64_t) * nParam)) == NULL) {
       return TSDB_CODE_TSC_OUT_OF_MEMORY;
     }
+
     int64_t ts;
     if (getTimeFromExpr(pRight, timePrecision, &ts) != TSDB_CODE_SUCCESS) {
       return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg1);
@@ -4662,9 +4659,8 @@ int32_t parseOrderbyClause(SSqlCmd* pCmd, SQueryInfo* pQueryInfo, SQuerySQL* pQu
 
 int32_t setDelInfo(SSqlObj *pSql, struct SSqlInfo* pInfo) {
   const char* msg1 = "invalid table name";
-  const char* msg2 = "invalid delete sql";
-  const char* msg3 = "data deletion is not supported on super table";
-  const char* msg4 = "Only data deletion by timestamp is supported ";
+  const char* msg2 = "data deletion is not supported on super table";
+  const char* msg3 = "Only data deletion by timestamp is supported ";
   
   int32_t code = TSDB_CODE_SUCCESS;
 
@@ -4699,21 +4695,23 @@ int32_t setDelInfo(SSqlObj *pSql, struct SSqlInfo* pInfo) {
   STableMeta* pTableMeta = pTableMetaInfo->pTableMeta; 
 
   if (UTIL_TABLE_IS_SUPER_TABLE(pTableMetaInfo)) {
-    return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg3); 
+    return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2); 
   }
 
   int64_t *tsBuf = NULL;
   int32_t sz = 0;
   if (pDelSql->pWhere != NULL) {
-    if (getDelCond(pCmd, pQueryInfo, pDelSql->pWhere, &tsBuf, &sz) != TSDB_CODE_SUCCESS) {
+    code = getDelCond(pCmd, pQueryInfo, pDelSql->pWhere, &tsBuf, &sz);
+    if (code != TSDB_CODE_SUCCESS) {
       free(tsBuf);
-      return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg2); 
-    }
+      return code; 
+    } 
   } else {
-    return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg4); 
+    return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg3); 
   }
 
   if ((code = tscAllocPayload(pCmd, sizeof(SDeleteMsg)  + sz * sizeof(tsBuf[0]) + 64)) != TSDB_CODE_SUCCESS) {
+    free(tsBuf);
     return code;
   }
   
