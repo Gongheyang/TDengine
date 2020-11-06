@@ -322,13 +322,23 @@ void tscProcessMsgFromServer(SRpcMsg *rpcMsg, SRpcEpSet *pEpSet) {
         int32_t duration = getWaitingTimeInterval(pSql->retry);
         taosMsleep(duration);
       }
-
-      rpcMsg->code = tscRenewTableMeta(pSql, 0);
+      bool free = false;
+      if (cmd == TSDB_SQL_META || cmd == TSDB_SQL_STABLEVGROUP) {
+        if (pSql->param) {
+          rpcMsg->code = tscRenewTableMeta(pSql->param, 0);
+          free = true;
+        }
+      } else {
+        rpcMsg->code = tscRenewTableMeta(pSql, 0);
+      }
 
       // if there is an error occurring, proceed to the following error handling procedure.
       if (rpcMsg->code == TSDB_CODE_TSC_ACTION_IN_PROGRESS) {
         taosCacheRelease(tscObjCache, (void**) &p, false);
         rpcFreeCont(rpcMsg->pCont);
+        if (free) {
+          taosCacheRelease(tscObjCache, (void **)&p, true);
+        }
         return;
       }
     }
