@@ -1233,7 +1233,7 @@ void *syncWrite(void *sarg) {
       int64_t tmp_time = time_counter;
 
       char *pstr = buffer;
-      pstr += sprintf(pstr, "insert into %s.%s%050d values", winfo->db_name, winfo->tb_prefix, tID);
+      pstr += sprintf(pstr, "INSERT INTO %s.%s%d values", winfo->db_name, winfo->tb_prefix, tID);
       int k;
       for (k = 0; k < winfo->nrecords_per_request;) {
         int rand_num = rand() % 100;
