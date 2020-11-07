@@ -512,6 +512,9 @@ static int32_t tsdbCheckAndSetDefaultCfg(STsdbCfg *pCfg) {
     }
   }
 
+  // update check
+  if (pCfg->update != 0) pCfg->update = 1;
+
   return 0;
 
 _err:
@@ -579,7 +582,7 @@ static int32_t tsdbSaveConfig(char *rootDir, STsdbCfg *pCfg) {
 
   taosCalcChecksumAppend(0, (uint8_t *)buf, TSDB_FILE_HEAD_SIZE);
 
-  if (taosTWrite(fd, (void *)buf, TSDB_FILE_HEAD_SIZE) < TSDB_FILE_HEAD_SIZE) {
+  if (taosWrite(fd, (void *)buf, TSDB_FILE_HEAD_SIZE) < TSDB_FILE_HEAD_SIZE) {
     tsdbError("vgId:%d failed to write %d bytes to file %s since %s", pCfg->tsdbId, TSDB_FILE_HEAD_SIZE, fname,
               strerror(errno));
     terrno = TAOS_SYSTEM_ERROR(errno);
@@ -620,7 +623,7 @@ static int tsdbLoadConfig(char *rootDir, STsdbCfg *pCfg) {
     goto _err;
   }
 
-  if (taosTRead(fd, (void *)buf, TSDB_FILE_HEAD_SIZE) < TSDB_FILE_HEAD_SIZE) {
+  if (taosRead(fd, (void *)buf, TSDB_FILE_HEAD_SIZE) < TSDB_FILE_HEAD_SIZE) {
     tsdbError("failed to read %d bytes from file %s since %s", TSDB_FILE_HEAD_SIZE, fname, strerror(errno));
     terrno = TAOS_SYSTEM_ERROR(errno);
     goto _err;
@@ -762,7 +765,7 @@ static int32_t tsdbInsertDataToTable(STsdbRepo *pRepo, SSubmitBlk *pBlock, TSKEY
       return -1;
     }
 
-    if (tsdbInsertRowToMem(pRepo, row, pTable) < 0) return -1;
+    if (tsdbUpdateRowInMem(pRepo, row, pTable) < 0) return -1;
 
     (*affectedrows)++;
     points++;
@@ -923,6 +926,7 @@ static int tsdbEncodeCfg(void **buf, STsdbCfg *pCfg) {
   tlen += taosEncodeVariantI32(buf, pCfg->maxRowsPerFileBlock);
   tlen += taosEncodeFixedI8(buf, pCfg->precision);
   tlen += taosEncodeFixedI8(buf, pCfg->compression);
+  tlen += taosEncodeFixedI8(buf, pCfg->update);
 
   return tlen;
 }
@@ -939,6 +943,7 @@ static void *tsdbDecodeCfg(void *buf, STsdbCfg *pCfg) {
   buf = taosDecodeVariantI32(buf, &(pCfg->maxRowsPerFileBlock));
   buf = taosDecodeFixedI8(buf, &(pCfg->precision));
   buf = taosDecodeFixedI8(buf, &(pCfg->compression));
+  buf = taosDecodeFixedI8(buf, &(pCfg->update));
 
   return buf;
 }

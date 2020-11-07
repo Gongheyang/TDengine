@@ -97,14 +97,14 @@ static void tscInitSqlContext(SSqlCmd *pCmd, SLocalReducer *pReducer, tOrderDesc
       pCtx->param[2].i64Key = pQueryInfo->order.order;
       pCtx->param[2].nType  = TSDB_DATA_TYPE_BIGINT;
       pCtx->param[1].i64Key = pQueryInfo->order.orderColId;
+    } else if (functionId == TSDB_FUNC_APERCT) {
+      pCtx->param[0].i64Key = pExpr->param[0].i64Key;
+      pCtx->param[0].nType  = pExpr->param[0].nType;
     }
 
-    SResultInfo *pResInfo = &pReducer->pResInfo[i];
-    pResInfo->bufLen = pExpr->interBytes;
-    pResInfo->interResultBuf = calloc(1, (size_t) pResInfo->bufLen);
-
-    pCtx->resultInfo = &pReducer->pResInfo[i];
-    pCtx->resultInfo->superTableQ = true;
+    pCtx->interBufBytes = pExpr->interBytes;
+    pCtx->resultInfo = calloc(1, pCtx->interBufBytes + sizeof(SResultRowCellInfo));
+    pCtx->stableQuery = true;
   }
 
   int16_t          n = 0;
@@ -345,7 +345,6 @@ void tscCreateLocalReducer(tExtMemBuffer **pMemBuffer, int32_t numOfBuffer, tOrd
   size_t numOfCols = tscSqlExprNumOfExprs(pQueryInfo);
   
   pReducer->pTempBuffer->num = 0;
-  pReducer->pResInfo = calloc(numOfCols, sizeof(SResultInfo));
 
   tscCreateResPointerInfo(pRes, pQueryInfo);
   tscInitSqlContext(pCmd, pReducer, pDesc);
@@ -489,13 +488,15 @@ void tscDestroyLocalReducer(SSqlObj *pSql) {
       tscDebug("%p waiting for delete procedure, status: %d", pSql, status);
     }
 
-    pLocalReducer->pFillInfo = taosDestoryFillInfo(pLocalReducer->pFillInfo);
+    pLocalReducer->pFillInfo = taosDestroyFillInfo(pLocalReducer->pFillInfo);
 
     if (pLocalReducer->pCtx != NULL) {
       for (int32_t i = 0; i < pQueryInfo->fieldsInfo.numOfOutput; ++i) {
         SQLFunctionCtx *pCtx = &pLocalReducer->pCtx[i];
 
         tVariantDestroy(&pCtx->tag);
+        taosTFree(pCtx->resultInfo);
+
         if (pCtx->tagInfo.pTagCtxList != NULL) {
           taosTFree(pCtx->tagInfo.pTagCtxList);
         }
@@ -508,15 +509,6 @@ void tscDestroyLocalReducer(SSqlObj *pSql) {
 
     taosTFree(pLocalReducer->pTempBuffer);
     taosTFree(pLocalReducer->pResultBuf);
-
-    if (pLocalReducer->pResInfo != NULL) {
-      size_t num = tscSqlExprNumOfExprs(pQueryInfo);
-      for (int32_t i = 0; i < num; ++i) {
-        taosTFree(pLocalReducer->pResInfo[i].interResultBuf);
-      }
-
-      taosTFree(pLocalReducer->pResInfo);
-    }
 
     if (pLocalReducer->pLoserTree) {
       taosTFree(pLocalReducer->pLoserTree->param);
@@ -1072,7 +1064,7 @@ static int64_t getNumOfResultLocal(SQueryInfo *pQueryInfo, SQLFunctionCtx *pCtx)
       continue;
     }
 
-    SResultInfo* pResInfo = GET_RES_INFO(&pCtx[j]);
+    SResultRowCellInfo* pResInfo = GET_RES_INFO(&pCtx[j]);
     if (maxOutput < pResInfo->numOfRes) {
       maxOutput = pResInfo->numOfRes;
     }
@@ -1253,10 +1245,11 @@ bool genFinalResults(SSqlObj *pSql, SLocalReducer *pLocalReducer, bool noMoreCur
   return true;
 }
 
-void resetOutputBuf(SQueryInfo *pQueryInfo, SLocalReducer *pLocalReducer) {  // reset output buffer to the beginning
-  for (int32_t i = 0; i < pQueryInfo->fieldsInfo.numOfOutput; ++i) {
-    pLocalReducer->pCtx[i].aOutputBuf =
-        pLocalReducer->pResultBuf->data + tscFieldInfoGetOffset(pQueryInfo, i) * pLocalReducer->resColModel->capacity;
+void resetOutputBuf(SQueryInfo *pQueryInfo, SLocalReducer *pLocalReducer) {// reset output buffer to the beginning
+  size_t t = tscSqlExprNumOfExprs(pQueryInfo);
+  for (int32_t i = 0; i < t; ++i) {
+    SSqlExpr* pExpr = tscSqlExprGet(pQueryInfo, i);
+    pLocalReducer->pCtx[i].aOutputBuf = pLocalReducer->pResultBuf->data + pExpr->offset * pLocalReducer->resColModel->capacity;
   }
 
   memset(pLocalReducer->pResultBuf, 0, pLocalReducer->nResultBufSize + sizeof(tFilePage));
@@ -1501,8 +1494,7 @@ int32_t tscDoLocalMerge(SSqlObj *pSql) {
           if (pLocalReducer->discard && sameGroup) {
             pLocalReducer->hasUnprocessedRow = false;
             tmpBuffer->num = 0;
-          } else {
-            // current row does not belongs to the previous group, so it is not be handled yet.
+          } else { // current row does not belongs to the previous group, so it is not be handled yet.
             pLocalReducer->hasUnprocessedRow = true;
           }
 

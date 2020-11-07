@@ -58,6 +58,7 @@ char    tsLocale[TSDB_LOCALE_LEN] = {0};
 char    tsCharset[TSDB_LOCALE_LEN] = {0};  // default encode string
 int32_t tsEnableCoreFile = 0;
 int32_t tsMaxBinaryDisplayWidth = 30;
+char    tsTempDir[TSDB_FILENAME_LEN] = "/tmp/";
 
 /*
  * denote if the server needs to compress response message at the application layer to client, including query rsp,
@@ -119,6 +120,7 @@ int16_t tsWAL           = TSDB_DEFAULT_WAL_LEVEL;
 int32_t tsFsyncPeriod   = TSDB_DEFAULT_FSYNC_PERIOD;
 int32_t tsReplications  = TSDB_DEFAULT_DB_REPLICA_OPTION;
 int32_t tsQuorum        = TSDB_DEFAULT_DB_QUORUM_OPTION;
+int32_t tsUpdate        = TSDB_DEFAULT_DB_UPDATE_OPTION;
 int32_t tsMaxVgroupsPerDb  = 0;
 int32_t tsMinTablePerVnode = TSDB_TABLES_STEP;
 int32_t tsMaxTablePerVnode = TSDB_DEFAULT_TABLES;
@@ -785,6 +787,16 @@ static void doInitGlobalConfig(void) {
   cfg.unitType = TAOS_CFG_UTYPE_NONE;
   taosInitConfigOption(cfg);
 
+  cfg.option = "update";
+  cfg.ptr = &tsUpdate;
+  cfg.valType = TAOS_CFG_VTYPE_INT32;
+  cfg.cfgType = TSDB_CFG_CTYPE_B_CONFIG | TSDB_CFG_CTYPE_B_SHOW;
+  cfg.minValue = TSDB_MIN_DB_UPDATE;
+  cfg.maxValue = TSDB_MAX_DB_UPDATE;
+  cfg.ptrLength = 0;
+  cfg.unitType = TAOS_CFG_UTYPE_NONE;
+  taosInitConfigOption(cfg);
+
   cfg.option = "mqttHostName";
   cfg.ptr = tsMqttHostName;
   cfg.valType = TAOS_CFG_VTYPE_STRING;
@@ -1310,13 +1322,23 @@ static void doInitGlobalConfig(void) {
   cfg.ptrLength = 0;
   cfg.unitType = TAOS_CFG_UTYPE_NONE;
   taosInitConfigOption(cfg);
+
+  cfg.option = "tempDir";
+  cfg.ptr = tsTempDir;
+  cfg.valType = TAOS_CFG_VTYPE_STRING;
+  cfg.cfgType = TSDB_CFG_CTYPE_B_CONFIG | TSDB_CFG_CTYPE_B_CLIENT;
+  cfg.minValue = 0;
+  cfg.maxValue = 0;
+  cfg.ptrLength = tListLen(tsTempDir);
+  cfg.unitType = TAOS_CFG_UTYPE_NONE;
+  taosInitConfigOption(cfg);
 }
 
 void taosInitGlobalCfg() {
   pthread_once(&tsInitGlobalCfgOnce, doInitGlobalConfig);
 }
 
-bool taosCheckGlobalCfg() {
+int32_t taosCheckGlobalCfg() {
   char fqdn[TSDB_FQDN_LEN];
   uint16_t port;
 
@@ -1375,7 +1397,9 @@ bool taosCheckGlobalCfg() {
   tsSyncPort = tsServerPort + TSDB_PORT_SYNC;
   tsHttpPort = tsServerPort + TSDB_PORT_HTTP;
 
-  return true;
+  taosPrintGlobalCfg();
+
+  return 0;
 }
 
 int taosGetFqdnPortFromEp(const char *ep, char *fqdn, uint16_t *port) {

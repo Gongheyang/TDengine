@@ -56,6 +56,7 @@ static int syncRestoreFile(SSyncPeer *pPeer, uint64_t *fversion) {
   int        code = -1;
   char       name[TSDB_FILENAME_LEN * 2] = {0};
   uint32_t   pindex = 0;    // index in last restore
+  bool       fileChanged = false;
 
   *fversion = 0;
   sinfo.index = 0;
@@ -114,10 +115,11 @@ static int syncRestoreFile(SSyncPeer *pPeer, uint64_t *fversion) {
     close(dfd);
     if (ret < 0) break;
 
+    fileChanged = true;
     sDebug("%s, %s is received, size:%" PRId64, pPeer->id, minfo.name, minfo.size);
   }
 
-  if (code == 0 && (minfo.fversion != sinfo.fversion)) {
+  if (code == 0 && fileChanged) {
     // data file is changed, code shall be set to 1
     *fversion = minfo.fversion;
     code = 1;
@@ -152,7 +154,7 @@ static int syncRestoreWal(SSyncPeer *pPeer) {
     if (ret < 0) break;
 
     sDebug("%s, restore a record, ver:%" PRIu64, pPeer->id, pHead->version);
-    (*pNode->writeToCache)(pNode->ahandle, pHead, TAOS_QTYPE_WAL);
+    (*pNode->writeToCache)(pNode->ahandle, pHead, TAOS_QTYPE_WAL, NULL);
   }
 
   if (code < 0) {
@@ -167,7 +169,7 @@ static char *syncProcessOneBufferedFwd(SSyncPeer *pPeer, char *offset) {
   SSyncNode *pNode = pPeer->pSyncNode;
   SWalHead * pHead = (SWalHead *)offset;
 
-  (*pNode->writeToCache)(pNode->ahandle, pHead, TAOS_QTYPE_FWD);
+  (*pNode->writeToCache)(pNode->ahandle, pHead, TAOS_QTYPE_FWD, NULL);
   offset += pHead->len + sizeof(SWalHead);
 
   return offset;
