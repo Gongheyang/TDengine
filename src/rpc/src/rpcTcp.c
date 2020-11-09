@@ -177,12 +177,12 @@ static void taosStopTcpThread(SThreadObj* pThreadObj) {
   // save thread into local variable since pThreadObj is freed when thread exits
   pthread_t thread = pThreadObj->thread; 
 
-  if (taosComparePthread(pThreadObj->thread, pthread_self())) {
+  if (taosComparePthread(thread, pthread_self())) {
     pthread_detach(pthread_self());
     return;
   }
 
-  if (taosCheckPthreadValid(pThreadObj->thread)) {
+  if (taosCheckPthreadValid(thread)) {
     // signal the thread to stop, try graceful method first,
     // and use pthread_cancel when failed
     struct epoll_event event = { .events = EPOLLIN };
@@ -191,11 +191,11 @@ static void taosStopTcpThread(SThreadObj* pThreadObj) {
       // failed to create eventfd, call pthread_cancel instead, which may result in data corruption:
       tError("%s, failed to create eventfd(%s)", pThreadObj->label, strerror(errno));
       pThreadObj->stop = true;
-      pthread_cancel(pThreadObj->thread);
+      pthread_cancel(thread);
     } else if (epoll_ctl(pThreadObj->pollFd, EPOLL_CTL_ADD, fd, &event) < 0) {
       // failed to call epoll_ctl, call pthread_cancel instead, which may result in data corruption:
       tError("%s, failed to call epoll_ctl(%s)", pThreadObj->label, strerror(errno));
-      pthread_cancel(pThreadObj->thread);
+      pthread_cancel(thread);
     }
   }
 
