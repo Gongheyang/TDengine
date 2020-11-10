@@ -239,6 +239,7 @@ static int32_t mnodeProcessHeartBeatMsg(SMnodeMsg *pMsg) {
 
   SHeartBeatMsg *pHBMsg = pMsg->rpcMsg.pCont;
   if (taosCheckVersion(pHBMsg->clientVer, version, 3) != TSDB_CODE_SUCCESS) {
+    mError("mismatched client version, con:%d, app:%s, pid:%d", htonl(pHBMsg->connId), pHBMsg->appName, htonl(pHBMsg->pid));
     rpcFreeCont(pRsp);
     return TSDB_CODE_TSC_INVALID_VERSION;  // todo change the error code
   }
