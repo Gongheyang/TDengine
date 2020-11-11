@@ -701,12 +701,12 @@ void tSkipListDoInsert(SSkipList *pSkipList, SSkipListNode **backward, SSkipList
 }
 
 SSkipListNode* tSkipListPushFront(SSkipList* pSkipList, SSkipListNode *pNode) {
-  SSkipListNode* forward[MAX_SKIP_LIST_LEVEL] = {0};
-  for(int32_t i = 0; i < pSkipList->level; ++i) {
-    forward[i] = pSkipList->pHead;
+  SSkipListNode *backward[MAX_SKIP_LIST_LEVEL] = {0};
+  for (int32_t i = 0; i < pSkipList->level; ++i) {
+    backward[i] = SL_GET_FORWARD_POINTER(pSkipList->pHead, i);
   }
-  
-  tSkipListDoInsert(pSkipList, forward, pNode);
+
+  tSkipListDoInsert(pSkipList, backward, pNode);
   return pNode;
 }
 
