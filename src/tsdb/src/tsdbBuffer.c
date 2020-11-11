@@ -140,7 +140,7 @@ SListNode *tsdbAllocBufBlockFromPool(STsdbRepo *pRepo) {
 
 // ---------------- LOCAL FUNCTIONS ----------------
 static STsdbBufBlock *tsdbNewBufBlock(int bufBlockSize) {
-  STsdbBufBlock *pBufBlock = (STsdbBufBlock *)malloc(sizeof(*pBufBlock) + bufBlockSize);
+  STsdbBufBlock *pBufBlock = (STsdbBufBlock *)calloc(1, sizeof(*pBufBlock) + bufBlockSize);
   if (pBufBlock == NULL) {
     terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
     goto _err;

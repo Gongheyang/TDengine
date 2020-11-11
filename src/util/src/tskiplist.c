@@ -71,7 +71,7 @@ memset(pNode, 0, SL_NODE_HEADER_SIZE(_l));\
 (n)->level = _l;\
 } while(0)
 
-static void tSkipListDoInsert(SSkipList *pSkipList, SSkipListNode **forward, SSkipListNode *pNode);
+static void tSkipListDoInsert(SSkipList *pSkipList, SSkipListNode **backward, SSkipListNode *pNode);
 static SSkipListNode* tSkipListPushBack(SSkipList *pSkipList, SSkipListNode *pNode);
 static SSkipListNode* tSkipListPushFront(SSkipList* pSkipList, SSkipListNode *pNode);
 static SSkipListIterator* doCreateSkipListIterator(SSkipList *pSkipList, int32_t order);
@@ -260,26 +260,26 @@ SSkipListNode *tSkipListPut(SSkipList *pSkipList, SSkipListNode *pNode) {
   }
   
   // find the appropriated position to insert data
-  SSkipListNode *px = pSkipList->pHead;
-  SSkipListNode *forward[MAX_SKIP_LIST_LEVEL] = {0};
+  SSkipListNode *px = pSkipList->pTail;
+  SSkipListNode *backward[MAX_SKIP_LIST_LEVEL] = {0};
 
   int32_t ret = -1;
   for (int32_t i = pSkipList->level - 1; i >= 0; --i) {
-    SSkipListNode *p = SL_GET_FORWARD_POINTER(px, i);
-    while (p != pSkipList->pTail) {
+    SSkipListNode *p = SL_GET_BACKWARD_POINTER(px, i);
+    while (p != pSkipList->pHead) {
       char *key = SL_GET_NODE_KEY(pSkipList, p);
 
       // if the forward element is less than the specified key, forward one step
       ret = pSkipList->comparFn(key, newDatakey);
-      if (ret < 0) {
+      if (ret > 0) {
         px = p;
-        p = SL_GET_FORWARD_POINTER(px, i);
+        p = SL_GET_BACKWARD_POINTER(px, i);
       } else {
         break;
       }
     }
     
-    forward[i] = px;
+    backward[i] = px;
   }
 
   // if the skip list does not allowed identical key inserted, the new data will be discarded.
@@ -291,7 +291,7 @@ SSkipListNode *tSkipListPut(SSkipList *pSkipList, SSkipListNode *pNode) {
     return NULL;
   }
   
-  tSkipListDoInsert(pSkipList, forward, pNode);
+  tSkipListDoInsert(pSkipList, backward, pNode);
   return pNode;
 }
 
@@ -680,18 +680,18 @@ void tSkipListPrint(SSkipList *pSkipList, int16_t nlevel) {
   }
 }
 
-void tSkipListDoInsert(SSkipList *pSkipList, SSkipListNode **forward, SSkipListNode *pNode) {
+void tSkipListDoInsert(SSkipList *pSkipList, SSkipListNode **backward, SSkipListNode *pNode) {
   DO_MEMSET_PTR_AREA(pNode);
   
   for (int32_t i = 0; i < pNode->level; ++i) {
-    SSkipListNode *x = forward[i];
-    SL_GET_BACKWARD_POINTER(pNode, i) = x;
-    
-    SSkipListNode *next = SL_GET_FORWARD_POINTER(x, i);
-    SL_GET_BACKWARD_POINTER(next, i) = pNode;
-    
-    SL_GET_FORWARD_POINTER(pNode, i) = next;
-    SL_GET_FORWARD_POINTER(x, i) = pNode;
+    SSkipListNode *x = backward[i];
+    SL_GET_FORWARD_POINTER(pNode, i) = x;
+
+    SSkipListNode *prev = SL_GET_BACKWARD_POINTER(x, i);
+    SL_GET_FORWARD_POINTER(prev, i) = pNode;
+
+    SL_GET_BACKWARD_POINTER(pNode, i) = prev;
+    SL_GET_BACKWARD_POINTER(x, i) = pNode;
   }
   
   atomic_add_fetch_32(&pSkipList->size, 1);
