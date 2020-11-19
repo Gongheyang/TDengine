@@ -25,10 +25,12 @@ public class InvalidResultPointerExceptionTest {
         try (Statement stmt = conn.createStatement()) {
             stmt.execute("create table weather(ts timestamp, temperature int)");
         }
+        conn.close();
     }
 
     @Test
-    public void testInvalidResultPointerException() {
+    public void testInvalidResultPointerException() throws SQLException, ClassNotFoundException {
+        conn = TSDBCommon.getConn("localhost");
         IntStream.of(1, 2).boxed().map(i -> new Thread(() -> {
             try (Statement stmt = conn.createStatement()) {
                 long end = System.currentTimeMillis() + 1000 * 60 * 5;
