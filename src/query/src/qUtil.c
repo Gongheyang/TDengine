@@ -24,7 +24,7 @@ int32_t getOutputInterResultBufSize(SQuery* pQuery) {
   int32_t size = 0;
 
   for (int32_t i = 0; i < pQuery->numOfOutput; ++i) {
-    size += pQuery->pSelectExpr[i].interBytes;
+    size += pQuery->pExpr1[i].interBytes;
   }
 
   assert(size >= 0);
@@ -57,7 +57,7 @@ void cleanupTimeWindowInfo(SWindowResInfo *pWindowResInfo) {
     return;
   }
   
-  taosTFree(pWindowResInfo->pResult);
+  tfree(pWindowResInfo->pResult);
 }
 
 void resetTimeWindowInfo(SQueryRuntimeEnv *pRuntimeEnv, SWindowResInfo *pWindowResInfo) {
@@ -237,7 +237,7 @@ void clearResultRow(SQueryRuntimeEnv *pRuntimeEnv, SResultRow *pWindowRes) {
       SResultRowCellInfo *pResultInfo = &pWindowRes->pCellInfo[i];
 
       char * s = getPosInResultPage(pRuntimeEnv, i, pWindowRes, page);
-      size_t size = pRuntimeEnv->pQuery->pSelectExpr[i].bytes;
+      size_t size = pRuntimeEnv->pQuery->pExpr1[i].bytes;
       memset(s, 0, size);
 
       RESET_RESULT_INFO(pResultInfo);
@@ -280,7 +280,7 @@ void copyResultRow(SQueryRuntimeEnv *pRuntimeEnv, SResultRow *dst, const SResult
 
     tFilePage *srcpage = getResBufPage(pRuntimeEnv->pResultBuf, src->pageId);
     char * srcBuf = getPosInResultPage(pRuntimeEnv, i, (SResultRow *)src, srcpage);
-    size_t s = pRuntimeEnv->pQuery->pSelectExpr[i].bytes;
+    size_t s = pRuntimeEnv->pQuery->pExpr1[i].bytes;
     
     memcpy(dstBuf, srcBuf, s);
   }
@@ -358,11 +358,11 @@ void* destroyResultRowPool(SResultRowPool* p) {
   size_t size = taosArrayGetSize(p->pData);
   for(int32_t i = 0; i < size; ++i) {
     void** ptr = taosArrayGet(p->pData, i);
-    taosTFree(*ptr);
+    tfree(*ptr);
   }
 
   taosArrayDestroy(p->pData);
 
-  taosTFree(p);
+  tfree(p);
   return NULL;
 }

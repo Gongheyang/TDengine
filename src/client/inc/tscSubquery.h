@@ -39,7 +39,9 @@ int32_t tscHandleMultivnodeInsert(SSqlObj *pSql);
 int32_t tscHandleInsertRetry(SSqlObj* pSql);
 
 void tscBuildResFromSubqueries(SSqlObj *pSql);
-TAOS_ROW doSetResultRowData(SSqlObj *pSql, bool finalResult);
+TAOS_ROW doSetResultRowData(SSqlObj *pSql);
+
+char *getArithmeticInputSrc(void *param, const char *name, int32_t colId);
 
 #ifdef __cplusplus
 }

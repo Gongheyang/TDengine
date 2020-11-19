@@ -65,7 +65,7 @@ _err:
 void tsdbFreeFileH(STsdbFileH *pFileH) {
   if (pFileH) {
     pthread_rwlock_destroy(&pFileH->fhlock);
-    taosTFree(pFileH->pFGroup);
+    tfree(pFileH->pFGroup);
     free(pFileH);
   }
 }
@@ -199,7 +199,7 @@ int tsdbOpenFileH(STsdbRepo *pRepo) {
 
   regfree(&regex1);
   regfree(&regex2);
-  taosTFree(tDataDir);
+  tfree(tDataDir);
   closedir(dir);
   return 0;
 
@@ -209,7 +209,7 @@ _err:
   regfree(&regex1);
   regfree(&regex2);
 
-  taosTFree(tDataDir);
+  tfree(tDataDir);
   if (dir != NULL) closedir(dir);
   tsdbCloseFileH(pRepo);
   return -1;
@@ -256,7 +256,8 @@ SFileGroup *tsdbCreateFGroupIfNeed(STsdbRepo *pRepo, char *dataDir, int fid) {
     pFileH->pFGroup[pFileH->nFGroups++] = fGroup;
     qsort((void *)(pFileH->pFGroup), pFileH->nFGroups, sizeof(SFileGroup), compFGroup);
     pthread_rwlock_unlock(&pFileH->fhlock);
-    return tsdbSearchFGroup(pFileH, fid, TD_EQ);
+    pGroup = tsdbSearchFGroup(pFileH, fid, TD_EQ);
+    ASSERT(pGroup != NULL);
   }
 
   return pGroup;
@@ -516,7 +517,7 @@ void tsdbGetFileInfoImpl(char *fname, uint32_t *magic, int64_t *size) {
   SFile         file;
   SFile *       pFile = &file;
 
-  strncpy(pFile->fname, fname, TSDB_FILENAME_LEN);
+  strncpy(pFile->fname, fname, TSDB_FILENAME_LEN - 1);
   pFile->fd = -1;
 
   if (tsdbOpenFile(pFile, O_RDONLY) < 0) goto _err;

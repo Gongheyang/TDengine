@@ -236,6 +236,7 @@ int tdUpdateKVStoreRecord(SKVStore *pStore, uint64_t uid, void *cont, int contLe
   rInfo.offset = lseek(pStore->fd, 0, SEEK_CUR);
   if (rInfo.offset < 0) {
     uError("failed to lseek file %s since %s", pStore->fname, strerror(errno));
+    terrno = TAOS_SYSTEM_ERROR(errno);
     return -1;
   }
 
@@ -254,6 +255,7 @@ int tdUpdateKVStoreRecord(SKVStore *pStore, uint64_t uid, void *cont, int contLe
 
   if (taosWrite(pStore->fd, cont, contLen) < contLen) {
     uError("failed to write %d bytes to file %s since %s", contLen, pStore->fname, strerror(errno));
+    terrno = TAOS_SYSTEM_ERROR(errno);
     return -1;
   }
 
@@ -475,9 +477,9 @@ _err:
 
 static void tdFreeKVStore(SKVStore *pStore) {
   if (pStore) {
-    taosTFree(pStore->fname);
-    taosTFree(pStore->fsnap);
-    taosTFree(pStore->fnew);
+    tfree(pStore->fname);
+    tfree(pStore->fsnap);
+    tfree(pStore->fnew);
     taosHashCleanup(pStore->map);
     free(pStore);
   }
@@ -616,11 +618,11 @@ static int tdRestoreKVStore(SKVStore *pStore) {
   if (pStore->aFunc) (*pStore->aFunc)(pStore->appH);
 
   taosHashDestroyIter(pIter);
-  taosTFree(buf);
+  tfree(buf);
   return 0;
 
 _err:
   taosHashDestroyIter(pIter);
-  taosTFree(buf);
+  tfree(buf);
   return -1;
 }

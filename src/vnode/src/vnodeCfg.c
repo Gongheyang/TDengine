@@ -22,11 +22,10 @@
 #include "tsdb.h"
 #include "dnode.h"
 #include "vnodeInt.h"
-#include "vnodeVersion.h"
 #include "vnodeCfg.h"
 
 static void vnodeLoadCfg(SVnodeObj *pVnode, SCreateVnodeMsg* vnodeMsg) {
-  strcpy(pVnode->db, vnodeMsg->db);
+  tstrncpy(pVnode->db, vnodeMsg->db, sizeof(pVnode->db));
   pVnode->cfgVersion = vnodeMsg->cfg.cfgVersion;
   pVnode->tsdbCfg.cacheBlockSize = vnodeMsg->cfg.cacheBlockSize;
   pVnode->tsdbCfg.totalBlocks = vnodeMsg->cfg.totalBlocks;
@@ -40,8 +39,7 @@ static void vnodeLoadCfg(SVnodeObj *pVnode, SCreateVnodeMsg* vnodeMsg) {
   pVnode->tsdbCfg.compression = vnodeMsg->cfg.compression;
   pVnode->walCfg.walLevel = vnodeMsg->cfg.walLevel;
   pVnode->walCfg.fsyncPeriod = vnodeMsg->cfg.fsyncPeriod;
-  pVnode->walCfg.wals = vnodeMsg->cfg.wals;
-  pVnode->walCfg.keep = 0;
+  pVnode->walCfg.keep = TAOS_WAL_NOT_KEEP;
   pVnode->syncCfg.replica = vnodeMsg->cfg.replications;
   pVnode->syncCfg.quorum = vnodeMsg->cfg.quorum;
 
@@ -99,7 +97,7 @@ int32_t vnodeReadCfg(SVnodeObj *pVnode) {
     vError("vgId:%d, failed to read %s, db not found", pVnode->vgId, file);
     goto PARSE_VCFG_ERROR;
   }
-  strcpy(vnodeMsg.db, db->valuestring);
+  tstrncpy(vnodeMsg.db, db->valuestring, sizeof(vnodeMsg.db));
 
   cJSON *cfgVersion = cJSON_GetObjectItem(root, "cfgVersion");
   if (!cfgVersion || cfgVersion->type != cJSON_Number) {

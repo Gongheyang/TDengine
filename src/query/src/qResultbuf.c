@@ -165,7 +165,7 @@ static char* doFlushPageToDisk(SDiskbasedResultBuf* pResultBuf, SPageInfo* pg) {
 
 static char* flushPageToDisk(SDiskbasedResultBuf* pResultBuf, SPageInfo* pg) {
   int32_t ret = TSDB_CODE_SUCCESS;
-  assert(pResultBuf->numOfPages * pResultBuf->pageSize == pResultBuf->totalBufSize && pResultBuf->numOfPages >= pResultBuf->inMemPages);
+  assert((int64_t)pResultBuf->numOfPages * pResultBuf->pageSize == pResultBuf->totalBufSize && pResultBuf->numOfPages >= pResultBuf->inMemPages);
 
   if (pResultBuf->file == NULL) {
     if ((ret = createDiskFile(pResultBuf)) != TSDB_CODE_SUCCESS) {
@@ -267,7 +267,7 @@ static char* evicOneDataPage(SDiskbasedResultBuf* pResultBuf) {
     assert(d->pn == pn);
 
     d->pn = NULL;
-    taosTFree(pn);
+    tfree(pn);
 
     bufPage = flushPageToDisk(pResultBuf, d);
   }
@@ -418,7 +418,7 @@ void destroyResultBuf(SDiskbasedResultBuf* pResultBuf) {
   }
 
   unlink(pResultBuf->path);
-  taosTFree(pResultBuf->path);
+  tfree(pResultBuf->path);
 
   SHashMutableIterator* iter = taosHashCreateIter(pResultBuf->groupSet);
   while(taosHashIterNext(iter)) {
@@ -426,8 +426,8 @@ void destroyResultBuf(SDiskbasedResultBuf* pResultBuf) {
     size_t n = taosArrayGetSize(*p);
     for(int32_t i = 0; i < n; ++i) {
       SPageInfo* pi = taosArrayGetP(*p, i);
-      taosTFree(pi->pData);
-      taosTFree(pi);
+      tfree(pi->pData);
+      tfree(pi);
     }
 
     taosArrayDestroy(*p);
@@ -440,8 +440,8 @@ void destroyResultBuf(SDiskbasedResultBuf* pResultBuf) {
   taosHashCleanup(pResultBuf->groupSet);
   taosHashCleanup(pResultBuf->all);
 
-  taosTFree(pResultBuf->assistBuf);
-  taosTFree(pResultBuf);
+  tfree(pResultBuf->assistBuf);
+  tfree(pResultBuf);
 }
 
 SPageInfo* getLastPageInfo(SIDList pList) {

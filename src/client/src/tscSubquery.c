@@ -255,7 +255,7 @@ static void tscDestroyJoinSupporter(SJoinSupporter* pSupporter) {
     pSupporter->pVgroupTables = NULL;
   }
 
-  taosTFree(pSupporter->pIdTagList);
+  tfree(pSupporter->pIdTagList);
   tscTagCondRelease(&pSupporter->tagCond);
   free(pSupporter);
 }
@@ -308,7 +308,7 @@ static void filterVgroupTables(SQueryInfo* pQueryInfo, SArray* pVgroupTables) {
   assert(taosArrayGetSize(pVgroupTables) > 0);
   TSDB_QUERY_SET_TYPE(pQueryInfo->type, TSDB_QUERY_TYPE_MULTITABLE_QUERY);
 
-  taosTFree(list);
+  tfree(list);
 }
 
 static SArray* buildVgroupTableByResult(SQueryInfo* pQueryInfo, SArray* pVgroupTables) {
@@ -335,7 +335,7 @@ static SArray* buildVgroupTableByResult(SQueryInfo* pQueryInfo, SArray* pVgroupT
     taosArrayPush(pNew, &info);
   }
 
-  taosTFree(list);
+  tfree(list);
   TSDB_QUERY_SET_TYPE(pQueryInfo->type, TSDB_QUERY_TYPE_MULTITABLE_QUERY);
 
   return pNew;
@@ -1624,8 +1624,8 @@ static void doCleanupSubqueries(SSqlObj *pSql, int32_t numOfSubs) {
     
     SRetrieveSupport* pSupport = pSub->param;
     
-    taosTFree(pSupport->localBuffer);
-    taosTFree(pSupport);
+    tfree(pSupport->localBuffer);
+    tfree(pSupport);
     
     taos_free_result(pSub);
   }
@@ -1642,9 +1642,10 @@ int32_t tscHandleMasterSTableQuery(SSqlObj *pSql) {
   }
   
   tExtMemBuffer **  pMemoryBuf = NULL;
-  tOrderDescriptor *pDesc = NULL;
-  SColumnModel *    pModel = NULL;
-  
+  tOrderDescriptor *pDesc  = NULL;
+  SColumnModel     *pModel = NULL;
+  SColumnModel     *pFinalModel = NULL;
+
   pRes->qhandle = 0x1;  // hack the qhandle check
   
   const uint32_t nBufferSize = (1u << 16);  // 64KB
@@ -1662,11 +1663,11 @@ int32_t tscHandleMasterSTableQuery(SSqlObj *pSql) {
 
   assert(pState->numOfSub > 0);
   
-  int32_t ret = tscLocalReducerEnvCreate(pSql, &pMemoryBuf, &pDesc, &pModel, nBufferSize);
+  int32_t ret = tscLocalReducerEnvCreate(pSql, &pMemoryBuf, &pDesc, &pModel, &pFinalModel, nBufferSize);
   if (ret != 0) {
     pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
     tscQueueAsyncRes(pSql);
-    taosTFree(pMemoryBuf);
+    tfree(pMemoryBuf);
     return ret;
   }
   
@@ -1675,9 +1676,9 @@ int32_t tscHandleMasterSTableQuery(SSqlObj *pSql) {
   tscDebug("%p retrieved query data from %d vnode(s)", pSql, pState->numOfSub);
 
   if (pSql->pSubs == NULL) {
-    taosTFree(pSql->pSubs);
+    tfree(pSql->pSubs);
     pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
-    tscLocalReducerEnvDestroy(pMemoryBuf, pDesc, pModel, pState->numOfSub);
+    tscLocalReducerEnvDestroy(pMemoryBuf, pDesc, pModel, pFinalModel,pState->numOfSub);
 
     tscQueueAsyncRes(pSql);
     return ret;
@@ -1700,19 +1701,20 @@ int32_t tscHandleMasterSTableQuery(SSqlObj *pSql) {
     trs->localBuffer = (tFilePage *)calloc(1, nBufferSize + sizeof(tFilePage));
     if (trs->localBuffer == NULL) {
       tscError("%p failed to malloc buffer for local buffer, orderOfSub:%d, reason:%s", pSql, i, strerror(errno));
-      taosTFree(trs);
+      tfree(trs);
       break;
     }
     
     trs->subqueryIndex  = i;
     trs->pParentSql     = pSql;
     trs->pFinalColModel = pModel;
-    
+    trs->pFFColModel    = pFinalModel;
+
     SSqlObj *pNew = tscCreateSTableSubquery(pSql, trs, NULL);
     if (pNew == NULL) {
       tscError("%p failed to malloc buffer for subObj, orderOfSub:%d, reason:%s", pSql, i, strerror(errno));
-      taosTFree(trs->localBuffer);
-      taosTFree(trs);
+      tfree(trs->localBuffer);
+      tfree(trs);
       break;
     }
     
@@ -1730,13 +1732,13 @@ int32_t tscHandleMasterSTableQuery(SSqlObj *pSql) {
     tscError("%p failed to prepare subquery structure and launch subqueries", pSql);
     pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
     
-    tscLocalReducerEnvDestroy(pMemoryBuf, pDesc, pModel, pState->numOfSub);
+    tscLocalReducerEnvDestroy(pMemoryBuf, pDesc, pModel, pFinalModel, pState->numOfSub);
     doCleanupSubqueries(pSql, i);
     return pRes->code;   // free all allocated resource
   }
   
   if (pRes->code == TSDB_CODE_TSC_QUERY_CANCELLED) {
-    tscLocalReducerEnvDestroy(pMemoryBuf, pDesc, pModel, pState->numOfSub);
+    tscLocalReducerEnvDestroy(pMemoryBuf, pDesc, pModel, pFinalModel, pState->numOfSub);
     doCleanupSubqueries(pSql, i);
     return pRes->code;
   }
@@ -1762,12 +1764,8 @@ static void tscFreeRetrieveSup(SSqlObj *pSql) {
   }
 
   tscDebug("%p start to free subquery supp obj:%p", pSql, trsupport);
-//  int32_t  index = trsupport->subqueryIndex;
-//  SSqlObj *pParentSql = trsupport->pParentSql;
-
-//  assert(pSql == pParentSql->pSubs[index]);
-  taosTFree(trsupport->localBuffer);
-  taosTFree(trsupport);
+  tfree(trsupport->localBuffer);
+  tfree(trsupport);
 }
 
 static void tscRetrieveFromDnodeCallBack(void *param, TAOS_RES *tres, int numOfRows);
@@ -1880,7 +1878,7 @@ void tscHandleSubqueryError(SRetrieveSupport *trsupport, SSqlObj *pSql, int numO
       tstrerror(pParentSql->res.code));
 
   // release allocated resource
-  tscLocalReducerEnvDestroy(trsupport->pExtMemBuffer, trsupport->pOrderDescriptor, trsupport->pFinalColModel,
+  tscLocalReducerEnvDestroy(trsupport->pExtMemBuffer, trsupport->pOrderDescriptor, trsupport->pFinalColModel, trsupport->pFFColModel,
                             pState->numOfSub);
   
   tscFreeRetrieveSup(pSql);
@@ -1956,7 +1954,7 @@ static void tscAllDataRetrievedFromDnode(SRetrieveSupport *trsupport, SSqlObj* p
   SQueryInfo *pPQueryInfo = tscGetQueryInfoDetail(&pParentSql->cmd, 0);
   tscClearInterpInfo(pPQueryInfo);
   
-  tscCreateLocalReducer(trsupport->pExtMemBuffer, pState->numOfSub, pDesc, trsupport->pFinalColModel, pParentSql);
+  tscCreateLocalReducer(trsupport->pExtMemBuffer, pState->numOfSub, pDesc, trsupport->pFinalColModel, trsupport->pFFColModel, pParentSql);
   tscDebug("%p build loser tree completed", pParentSql);
   
   pParentSql->res.precision = pSql->res.precision;
@@ -2167,7 +2165,7 @@ static void multiVnodeInsertFinalize(void* param, TAOS_RES* tres, int numOfRows)
     pParentObj->res.code = pSql->res.code;
   }
 
-  taosTFree(pSupporter);
+  tfree(pSupporter);
 
   if (atomic_sub_fetch_32(&pParentObj->subState.numOfRemain, 1) > 0) {
     return;
@@ -2316,10 +2314,10 @@ static void doBuildResFromSubqueries(SSqlObj* pSql) {
     return;
   }
 
-  int32_t totalSize = tscGetResRowLength(pQueryInfo->exprList);
+  int32_t rowSize = tscGetResRowLength(pQueryInfo->exprList);
 
-  assert(numOfRes * totalSize > 0);
-  char* tmp = realloc(pRes->pRsp, numOfRes * totalSize);
+  assert(numOfRes * rowSize > 0);
+  char* tmp = realloc(pRes->pRsp, numOfRes * rowSize + sizeof(tFilePage));
   if (tmp == NULL) {
     pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
     return;
@@ -2327,9 +2325,12 @@ static void doBuildResFromSubqueries(SSqlObj* pSql) {
     pRes->pRsp = tmp;
   }
 
-  pRes->data = pRes->pRsp;
+  tFilePage* pFilePage = (tFilePage*) pRes->pRsp;
+  pFilePage->num = numOfRes;
 
+  pRes->data = pFilePage->data;
   char* data = pRes->data;
+
   int16_t bytes = 0;
 
   size_t numOfExprs = tscSqlExprNumOfExprs(pQueryInfo);
@@ -2356,6 +2357,17 @@ static void doBuildResFromSubqueries(SSqlObj* pSql) {
 
   pRes->numOfRows = numOfRes;
   pRes->numOfClauseTotal += numOfRes;
+
+  int32_t finalRowSize = 0;
+  for(int32_t i = 0; i < tscNumOfFields(pQueryInfo); ++i) {
+    TAOS_FIELD* pField = tscFieldInfoGetField(&pQueryInfo->fieldsInfo, i);
+    finalRowSize += pField->bytes;
+  }
+
+  doArithmeticCalculate(pQueryInfo, pFilePage, rowSize, finalRowSize);
+
+  pRes->data = pFilePage->data;
+  tscSetResRawPtr(pRes, pQueryInfo);
 }
 
 void tscBuildResFromSubqueries(SSqlObj *pSql) {
@@ -2368,13 +2380,12 @@ void tscBuildResFromSubqueries(SSqlObj *pSql) {
 
   if (pRes->tsrow == NULL) {
     SQueryInfo* pQueryInfo = tscGetQueryInfoDetail(&pSql->cmd, pSql->cmd.clauseIndex);
+    pRes->numOfCols = (int16_t) tscSqlExprNumOfExprs(pQueryInfo);
 
-    size_t numOfExprs = tscSqlExprNumOfExprs(pQueryInfo);
-    pRes->numOfCols =  (int16_t)numOfExprs;
-
-    pRes->tsrow  = calloc(numOfExprs, POINTER_BYTES);
-    pRes->buffer = calloc(numOfExprs, POINTER_BYTES);
-    pRes->length = calloc(numOfExprs, sizeof(int32_t));
+    pRes->tsrow  = calloc(pRes->numOfCols, POINTER_BYTES);
+    pRes->urow   = calloc(pRes->numOfCols, POINTER_BYTES);
+    pRes->buffer = calloc(pRes->numOfCols, POINTER_BYTES);
+    pRes->length = calloc(pRes->numOfCols, sizeof(int32_t));
 
     if (pRes->tsrow == NULL || pRes->buffer == NULL || pRes->length == NULL) {
       pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -2394,7 +2405,7 @@ void tscBuildResFromSubqueries(SSqlObj *pSql) {
   }
 }
 
-static void transferNcharData(SSqlObj *pSql, int32_t columnIndex, TAOS_FIELD *pField) {
+static UNUSED_FUNC void transferNcharData(SSqlObj *pSql, int32_t columnIndex, TAOS_FIELD *pField) {
   SSqlRes *pRes = &pSql->res;
   
   if (pRes->tsrow[columnIndex] != NULL && pField->type == TSDB_DATA_TYPE_NCHAR) {
@@ -2418,7 +2429,7 @@ static void transferNcharData(SSqlObj *pSql, int32_t columnIndex, TAOS_FIELD *pF
   }
 }
 
-static char *getArithemicInputSrc(void *param, const char *name, int32_t colId) {
+char *getArithmeticInputSrc(void *param, const char *name, int32_t colId) {
   SArithmeticSupport *pSupport = (SArithmeticSupport *) param;
 
   int32_t index = -1;
@@ -2436,13 +2447,13 @@ static char *getArithemicInputSrc(void *param, const char *name, int32_t colId) 
   return pSupport->data[index] + pSupport->offset * pExpr->resBytes;
 }
 
-TAOS_ROW doSetResultRowData(SSqlObj *pSql, bool finalResult) {
+TAOS_ROW doSetResultRowData(SSqlObj *pSql) {
   SSqlCmd *pCmd = &pSql->cmd;
   SSqlRes *pRes = &pSql->res;
 
   assert(pRes->row >= 0 && pRes->row <= pRes->numOfRows);
   if (pRes->row >= pRes->numOfRows) {  // all the results has returned to invoker
-    taosTFree(pRes->tsrow);
+    tfree(pRes->tsrow);
     return pRes->tsrow;
   }
 
@@ -2450,47 +2461,19 @@ TAOS_ROW doSetResultRowData(SSqlObj *pSql, bool finalResult) {
 
   size_t size = tscNumOfFields(pQueryInfo);
   for (int i = 0; i < size; ++i) {
-    SInternalField* pSup = TARRAY_GET_ELEM(pQueryInfo->fieldsInfo.internalField, i);
-    if (pSup->pSqlExpr != NULL) {
-      tscGetResultColumnChr(pRes, &pQueryInfo->fieldsInfo, i);
+    SInternalField* pInfo = (SInternalField*)TARRAY_GET_ELEM(pQueryInfo->fieldsInfo.internalField, i);
+
+    int32_t type  = pInfo->field.type;
+    int32_t bytes = pInfo->field.bytes;
+
+    if (type != TSDB_DATA_TYPE_BINARY && type != TSDB_DATA_TYPE_NCHAR) {
+      pRes->tsrow[i] = isNull(pRes->urow[i], type) ? NULL : pRes->urow[i];
+    } else {
+      pRes->tsrow[i] = isNull(pRes->urow[i], type) ? NULL : varDataVal(pRes->urow[i]);
+      pRes->length[i] = varDataLen(pRes->urow[i]);
     }
 
-    // primary key column cannot be null in interval query, no need to check
-    if (i == 0 && pQueryInfo->interval.interval > 0) {
-      continue;
-    }
-
-    TAOS_FIELD *pField = TARRAY_GET_ELEM(pQueryInfo->fieldsInfo.internalField, i);
-    if (pRes->tsrow[i] != NULL && pField->type == TSDB_DATA_TYPE_NCHAR) {
-      transferNcharData(pSql, i, pField);
-    }
-
-    // calculate the result from several other columns
-    if (pSup->pArithExprInfo != NULL) {
-      if (pRes->pArithSup == NULL) {
-        pRes->pArithSup = (SArithmeticSupport*)calloc(1, sizeof(SArithmeticSupport));
-      }
-
-      pRes->pArithSup->offset     = 0;
-      pRes->pArithSup->pArithExpr = pSup->pArithExprInfo;
-      pRes->pArithSup->numOfCols  = (int32_t)tscSqlExprNumOfExprs(pQueryInfo);
-      pRes->pArithSup->exprList   = pQueryInfo->exprList;
-      pRes->pArithSup->data       = calloc(pRes->pArithSup->numOfCols, POINTER_BYTES);
-
-      if (pRes->buffer[i] == NULL) {
-        TAOS_FIELD* field = tscFieldInfoGetField(&pQueryInfo->fieldsInfo, i);
-        pRes->buffer[i] = malloc(field->bytes);
-      }
-
-      for(int32_t k = 0; k < pRes->pArithSup->numOfCols; ++k) {
-        SSqlExpr* pExpr = tscSqlExprGet(pQueryInfo, k);
-        pRes->pArithSup->data[k] = (pRes->data + pRes->numOfRows* pExpr->offset) + pRes->row*pExpr->resBytes;
-      }
-
-      tExprTreeCalcTraverse(pRes->pArithSup->pArithExpr->pExpr, 1, pRes->buffer[i], pRes->pArithSup,
-          TSDB_ORDER_ASC, getArithemicInputSrc);
-      pRes->tsrow[i] = (unsigned char*)pRes->buffer[i];
-    }
+    ((char**) pRes->urow)[i] += bytes;
   }
 
   pRes->row++;  // index increase one-step

@@ -287,17 +287,17 @@ static int32_t taosOpenLogFile(char *fn, int32_t maxLines, int32_t maxFileNum) {
   tsLogObj.fileNum = maxFileNum;
   taosGetLogFileName(fn);
 
+
   if (strlen(fn) < LOG_FILE_NAME_LEN + 50 - 2) {
     strcpy(name, fn);
     strcat(name, ".0");
   }
+  bool log0Exist = stat(name, &logstat0) >= 0;
 
   if (strlen(fn) < LOG_FILE_NAME_LEN + 50 - 2) {
     strcpy(name, fn);
     strcat(name, ".1");
   }
-
-  bool log0Exist = stat(name, &logstat0) >= 0;
   bool log1Exist = stat(name, &logstat1) >= 0;
   
   // if none of the log files exist, open 0, if both exists, open the old one
@@ -512,8 +512,8 @@ static SLogBuff *taosLogBuffNew(int32_t bufSize) {
   return tLogBuff;
 
 _err:
-  taosTFree(LOG_BUF_BUFFER(tLogBuff));
-  taosTFree(tLogBuff);
+  tfree(LOG_BUF_BUFFER(tLogBuff));
+  tfree(tLogBuff);
   return NULL;
 }
 
@@ -522,7 +522,7 @@ static void taosLogBuffDestroy(SLogBuff *tLogBuff) {
   tsem_destroy(&(tLogBuff->buffNotEmpty));
   pthread_mutex_destroy(&(tLogBuff->buffMutex));
   free(tLogBuff->buffer);
-  taosTFree(tLogBuff);
+  tfree(tLogBuff);
 }
 #endif
 

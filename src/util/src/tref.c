@@ -426,11 +426,11 @@ static int taosDecRefCount(int rsetId, int64_t rid, int remove) {
 		
       (*pSet->fp)(pNode->p); 
 
-      uTrace("rsetId:%d p:%p rid:%" PRId64 "is removed, count:%d, free mem: %p", rsetId, pNode->p, rid, pSet->count, pNode);
+      uTrace("rsetId:%d p:%p rid:%" PRId64 " is removed, count:%d, free mem: %p", rsetId, pNode->p, rid, pSet->count, pNode);
       free(pNode);
       released = 1;
     } else {
-      uTrace("rsetId:%d p:%p rid:%" PRId64 "is released, count:%d", rsetId, pNode->p, rid, pNode->count);
+      uTrace("rsetId:%d p:%p rid:%" PRId64 " is released, count:%d", rsetId, pNode->p, rid, pNode->count);
     }
   } else {
     uTrace("rsetId:%d rid:%" PRId64 " is not there, failed to release/remove", rsetId, rid);
@@ -484,8 +484,8 @@ static void taosDecRsetCount(SRefSet *pSet) {
     pSet->max = 0;
     pSet->fp = NULL;
 
-    taosTFree(pSet->nodeList);
-    taosTFree(pSet->lockedBy);
+    tfree(pSet->nodeList);
+    tfree(pSet->lockedBy);
 
     tsRefSetNum--;
     uTrace("rsetId:%d is cleaned, refSetNum:%d count:%d", pSet->rsetId, tsRefSetNum, pSet->count);
