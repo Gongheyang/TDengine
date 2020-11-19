@@ -80,13 +80,13 @@ public class TSDBConnection implements Connection {
     }
 
     public Statement createStatement() throws SQLException {
-//        if (!this.connector.isClosed()) {
+        if (!this.connector.isClosed()) {
             TSDBStatement statement = new TSDBStatement(this, this.connector);
             statement.setConnection(this);
             return statement;
-//        } else {
-//            throw new SQLException(TSDBConstants.FixErrMsg(TSDBConstants.JNI_CONNECTION_NULL));
-//        }
+        } else {
+            throw new SQLException(TSDBConstants.FixErrMsg(TSDBConstants.JNI_CONNECTION_NULL));
+        }
     }
 
     public TSDBSubscribe subscribe(String topic, String sql, boolean restart) throws SQLException {

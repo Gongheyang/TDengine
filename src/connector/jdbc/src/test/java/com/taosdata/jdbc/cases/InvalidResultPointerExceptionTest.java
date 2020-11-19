@@ -13,14 +13,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 public class InvalidResultPointerExceptionTest {
-
-
-    private Connection conn;
     private Random random = new Random(System.currentTimeMillis());
 
     @Before
     public void before() throws SQLException, ClassNotFoundException {
-        conn = TSDBCommon.getConn("localhost");
+        Connection conn = TSDBCommon.getConn("localhost");
         TSDBCommon.createDatabase(conn, "irp_test");
         try (Statement stmt = conn.createStatement()) {
             stmt.execute("create table weather(ts timestamp, temperature int)");
@@ -29,14 +26,19 @@ public class InvalidResultPointerExceptionTest {
     }
 
     @Test
-    public void testInvalidResultPointerException() throws SQLException, ClassNotFoundException {
-        conn = TSDBCommon.getConn("localhost");
-        IntStream.of(1, 2).boxed().map(i -> new Thread(() -> {
-            try (Statement stmt = conn.createStatement()) {
+    public void testInvalidResultPointerException() {
+        try (Connection conn = TSDBCommon.getConn("localhost")) {
+            Statement stmt = conn.createStatement();
+
+            IntStream.of(1, 2).boxed().map(i -> new Thread(() -> {
                 long end = System.currentTimeMillis() + 1000 * 60 * 5;
                 while (System.currentTimeMillis() < end) {
                     String sql = "insert into irp_test.weather values(now, " + random.nextInt(100) + ")";
-                    stmt.execute(sql);
+                    try {
+                        stmt.execute(sql);
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                    }
                     System.out.println(Thread.currentThread().getName() + " >>> " + sql);
                     try {
                         TimeUnit.MILLISECONDS.sleep(10);
@@ -44,15 +46,15 @@ public class InvalidResultPointerExceptionTest {
                         e.printStackTrace();
                     }
                 }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }, "Thread-" + i)).forEach(Thread::start);
+            }, "Thread-" + i)).forEach(Thread::start);
+
+            stmt.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+
     }
 
-    @After
-    public void after() throws SQLException {
-        if (conn != null)
-            conn.close();
-    }
 }
