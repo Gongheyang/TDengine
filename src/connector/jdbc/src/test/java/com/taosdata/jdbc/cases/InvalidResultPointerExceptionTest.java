@@ -31,8 +31,9 @@ public class InvalidResultPointerExceptionTest {
             Statement stmt = conn.createStatement();
 
             IntStream.of(1, 2).boxed().map(i -> new Thread(() -> {
-                long end = System.currentTimeMillis() + 1000 * 60 * 5;
-                while (System.currentTimeMillis() < end) {
+//                long end = System.currentTimeMillis() + 1000 * 60 * 5;
+//                while (System.currentTimeMillis() < end) {
+                while (true) {
                     String sql = "insert into irp_test.weather values(now, " + random.nextInt(100) + ")";
                     try {
                         stmt.execute(sql);
