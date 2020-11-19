@@ -81,7 +81,7 @@ public class TSDBStatement implements Statement {
         }
 
         if (!this.connector.isUpdateQuery(pSql)) {
-        	TSDBResultSet res = new TSDBResultSet(this.connector, resultSetPointer);
+            TSDBResultSet res = new TSDBResultSet(this.connector, resultSetPointer);
             res.setBatchFetch(this.connection.getBatchFetch());
             return res;
         } else {
@@ -170,9 +170,9 @@ public class TSDBStatement implements Statement {
     }
 
     public boolean execute(String sql) throws SQLException {
-        if (isClosed) {
-            throw new SQLException("Invalid method call on a closed statement.");
-        }
+//        if (isClosed) {
+//            throw new SQLException("Invalid method call on a closed statement.");
+//        }
         boolean res = true;
         pSql = this.connector.executeQuery(sql);
         long resultSetPointer = this.connector.getResultSet();
