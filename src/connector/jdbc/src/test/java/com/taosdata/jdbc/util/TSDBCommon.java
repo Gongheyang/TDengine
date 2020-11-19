@@ -1,4 +1,4 @@
-package com.taosdata.jdbc.lib;
+package com.taosdata.jdbc.util;
 
 import com.taosdata.jdbc.TSDBDriver;
 
