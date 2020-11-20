@@ -41,11 +41,11 @@ public class InvalidResultPointerExceptionTest {
                         e.printStackTrace();
                     }
                     System.out.println(Thread.currentThread().getName() + " >>> " + sql);
-                    try {
-                        TimeUnit.MILLISECONDS.sleep(10);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+//                    try {
+//                        TimeUnit.MILLISECONDS.sleep(10);
+//                    } catch (InterruptedException e) {
+//                        e.printStackTrace();
+//                    }
                 }
             }, "Thread-" + i)).forEach(Thread::start);
 
