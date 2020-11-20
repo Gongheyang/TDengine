@@ -15,7 +15,9 @@
 package com.taosdata.jdbc;
 
 import java.sql.*;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 public class TSDBStatement implements Statement {
@@ -170,13 +172,18 @@ public class TSDBStatement implements Statement {
     }
 
     public boolean execute(String sql) throws SQLException {
-        System.out.println(Thread.currentThread().getName() + " before execute " + System.currentTimeMillis() + "=====> isclosed: " + isClosed);
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+        System.out.println(Thread.currentThread().getName() + " before execute " + sdf.format(new Date()) + "=====> isclosed: " + isClosed);
         if (isClosed) {
-            System.out.println(Thread.currentThread().getName() + " will throw " + System.currentTimeMillis() + "=====> isclosed: " + isClosed);
+            System.out.println(Thread.currentThread().getName() + " will throw " + sdf.format(new Date()) + "=====> isclosed: " + isClosed);
             throw new SQLException("Invalid method call on a closed statement.");
         }
         boolean res = true;
+
+        System.out.println(Thread.currentThread().getName() + " before JNI " + sdf.format(new Date()) + "=====> isclosed: " + isClosed);
         pSql = this.connector.executeQuery(sql);
+        System.out.println(Thread.currentThread().getName() + " after JNI " + sdf.format(new Date()) + "=====> isclosed: " + isClosed);
+
         long resultSetPointer = this.connector.getResultSet();
 
         if (resultSetPointer == TSDBConstants.JNI_CONNECTION_NULL) {
