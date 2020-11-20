@@ -170,8 +170,9 @@ public class TSDBStatement implements Statement {
     }
 
     public boolean execute(String sql) throws SQLException {
-        System.out.println(Thread.currentThread().getName() + " before execute =====> isclosed: " + isClosed);
+        System.out.println(Thread.currentThread().getName() + " before execute " + System.currentTimeMillis() + "=====> isclosed: " + isClosed);
         if (isClosed) {
+            System.out.println(Thread.currentThread().getName() + " will throw " + System.currentTimeMillis() + "=====> isclosed: " + isClosed);
             throw new SQLException("Invalid method call on a closed statement.");
         }
         boolean res = true;
@@ -186,7 +187,7 @@ public class TSDBStatement implements Statement {
             this.connector.freeResultSet(pSql);
             res = false;
         }
-        System.out.println(Thread.currentThread().getName() + " after execute =====> isclosed: " + isClosed);
+        System.out.println(Thread.currentThread().getName() + " after execute " + System.currentTimeMillis() + " =====> isclosed: " + isClosed);
 
         return res;
     }
