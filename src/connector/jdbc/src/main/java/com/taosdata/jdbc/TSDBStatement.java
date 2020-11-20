@@ -38,7 +38,7 @@ public class TSDBStatement implements Statement {
     /**
      * Status of current statement
      */
-    private boolean isClosed = true;
+    private volatile boolean isClosed = true;
     private int affectedRows = 0;
 
     private TSDBConnection connection;
