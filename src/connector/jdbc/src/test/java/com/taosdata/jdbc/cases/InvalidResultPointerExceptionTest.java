@@ -8,8 +8,10 @@ import org.junit.Test;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class InvalidResultPointerExceptionTest {
@@ -30,9 +32,7 @@ public class InvalidResultPointerExceptionTest {
         try (Connection conn = TSDBCommon.getConn("localhost")) {
             Statement stmt = conn.createStatement();
 
-            IntStream.of(1, 2).boxed().map(i -> new Thread(() -> {
-//                long end = System.currentTimeMillis() + 1000 * 60 * 5;
-//                while (System.currentTimeMillis() < end) {
+            List<Thread> threads = IntStream.range(1, 2).boxed().map(i -> new Thread(() -> {
                 while (true) {
                     String sql = "insert into irp_test.weather values(now, " + random.nextInt(100) + ")";
                     try {
@@ -41,18 +41,24 @@ public class InvalidResultPointerExceptionTest {
                         e.printStackTrace();
                     }
                     System.out.println(Thread.currentThread().getName() + " >>> " + sql);
-//                    try {
-//                        TimeUnit.MILLISECONDS.sleep(10);
-//                    } catch (InterruptedException e) {
-//                        e.printStackTrace();
-//                    }
+                    try {
+                        TimeUnit.MILLISECONDS.sleep(10);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
-            }, "Thread-" + i)).forEach(Thread::start);
+            }, "Thread-" + i)).collect(Collectors.toList());
+
+            for (int i = 0; i < threads.size(); i++) {
+                threads.get(i).join();
+            }
 
             stmt.close();
         } catch (SQLException e) {
             e.printStackTrace();
         } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
             e.printStackTrace();
         }
 
