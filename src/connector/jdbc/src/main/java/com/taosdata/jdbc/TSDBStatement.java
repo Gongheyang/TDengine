@@ -172,20 +172,14 @@ public class TSDBStatement implements Statement {
     }
 
     public boolean execute(String sql) throws SQLException {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-        System.out.println(Thread.currentThread().getName() + " before execute " + sdf.format(new Date()) + "=====> isclosed: " + isClosed);
         if (isClosed) {
-            System.out.println(Thread.currentThread().getName() + " will throw " + sdf.format(new Date()) + "=====> isclosed: " + isClosed);
             throw new SQLException("Invalid method call on a closed statement.");
         }
         boolean res = true;
 
-        System.out.println(Thread.currentThread().getName() + " before JNI " + sdf.format(new Date()) + "=====> isclosed: " + isClosed);
         pSql = this.connector.executeQuery(sql);
-        System.out.println(Thread.currentThread().getName() + " after JNI " + sdf.format(new Date()) + "=====> isclosed: " + isClosed);
 
         long resultSetPointer = this.connector.getResultSet();
-
         if (resultSetPointer == TSDBConstants.JNI_CONNECTION_NULL) {
             this.connector.freeResultSet(pSql);
             throw new SQLException(TSDBConstants.FixErrMsg(TSDBConstants.JNI_CONNECTION_NULL));
@@ -194,7 +188,6 @@ public class TSDBStatement implements Statement {
             this.connector.freeResultSet(pSql);
             res = false;
         }
-        System.out.println(Thread.currentThread().getName() + " after execute " + System.currentTimeMillis() + " =====> isclosed: " + isClosed);
 
         return res;
     }

@@ -30,13 +30,14 @@ public class InvalidResultPointerExceptionTest {
     @Test
     public void testInvalidResultPointerException() {
         try (Connection conn = TSDBCommon.getConn("localhost")) {
-            Statement stmt = conn.createStatement();
 
             List<Thread> threads = IntStream.range(1, 2).boxed().map(i -> new Thread(() -> {
                 while (true) {
                     String sql = "insert into irp_test.weather values(now, " + random.nextInt(100) + ")";
                     try {
+                        Statement stmt = conn.createStatement();
                         stmt.execute(sql);
+                        stmt.close();
                     } catch (SQLException e) {
                         e.printStackTrace();
                     }
@@ -49,11 +50,12 @@ public class InvalidResultPointerExceptionTest {
                 }
             }, "Thread-" + i)).collect(Collectors.toList());
 
-            for (int i = 0; i < threads.size(); i++) {
-                threads.get(i).join();
+            for (Thread thread : threads)
+                thread.start();
+            for (Thread thread : threads) {
+                thread.join();
             }
 
-            stmt.close();
         } catch (SQLException e) {
             e.printStackTrace();
         } catch (ClassNotFoundException e) {
