@@ -112,6 +112,13 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>2.12.4</version>
                 <configuration>
+                    <includes>
+                        <include>**/*Test.java</include>
+                    </includes>
+                    <excludes>
+<!--                        <exclude>**/InvalidResultPointerExceptionTest.java</exclude>-->
+                        <exclude>**/FailOverTest.java</exclude>
+                    </excludes>
                     <testFailureIgnore>true</testFailureIgnore>
                 </configuration>
             </plugin>

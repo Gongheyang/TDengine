@@ -1,7 +1,6 @@
 package com.taosdata.jdbc.cases;
 
 import com.taosdata.jdbc.util.TSDBCommon;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -28,15 +27,15 @@ public class InvalidResultPointerExceptionTest {
     }
 
     @Test
-    public void testInvalidResultPointerException() {
+    public void testUseSameConnection() {
         try (Connection conn = TSDBCommon.getConn("localhost")) {
 
-            List<Thread> threads = IntStream.range(1, 2).boxed().map(i -> new Thread(() -> {
+            List<Thread> threads = IntStream.range(0, 2).boxed().map(i -> new Thread(() -> {
                 while (true) {
                     String sql = "insert into irp_test.weather values(now, " + random.nextInt(100) + ")";
                     try {
                         Statement stmt = conn.createStatement();
-                        stmt.execute(sql);
+                        stmt.executeUpdate(sql);
                         stmt.close();
                     } catch (SQLException e) {
                         e.printStackTrace();
@@ -63,7 +62,44 @@ public class InvalidResultPointerExceptionTest {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+    }
 
+    @Test
+    public void testUseSameStatement() {
+        try (Connection conn = TSDBCommon.getConn("localhost")) {
+            Statement stmt = conn.createStatement();
+
+            List<Thread> threads = IntStream.range(0, 2).boxed().map(i -> new Thread(() -> {
+                while (true) {
+                    String sql = "insert into irp_test.weather values(now, " + random.nextInt(100) + ")";
+                    try {
+                        stmt.executeUpdate(sql);
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                    }
+                    System.out.println(Thread.currentThread().getName() + " >>> " + sql);
+                    try {
+                        TimeUnit.MILLISECONDS.sleep(10);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }, "Thread-" + i)).collect(Collectors.toList());
+
+            for (Thread thread : threads)
+                thread.start();
+            for (Thread thread : threads) {
+                thread.join();
+            }
+
+            stmt.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
 }

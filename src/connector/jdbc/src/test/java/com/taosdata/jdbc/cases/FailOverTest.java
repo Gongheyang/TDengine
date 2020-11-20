@@ -7,6 +7,9 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * for TD-1590
+ ***/
 public class FailOverTest {
 
     private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
@@ -16,8 +19,7 @@ public class FailOverTest {
         Class.forName("com.taosdata.jdbc.TSDBDriver");
         final String url = "jdbc:TAOS://:/?user=root&password=taosdata";
 
-        long end = System.currentTimeMillis() + 1000 * 60 * 5;
-        while (System.currentTimeMillis() < end) {
+        while (true) {
             try (Connection conn = DriverManager.getConnection(url)) {
                 Statement stmt = conn.createStatement();
                 ResultSet resultSet = stmt.executeQuery("select server_status()");
@@ -30,7 +32,6 @@ public class FailOverTest {
                 e.printStackTrace();
             }
         }
-
     }
 
 }

@@ -13,6 +13,7 @@ public class RestfulStatement implements Statement {
 
     private final String catalog;
     private final RestfulConnection conn;
+    private boolean isClosed = false;
 
     public RestfulStatement(RestfulConnection c, String catalog) {
         this.conn = c;
@@ -21,8 +22,7 @@ public class RestfulStatement implements Statement {
 
     @Override
     public ResultSet executeQuery(String sql) throws SQLException {
-
-        final String url = "http://" + conn.getHost() + ":"+conn.getPort()+"/rest/sql";
+        final String url = "http://" + conn.getHost() + ":" + conn.getPort() + "/rest/sql";
 
         String result = HttpClientPoolUtil.execute(url, sql);
         String fields = "";
@@ -65,17 +65,24 @@ public class RestfulStatement implements Statement {
 
     @Override
     public int executeUpdate(String sql) throws SQLException {
-        return 0;
+        String result = HttpClientPoolUtil.execute(conn.getUrl(), sql);
+        JSONObject jsonObject = JSON.parseObject(result);
+        if (jsonObject.getString("status").equals("error")) {
+            throw new SQLException(TSDBConstants.WrapErrMsg("SQL execution error: " + jsonObject.getString("desc") + "\n" +
+                    "error code: " + jsonObject.getString("code")));
+        }
+        return Integer.parseInt(jsonObject.getString("rows"));
     }
 
     @Override
     public void close() throws SQLException {
-
+        isClosed = true;
     }
 
     @Override
     public int getMaxFieldSize() throws SQLException {
-        return 0;
+        //TODO:
+        throw new SQLFeatureNotSupportedException();
     }
 
     @Override
@@ -130,7 +137,11 @@ public class RestfulStatement implements Statement {
 
     @Override
     public boolean execute(String sql) throws SQLException {
-        return false;
+        if (isClosed) {
+            throw new SQLException("Invalid method call on a closed statement.");
+        }
+        HttpClientPoolUtil.execute(conn.getUrl(), sql);
+        return true;
     }
 
     @Override
