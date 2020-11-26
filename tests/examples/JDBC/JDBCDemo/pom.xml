@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.taosdata.jdbc</groupId>
-    <artifactId>jdbcChecker</artifactId>
+    <artifactId>jdbcTaosdemo</artifactId>
     <version>SNAPSHOT</version>
     <packaging>jar</packaging>
     <build>
@@ -23,7 +23,8 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.taosdata.example.JdbcChecker</mainClass>
+                            <!-- <mainClass>com.taosdata.example.JdbcChecker</mainClass> -->
+                            <mainClass>com.taosdata.example.jdbcTaosdemo.JdbcTaosdemo</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
@@ -56,7 +57,7 @@
         <dependency>
             <groupId>com.taosdata.jdbc</groupId>
             <artifactId>taos-jdbcdriver</artifactId>
-            <version>2.0.8</version>
+            <version>2.0.12</version>
         </dependency>
         <dependency>
             <groupId>log4j</groupId>
