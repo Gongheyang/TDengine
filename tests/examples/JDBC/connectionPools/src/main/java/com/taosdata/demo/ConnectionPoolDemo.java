@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 public class ConnectionPoolDemo {
@@ -22,9 +23,9 @@ public class ConnectionPoolDemo {
 
     private static int batchSize = 10;
     private static int sleep = 1000;
-    private static int poolSize = 50;
+    private static int connectionPoolSize = 50;
     private static int tableSize = 1000;
-    private static int threadCount = 50;
+    private static int threadPoolSize = 50;
     private static String poolType = "hikari";
 
 
@@ -40,8 +41,8 @@ public class ConnectionPoolDemo {
             if ("-sleep".equalsIgnoreCase(args[i]) && i < args.length - 1) {
                 sleep = Integer.parseInt(args[++i]);
             }
-            if ("-poolSize".equalsIgnoreCase(args[i]) && i < args.length - 1) {
-                poolSize = Integer.parseInt(args[++i]);
+            if ("-connectPoolSize".equalsIgnoreCase(args[i]) && i < args.length - 1) {
+                connectionPoolSize = Integer.parseInt(args[++i]);
             }
             if ("-tableSize".equalsIgnoreCase(args[i]) && i < args.length - 1) {
                 tableSize = Integer.parseInt(args[++i]);
@@ -49,14 +50,18 @@ public class ConnectionPoolDemo {
             if ("-poolType".equalsIgnoreCase(args[i]) && i < args.length - 1) {
                 poolType = args[++i];
             }
+            if ("-threadPoolSize".equalsIgnoreCase(args[i]) && i < args.length - 1) {
+                threadPoolSize = Integer.parseInt(args[++i]);
+            }
         }
         if (host == null) {
             System.out.println("Usage: java -jar XXX.jar " +
                     "-host <hostname> " +
                     "-batchSize <batchSize> " +
                     "-sleep <sleep> " +
-                    "-poolSize <poolSize> " +
+                    "-connectionPoolSize <connectionPoolSize> " +
                     "-tableSize <tableSize>" +
+                    "-threadPoolSize <threadPoolSize>" +
                     "-poolType <c3p0| dbcp| druid| hikari>");
             return;
         }
@@ -64,33 +69,34 @@ public class ConnectionPoolDemo {
         DataSource dataSource;
         switch (poolType) {
             case "c3p0":
-                dataSource = C3p0Builder.getDataSource(host, poolSize);
+                dataSource = C3p0Builder.getDataSource(host, connectionPoolSize);
                 break;
             case "dbcp":
-                dataSource = DbcpBuilder.getDataSource(host, poolSize);
+                dataSource = DbcpBuilder.getDataSource(host, connectionPoolSize);
                 break;
             case "druid":
-                dataSource = DruidPoolBuilder.getDataSource(host, poolSize);
+                dataSource = DruidPoolBuilder.getDataSource(host, connectionPoolSize);
                 break;
             case "hikari":
             default:
-                dataSource = HikariCpBuilder.getDataSource(host, poolSize);
+                dataSource = HikariCpBuilder.getDataSource(host, connectionPoolSize);
                 poolType = "hikari";
         }
 
         logger.info(">>>>>>>>>>>>>> connection pool Type: " + poolType);
-
         init(dataSource);
 
-        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(threadPoolSize);
         while (true) {
             executor.execute(new InsertTask(dataSource, dbName, tableSize, batchSize));
+            logger.info("thread pool size : " + executor.getPoolSize() + ", active pool size: " + executor.getActiveCount());
             if (sleep > 0)
                 TimeUnit.MILLISECONDS.sleep(sleep);
         }
     }
 
     private static void init(DataSource dataSource) {
+
         try (Connection conn = dataSource.getConnection()) {
             execute(conn, "drop database if exists " + dbName + "");
             execute(conn, "create database if not exists " + dbName + "");
