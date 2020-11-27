@@ -6,6 +6,7 @@ import com.taosdata.demo.pool.DbcpBuilder;
 import com.taosdata.demo.pool.DruidPoolBuilder;
 import com.taosdata.demo.pool.HikariCpBuilder;
 import org.apache.log4j.Logger;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -86,7 +87,13 @@ public class ConnectionPoolDemo {
         logger.info(">>>>>>>>>>>>>> connection pool Type: " + poolType);
         init(dataSource);
 
-        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(threadPoolSize);
+
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(20);
+        executor.setMaxPoolSize(100);
+        executor.setQueueCapacity(100);
+        executor.setKeepAliveSeconds(300);
+//        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(threadPoolSize);
         while (true) {
             executor.execute(new InsertTask(dataSource, dbName, tableSize, batchSize));
             logger.info("thread pool size : " + executor.getPoolSize() + ", active pool size: " + executor.getActiveCount());
