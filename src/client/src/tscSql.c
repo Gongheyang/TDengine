@@ -353,8 +353,10 @@ TAOS_RES* taos_query_c(TAOS *taos, const char *sqlstr, uint32_t sqlLen, TAOS_RES
     terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
     return NULL;
   }
+  
   tscError("curre query count: %ld",atomic_add_fetch_64(&queryIncr, 1)); 
   tsem_init(&pSql->rspSem, 0, 0);
+  pSql->global = 100; 
   doAsyncQuery(pObj, pSql, waitForQueryRsp, taos, sqlstr, sqlLen);
 
   if (res != NULL) {
@@ -660,7 +662,7 @@ void taos_free_result(TAOS_RES *res) {
     tscError("%p already released sqlObj", res);
     return;
   }
-  if (0 == pSql->subState.numOfSub) {
+  if (100 == pSql->global) {
     tscError("current query count: %ld", atomic_sub_fetch_64(&queryIncr, 1));
   }
     
