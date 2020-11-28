@@ -296,7 +296,7 @@ void sdbUpdateAsync() {
 
 void sdbUpdateSync(void *pMnodes) {
   SMnodeInfos *mnodes = pMnodes;
-  if (!mnodeIsRunning()) {
+  if (!mnodeIsReady()) {
     mDebug("vgId:1, mnode not start yet, update sync config later");
     return;
   }

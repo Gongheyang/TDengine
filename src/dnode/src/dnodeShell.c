@@ -32,7 +32,7 @@
 
 static void  (*dnodeProcessShellMsgFp[TSDB_MSG_TYPE_MAX])(SRpcMsg *);
 static void    dnodeProcessMsgFromShell(SRpcMsg *pMsg, SRpcEpSet *);
-static int     dnodeRetrieveUserAuthInfo(char *user, char *spi, char *encrypt, char *secret, char *ckey);
+static int     dnodeRetrieveUserAuthInfo(char *user, char *spi, char *encrypt, char *secret, char *ckey, char *reason);
 static void  * tsShellRpc = NULL;
 static int32_t tsQueryReqNum  = 0;
 static int32_t tsSubmitReqNum = 0;
@@ -142,10 +142,13 @@ static void dnodeProcessMsgFromShell(SRpcMsg *pMsg, SRpcEpSet *pEpSet) {
   }
 }
 
-static int dnodeRetrieveUserAuthInfo(char *user, char *spi, char *encrypt, char *secret, char *ckey) {
-  int code = mnodeRetriveAuth(user, spi, encrypt, secret, ckey);
-  if (code != TSDB_CODE_APP_NOT_READY) return code;
+static int dnodeRetrieveUserAuthInfo(char *user, char *spi, char *encrypt, char *secret, char *ckey, char *reason) {
+  *reason = 0;
 
+  int code = mnodeRetriveAuth(user, spi, encrypt, secret, ckey, reason);
+  if (code != TSDB_CODE_RPC_REDIRECT) return code;
+
+  // send the auth request to other mnodes
   SAuthMsg *pMsg = rpcMallocCont(sizeof(SAuthMsg));
   tstrncpy(pMsg->user, user, sizeof(pMsg->user));
 
@@ -160,6 +163,7 @@ static int dnodeRetrieveUserAuthInfo(char *user, char *spi, char *encrypt, char 
 
   if (rpcRsp.code != 0) {
     dError("user:%s, auth msg received from mnodes, error:%s", user, tstrerror(rpcRsp.code));
+    if (rpcRsp.contLen > 0) strncpy(reason, rpcRsp.pCont, TSDB_REASON_LEN); 
   } else {
     SAuthRsp *pRsp = rpcRsp.pCont;
     dDebug("user:%s, auth msg received from mnodes", user);

@@ -56,7 +56,7 @@ typedef struct {
   char     ckey[TSDB_KEY_LEN];   // ciphering key 
 
   void   (*cfp)(SRpcMsg *, SRpcEpSet *);
-  int    (*afp)(char *user, char *spi, char *encrypt, char *secret, char *ckey); 
+  int    (*afp)(char *user, char *spi, char *encrypt, char *secret, char *ckey, char *reason); 
 
   int32_t   refCount;
   void     *idPool;   // handle to ID pool
@@ -726,7 +726,7 @@ static SRpcConn *rpcAllocateServerConn(SRpcInfo *pRpc, SRecvInfo *pRecv) {
       if (pConn->user[0] == 0) {
         terrno = TSDB_CODE_RPC_AUTH_REQUIRED;
       } else {
-        terrno = (*pRpc->afp)(pConn->user, &pConn->spi, &pConn->encrypt, pConn->secret, pConn->ckey);
+        terrno = (*pRpc->afp)(pConn->user, &pConn->spi, &pConn->encrypt, pConn->secret, pConn->ckey, pRecv->reason);
       }
 
       if (terrno != 0) {
@@ -1053,6 +1053,7 @@ static void *rpcProcessMsgFromPeer(SRecvInfo *pRecv) {
     return NULL;
   }
 
+  pRecv->reason[0] = 0;
   terrno = 0;
   SRpcReqContext *pContext;
   pConn = rpcProcessMsgHead(pRpc, pRecv, &pContext);
@@ -1218,7 +1219,7 @@ static void rpcSendReqHead(SRpcConn *pConn) {
 
 static void rpcSendErrorMsgToPeer(SRecvInfo *pRecv, int32_t code) {
   SRpcHead  *pRecvHead, *pReplyHead;
-  char       msg[sizeof(SRpcHead) + sizeof(SRpcDigest) + sizeof(uint32_t) ];
+  char       msg[sizeof(SRpcHead) + sizeof(SRpcDigest) + sizeof(uint32_t) + TSDB_REASON_LEN];
   uint32_t   timeStamp;
   int        msgLen;
 
@@ -1245,6 +1246,11 @@ static void rpcSendErrorMsgToPeer(SRecvInfo *pRecv, int32_t code) {
     timeStamp = htonl(taosGetTimestampSec());
     memcpy(pContent, &timeStamp, sizeof(timeStamp));
     msgLen += sizeof(timeStamp);
+  }
+
+  if (code == TSDB_CODE_MND_INIT) {
+    strncpy((char *)pReplyHead->content, pRecv->reason, TSDB_REASON_LEN);
+    msgLen += TSDB_REASON_LEN;
   }
 
   pReplyHead->msgLen = (int32_t)htonl((uint32_t)msgLen);
@@ -1551,7 +1557,7 @@ static int rpcCheckAuthentication(SRpcConn *pConn, char *msg, int msgLen) {
   if ( !rpcIsReq(pHead->msgType) ) {
     // for response, if code is auth failure, it shall bypass the auth process
     code = htonl(pHead->code);
-    if (code == TSDB_CODE_RPC_INVALID_TIME_STAMP || code == TSDB_CODE_RPC_AUTH_FAILURE ||
+    if (code == TSDB_CODE_RPC_INVALID_TIME_STAMP || code == TSDB_CODE_RPC_AUTH_FAILURE || code == TSDB_CODE_MND_INIT ||
         code == TSDB_CODE_RPC_AUTH_REQUIRED || code == TSDB_CODE_MND_INVALID_USER || code == TSDB_CODE_RPC_NOT_READY) {
       pHead->msgLen = (int32_t)htonl((uint32_t)pHead->msgLen);
       // tTrace("%s, dont check authentication since code is:0x%x", pConn->info, code);

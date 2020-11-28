@@ -582,16 +582,27 @@ void mnodeDropAllUsers(SAcctObj *pAcct)  {
   mDebug("acct:%s, all users:%d is dropped from sdb", pAcct->user, numOfUsers);
 }
 
-int32_t mnodeRetriveAuth(char *user, char *spi, char *encrypt, char *secret, char *ckey) {
+int32_t mnodeRetriveAuth(char *user, char *spi, char *encrypt, char *secret, char *ckey, char *reason) {
+  *secret = 0;  *reason = 0;
+
+  if (!mnodeIsRunning()) {
+    mDebug("user:%s, failed to auth user, mnode is not running", user);
+    return TSDB_CODE_RPC_REDIRECT;
+  }
+
+  if (!mnodeIsReady()) {
+    mDebug("user:%s, failed to auth user, mnode is not ready", user);
+    strcpy(reason, tsMgmtInitStr);
+    return TSDB_CODE_MND_INIT;
+  }
+
   if (!sdbIsMaster()) {
-    *secret = 0;
     mDebug("user:%s, failed to auth user, mnode is not master", user);
-    return TSDB_CODE_APP_NOT_READY;
+    return TSDB_CODE_RPC_REDIRECT;
   }
 
   SUserObj *pUser = mnodeGetUser(user);
   if (pUser == NULL) {
-    *secret = 0;
     mError("user:%s, failed to auth user, reason:%s", user, tstrerror(TSDB_CODE_MND_INVALID_USER));
     return TSDB_CODE_MND_INVALID_USER;
   } else {
@@ -613,5 +624,5 @@ static int32_t mnodeProcessAuthMsg(SMnodeMsg *pMsg) {
   pMsg->rpcRsp.rsp = pAuthRsp;
   pMsg->rpcRsp.len = sizeof(SAuthRsp);
   
-  return mnodeRetriveAuth(pAuthMsg->user, &pAuthRsp->spi, &pAuthRsp->encrypt, pAuthRsp->secret, pAuthRsp->ckey);
+  return mnodeRetriveAuth(pAuthMsg->user, &pAuthRsp->spi, &pAuthRsp->encrypt, pAuthRsp->secret, pAuthRsp->ckey, pAuthRsp->reason);
 }

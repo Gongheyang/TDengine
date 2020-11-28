@@ -184,6 +184,8 @@ TAOS *taos_connect_internal(const char *ip, const char *user, const char *pass, 
 
     if (pSql->res.code != TSDB_CODE_SUCCESS) {
       terrno = pSql->res.code;
+      if (pSql->res.code == TSDB_CODE_MND_INIT) 
+        printf("mnode %s\n", pSql->res.pRsp);
       taos_free_result(pSql);
       taos_close(pObj);
       return NULL;
@@ -650,11 +652,15 @@ char *taos_errstr(TAOS_RES *tres) {
     return (char*) tstrerror(terrno);
   }
 
-  if (hasAdditionalErrorInfo(pSql->res.code, &pSql->cmd)) {
-    return pSql->cmd.payload;
-  } else {
-    return (char*)tstrerror(pSql->res.code);
+  if (!hasAdditionalErrorInfo(pSql->res.code, &pSql->cmd)) {
+    if (pSql->res.code == TSDB_CODE_MND_INIT) {
+      sprintf(pSql->cmd.payload, "%s:%s", tstrerror(pSql->res.code), pSql->res.pRsp);
+    } else {
+      sprintf(pSql->cmd.payload, "%s", tstrerror(pSql->res.code));
+    }
   }
+
+  return pSql->cmd.payload;
 }
 
 void taos_config(int debug, char *log_path) {

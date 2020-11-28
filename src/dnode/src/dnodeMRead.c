@@ -123,11 +123,16 @@ void dnodeFreeMReadQueue() {
 }
 
 void dnodeDispatchToMReadQueue(SRpcMsg *pMsg) {
-  if (!mnodeIsRunning() || tsMReadQueue == NULL) {
-    dnodeSendRedirectMsg(pMsg, true);
+  if (!mnodeIsRunning()) {
+    dnodeSendRedirectMsg(pMsg, false);
   } else {
-    SMnodeMsg *pRead = mnodeCreateMsg(pMsg);
-    taosWriteQitem(tsMReadQueue, TAOS_QTYPE_RPC, pRead);
+    if (!mnodeIsReady()) {
+      SRpcMsg rpcRsp = {.handle = pMsg->handle, .code = TSDB_CODE_MND_INIT, .pCont = tsMgmtInitStr, .contLen = sizeof(tsMgmtInitStr)};
+      rpcSendResponse(&rpcRsp);
+    } else {
+      SMnodeMsg *pRead = mnodeCreateMsg(pMsg);
+      taosWriteQitem(tsMReadQueue, TAOS_QTYPE_RPC, pRead);
+    }
   }
 
   rpcFreeCont(pMsg->pCont);

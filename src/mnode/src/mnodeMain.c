@@ -37,14 +37,23 @@
 #include "mnodeShow.h"
 #include "mnodeProfile.h"
 
+
 typedef struct {
   const char *const name;
   int               (*init)();
   void              (*cleanup)();
 } SMnodeComponent;
 
-void *tsMnodeTmr = NULL;
-static bool tsMgmtIsRunning = false;
+typedef enum {
+  TSDB_MND_STATUS_NOT_RUNNING,
+  TSDB_MND_STATUS_INIT,
+  TSDB_MND_STATUS_READY,
+  TSDB_MND_STATUS_CLEANING,
+} EMndStatus;
+
+void  *tsMnodeTmr = NULL;
+static EMndStatus tsMgmtStatus = TSDB_MND_STATUS_NOT_RUNNING;
+char   tsMgmtInitStr[TSDB_REASON_LEN];
 
 static const SMnodeComponent tsMnodeComponents[] = {
   {"profile", mnodeInitProfile, mnodeCleanupProfile},
@@ -75,37 +84,44 @@ static void mnodeCleanupComponents(int32_t stepId) {
 static int32_t mnodeInitComponents() {
   int32_t code = 0;
   for (int32_t i = 0; i < sizeof(tsMnodeComponents) / sizeof(tsMnodeComponents[0]); i++) {
+    snprintf(tsMgmtInitStr, sizeof(tsMgmtInitStr), "start to init %s", tsMnodeComponents[i].name);
     if (tsMnodeComponents[i].init() != 0) {
       mnodeCleanupComponents(i);
       code = -1;
       break;
     }
+    sleep(3);
   }
   return code;
 }
 
 int32_t mnodeStartSystem() {
-  if (tsMgmtIsRunning) {
+  if (tsMgmtStatus != TSDB_MND_STATUS_NOT_RUNNING) {
     mInfo("mnode module already started...");
     return 0;
   }
 
+  tsMgmtStatus = TSDB_MND_STATUS_INIT;
   mInfo("starting to initialize mnode ...");
   if (mkdir(tsMnodeDir, 0755) != 0 && errno != EEXIST) {
     mError("failed to init mnode dir:%s, reason:%s", tsMnodeDir, strerror(errno));
     return -1;
   }
 
+  sleep(3);
+  snprintf(tsMgmtInitStr, sizeof(tsMgmtInitStr), "start to init queues");
   dnodeAllocMWritequeue();
   dnodeAllocMReadQueue();
   dnodeAllocateMPeerQueue();
 
+  sleep(3);
   if (mnodeInitComponents() != 0) {
     return -1;
   }
 
+  snprintf(tsMgmtInitStr, sizeof(tsMgmtInitStr), "mnode is ready");
   grantReset(TSDB_GRANT_ALL, 0);
-  tsMgmtIsRunning = true;
+  tsMgmtStatus = TSDB_MND_STATUS_READY;
 
   mInfo("mnode is initialized successfully");
 
@@ -123,9 +139,9 @@ int32_t mnodeInitSystem() {
 }
 
 void mnodeCleanupSystem() {
-  if (tsMgmtIsRunning) {
+  if (tsMgmtStatus != TSDB_MND_STATUS_READY) {
     mInfo("starting to clean up mnode");
-    tsMgmtIsRunning = false;
+    tsMgmtStatus = TSDB_MND_STATUS_CLEANING;
 
     dnodeFreeMWritequeue();
     dnodeFreeMReadQueue();
@@ -134,6 +150,7 @@ void mnodeCleanupSystem() {
     mnodeCleanupComponents(sizeof(tsMnodeComponents) / sizeof(tsMnodeComponents[0]) - 1);
 
     mInfo("mnode is cleaned up");
+    tsMgmtStatus = TSDB_MND_STATUS_NOT_RUNNING;
   }
 }
 
@@ -183,5 +200,10 @@ static bool mnodeNeedStart() {
 }
 
 bool mnodeIsRunning() {
-  return tsMgmtIsRunning;
+  return (tsMgmtStatus == TSDB_MND_STATUS_READY || tsMgmtStatus == TSDB_MND_STATUS_INIT);
 }
+
+bool mnodeIsReady() {
+  return (tsMgmtStatus == TSDB_MND_STATUS_READY);
+}
+

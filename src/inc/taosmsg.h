@@ -836,6 +836,7 @@ typedef struct {
   char encrypt;
   char secret[TSDB_KEY_LEN];
   char ckey[TSDB_KEY_LEN];
+  char reason[TSDB_REASON_LEN];
 } SAuthMsg, SAuthRsp;
 
 #pragma pack(pop)

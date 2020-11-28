@@ -122,11 +122,16 @@ void dnodeFreeMPeerQueue() {
 }
 
 void dnodeDispatchToMPeerQueue(SRpcMsg *pMsg) {
-  if (!mnodeIsRunning() || tsMPeerQueue == NULL) {
+  if (!mnodeIsRunning()) {
     dnodeSendRedirectMsg(pMsg, false);
   } else {
-    SMnodeMsg *pPeer = mnodeCreateMsg(pMsg);
-    taosWriteQitem(tsMPeerQueue, TAOS_QTYPE_RPC, pPeer);
+    if (!mnodeIsReady()) {
+      SRpcMsg rpcRsp = {.handle = pMsg->handle, .code = TSDB_CODE_MND_INIT, .pCont = tsMgmtInitStr, .contLen = sizeof(tsMgmtInitStr)};
+      rpcSendResponse(&rpcRsp);
+    } else {
+      SMnodeMsg *pPeer = mnodeCreateMsg(pMsg);
+      taosWriteQitem(tsMPeerQueue, TAOS_QTYPE_RPC, pPeer);
+    }
   }
 
   rpcFreeCont(pMsg->pCont);

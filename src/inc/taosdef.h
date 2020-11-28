@@ -272,6 +272,7 @@ void tsDataSwap(void *pLeft, void *pRight, int32_t type, int32_t size, void* buf
 #define TSDB_LOCALE_LEN           64
 #define TSDB_TIMEZONE_LEN         96
 #define TSDB_LABEL_LEN            8 
+#define TSDB_REASON_LEN           80
 
 #define TSDB_CLUSTER_ID_LEN       40
 #define TSDB_FQDN_LEN             128

@@ -34,6 +34,7 @@ typedef struct {
   uint32_t ip; 
   uint16_t port;
   int      connType;
+  char     reason[TSDB_REASON_LEN];
   void    *shandle;
   void    *thandle;
   void    *chandle;

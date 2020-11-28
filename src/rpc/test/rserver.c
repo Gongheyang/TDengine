@@ -83,10 +83,11 @@ void processShellMsg() {
 
 }
 
-int retrieveAuthInfo(char *meterId, char *spi, char *encrypt, char *secret, char *ckey) {
+int retrieveAuthInfo(char *meterId, char *spi, char *encrypt, char *secret, char *ckey, char *reason) {
   // app shall retrieve the auth info based on meterID from DB or a data file
   // demo code here only for simple demo
   int ret = 0;
+  *reason = 0;
 
   if (strcmp(meterId, "michael") == 0) {
     *spi = 1;

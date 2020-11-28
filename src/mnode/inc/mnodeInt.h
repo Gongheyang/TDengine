@@ -45,6 +45,7 @@ extern int32_t sdbDebugFlag;
 #define mLWarn(...)  { monitorSaveLog(1, __VA_ARGS__); mWarn(__VA_ARGS__)  }
 #define mLInfo(...)  { monitorSaveLog(0, __VA_ARGS__); mInfo(__VA_ARGS__) }
 
+
 #ifdef __cplusplus
 }
 #endif
