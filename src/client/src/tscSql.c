@@ -43,8 +43,6 @@ static bool validImpl(const char* str, size_t maxsize) {
   return true;
 }
 
-static int64_t queryIncr = 0;
-//static int64_t queryDec = 0; 
 
 static bool validUserName(const char* user) {
   return validImpl(user, TSDB_USER_LEN - 1);
@@ -354,9 +352,7 @@ TAOS_RES* taos_query_c(TAOS *taos, const char *sqlstr, uint32_t sqlLen, TAOS_RES
     return NULL;
   }
   
-  tscError("curre query count: %ld",atomic_add_fetch_64(&queryIncr, 1)); 
   tsem_init(&pSql->rspSem, 0, 0);
-  pSql->global = 100; 
   doAsyncQuery(pObj, pSql, waitForQueryRsp, taos, sqlstr, sqlLen);
 
   if (res != NULL) {
@@ -622,7 +618,7 @@ int taos_select_db(TAOS *taos, const char *db) {
 }
 
 // send free message to vnode to free qhandle and corresponding resources in vnode
-static UNUSED_FUNC bool tscKillQueryInDnode(SSqlObj* pSql) {
+static  bool tscKillQueryInDnode(SSqlObj* pSql) {
   SSqlCmd* pCmd = &pSql->cmd;
   SSqlRes* pRes = &pSql->res;
 
@@ -661,9 +657,6 @@ void taos_free_result(TAOS_RES *res) {
   if (pSql == NULL || pSql->signature != pSql) {
     tscError("%p already released sqlObj", res);
     return;
-  }
-  if (100 == pSql->global) {
-    tscError("current query count: %ld", atomic_sub_fetch_64(&queryIncr, 1));
   }
     
   bool freeNow = tscKillQueryInDnode(pSql);

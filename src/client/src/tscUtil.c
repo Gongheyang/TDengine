@@ -750,14 +750,12 @@ int32_t tscMergeTableDataBlocks(SSqlObj* pSql, SArray* pTableDataBlockList) {
     dataBuf->size += (finalLen + sizeof(SSubmitBlk));
     assert(dataBuf->size <= dataBuf->nAllocSize);
 
-    //char* p = realloc(dataBuf->pData, dataBuf->size);
-    //if (p != NULL) {
-    //  dataBuf->pData = p; 
-    //}
     // the length does not include the SSubmitBlk structure
     pBlocks->dataLen = htonl(finalLen);
 
     dataBuf->numOfTables += 1;
+
+    tfree(pOneTableBlock->pData);
   }
 
   tscDestroyBlockArrayList(pTableDataBlockList);
@@ -811,13 +809,11 @@ int tscAllocPayload(SSqlCmd* pCmd, int size) {
     if (pCmd->payload == NULL) return TSDB_CODE_TSC_OUT_OF_MEMORY;
     pCmd->allocSize = size;
   } else {
-    if (pCmd->allocSize < (uint32_t)size) {
-      char* b = realloc(pCmd->payload, size);
-      if (b == NULL) return TSDB_CODE_TSC_OUT_OF_MEMORY;
-      pCmd->payload = b;
-      pCmd->allocSize = size;
+    pCmd->payload = realloc(pCmd->payload, size);
+    if  (pCmd->payload == NULL) {
+      return TSDB_CODE_TSC_OUT_OF_MEMORY;
     }
-    
+    pCmd->allocSize = size;
     memset(pCmd->payload, 0, pCmd->allocSize);
   }
 

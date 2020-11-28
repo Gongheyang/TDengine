@@ -480,6 +480,10 @@ void tscTableMetaCallBack(void *param, TAOS_RES *res, int code) {
           tscResetSqlCmdObj(pCmd, false);
 
           code = tsParseSql(pSql, true);
+          if (pCmd->command == TSDB_SQL_INSERT) {
+            pSql->fp = pSql->fetchFp;  // restore the fp
+          }
+
           if (code == TSDB_CODE_TSC_ACTION_IN_PROGRESS) {
             return;
           } else if (code != TSDB_CODE_SUCCESS) {

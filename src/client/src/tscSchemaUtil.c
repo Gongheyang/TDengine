@@ -154,6 +154,7 @@ STableMeta* tscCreateTableMetaFromMsg(STableMetaMsg* pTableMetaMsg, size_t* size
   assert(pTableMetaMsg != NULL);
   
   int32_t schemaSize = (pTableMetaMsg->numOfColumns + pTableMetaMsg->numOfTags) * sizeof(SSchema);
+  
   STableMeta* pTableMeta = calloc(1, sizeof(STableMeta) + schemaSize);
   pTableMeta->tableType = pTableMetaMsg->tableType;
   
