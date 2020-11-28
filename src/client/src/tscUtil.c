@@ -705,6 +705,7 @@ int32_t tscMergeTableDataBlocks(SSqlObj* pSql, SArray* pTableDataBlockList) {
       tscDestroyBlockArrayList(pVnodeDataBlockList);
       return ret;
     }
+    tscSortRemoveDataBlockDupRows(pOneTableBlock);
 
     SSubmitBlk* pBlocks = (SSubmitBlk*) pOneTableBlock->pData;
     int64_t destSize = dataBuf->size + pOneTableBlock->size + pBlocks->numOfRows * expandSize + sizeof(STColumn) * tscGetNumOfColumns(pOneTableBlock->pTableMeta);
@@ -729,7 +730,6 @@ int32_t tscMergeTableDataBlocks(SSqlObj* pSql, SArray* pTableDataBlockList) {
       }
     }
 
-    tscSortRemoveDataBlockDupRows(pOneTableBlock);
     char* ekey = (char*)pBlocks->data + pOneTableBlock->rowSize*(pBlocks->numOfRows-1);
     
     tscDebug("%p tableId:%s, sid:%d rows:%d sversion:%d skey:%" PRId64 ", ekey:%" PRId64, pSql, pOneTableBlock->tableId,
