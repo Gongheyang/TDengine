@@ -172,8 +172,6 @@ int64_t taosAddRef(int rsetId, void *p)
 
   rid = atomic_add_fetch_64(&pSet->rid, 1);
   hash = rid % pSet->max;
-
-  uTrace("rsetId:%d p:%p rid:%" PRId64 " try to add, hash:%d count:%d", rsetId, p, rid, hash, pSet->count);
   taosLockList(pSet->lockedBy+hash);
   
   pNode->p = p;
@@ -185,7 +183,7 @@ int64_t taosAddRef(int rsetId, void *p)
   if (pSet->nodeList[hash]) pSet->nodeList[hash]->prev = pNode;
   pSet->nodeList[hash] = pNode;
 
-  uTrace("rsetId:%d p:%p rid:%" PRId64 " is added, hash:%d, count:%d", rsetId, p, rid, hash, pSet->count);
+  uTrace("rsetId:%d p:%p rid:%" PRId64 " is added, count:%d", rsetId, p, rid, pSet->count);
 
   taosUnlockList(pSet->lockedBy+hash);
 
@@ -227,7 +225,6 @@ void *taosAcquireRef(int rsetId, int64_t rid)
   }
   
   hash = rid % pSet->max;
-  uTrace("rsetId:%d p:%p rid:%" PRId64 " try to acquire, hash:%d count:%d", rsetId, p, rid, hash, pSet->count);
   taosLockList(pSet->lockedBy+hash);
 
   pNode = pSet->nodeList[hash];
@@ -244,14 +241,14 @@ void *taosAcquireRef(int rsetId, int64_t rid)
     if (pNode->removed == 0) {
       pNode->count++;
       p = pNode->p;
-      uTrace("rsetId:%d p:%p rid:%" PRId64 " is acquired, hash:%d", rsetId, pNode->p, rid, hash);
+      uTrace("rsetId:%d p:%p rid:%" PRId64 " is acquired", rsetId, pNode->p, rid);
     } else {
       terrno = TSDB_CODE_REF_NOT_EXIST;
-      uTrace("rsetId:%d p:%p rid:%" PRId64 " is already removed, failed to acquire, hash:%d", rsetId, pNode->p, rid, hash);
+      uTrace("rsetId:%d p:%p rid:%" PRId64 " is already removed, failed to acquire", rsetId, pNode->p, rid);
     }
   } else {
     terrno = TSDB_CODE_REF_NOT_EXIST;
-    uTrace("rsetId:%d rid:%" PRId64 " is not there, failed to acquire, hash:%d", rsetId, rid, hash);
+    uTrace("rsetId:%d rid:%" PRId64 " is not there, failed to acquire", rsetId, rid);
   }
 
   taosUnlockList(pSet->lockedBy+hash);
@@ -295,7 +292,6 @@ void *taosIterateRef(int rsetId, int64_t rid) {
   int hash = 0;
   if (rid > 0) {
     hash = rid % pSet->max;
-    uTrace("rsetId:%d rid:%" PRId64 " try to iterate, hash:%d", rsetId, rid, hash);
     taosLockList(pSet->lockedBy+hash);
 
     pNode = pSet->nodeList[hash];
@@ -305,7 +301,7 @@ void *taosIterateRef(int rsetId, int64_t rid) {
     }
 
     if (pNode == NULL) {
-      uError("rsetId:%d rid:%" PRId64 " not there, quit, hash:%d", rsetId, rid, hash);
+      uError("rsetId:%d rid:%" PRId64 " not there, quit", rsetId, rid);
       terrno = TSDB_CODE_REF_NOT_EXIST;
       taosUnlockList(pSet->lockedBy+hash);
       return NULL;
@@ -321,7 +317,6 @@ void *taosIterateRef(int rsetId, int64_t rid) {
 
   if (pNode == NULL) {
     for (; hash < pSet->max; ++hash) {
-      uTrace("rsetId:%d in the middle of iterate, hash:%d", rsetId, hash);
       taosLockList(pSet->lockedBy+hash);
       pNode = pSet->nodeList[hash];
       if (pNode) break; 
@@ -334,7 +329,7 @@ void *taosIterateRef(int rsetId, int64_t rid) {
     pNode->count++;  // acquire it
     newP = pNode->p;  
     taosUnlockList(pSet->lockedBy+hash);
-    uTrace("rsetId:%d p:%p rid:%" PRId64 " is returned, hash:%d", rsetId, newP, rid, hash);
+    uTrace("rsetId:%d p:%p rid:%" PRId64 " is returned", rsetId, newP, rid);
   } else {
     uTrace("rsetId:%d the list is over", rsetId);
   }
@@ -404,7 +399,6 @@ static int taosDecRefCount(int rsetId, int64_t rid, int remove) {
   }
   
   hash = rid % pSet->max;
-  uTrace("rsetId:%d rid:%" PRId64 " try to release, hash:%d", rsetId, rid, hash);
   taosLockList(pSet->lockedBy+hash);
   
   pNode = pSet->nodeList[hash];
@@ -429,12 +423,13 @@ static int taosDecRefCount(int rsetId, int64_t rid, int remove) {
       if (pNode->next) {
         pNode->next->prev = pNode->prev; 
       } 
+		
       released = 1;
     } else {
-      uTrace("rsetId:%d p:%p rid:%" PRId64 "is released, hash:%d count:%d", rsetId, pNode->p, rid, hash, pSet->count);
+      uTrace("rsetId:%d p:%p rid:%" PRId64 " is released", rsetId, pNode->p, rid);
     }
   } else {
-    uTrace("rsetId:%d rid:%" PRId64 " is not there, failed to release/remove, hash:%d count:%d", rsetId, rid, hash, pSet->count);
+    uTrace("rsetId:%d rid:%" PRId64 " is not there, failed to release/remove", rsetId, rid);
     terrno = TSDB_CODE_REF_NOT_EXIST;
     code = -1;
   }
@@ -442,11 +437,9 @@ static int taosDecRefCount(int rsetId, int64_t rid, int remove) {
   taosUnlockList(pSet->lockedBy+hash);
 
   if (released) {
+    uTrace("rsetId:%d p:%p rid:%" PRId64 " is removed, count:%d, free mem: %p", rsetId, pNode->p, rid, pSet->count, pNode);
     (*pSet->fp)(pNode->p); 
-
-    uTrace("rsetId:%d p:%p rid:%" PRId64 "is removed, hash:%d count:%d, free mem: %p", rsetId, pNode->p, rid, hash, pSet->count, pNode);
     free(pNode);
-
     taosDecRsetCount(pSet);
   }
 
@@ -461,8 +454,6 @@ static void taosLockList(int64_t *lockedBy) {
       sched_yield();
     }
   }
-
-  uTrace("rsetId: %p is locked", lockedBy);
 }
 
 static void taosUnlockList(int64_t *lockedBy) {
@@ -470,8 +461,6 @@ static void taosUnlockList(int64_t *lockedBy) {
   if (atomic_val_compare_exchange_64(lockedBy, tid, 0) != tid) {
     assert(false);
   }
-
-  uTrace("rsetId: %p is unlocked", lockedBy);
 }
 
 static void taosInitRefModule(void) {
