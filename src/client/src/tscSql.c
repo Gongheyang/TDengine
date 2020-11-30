@@ -43,6 +43,9 @@ static bool validImpl(const char* str, size_t maxsize) {
   return true;
 }
 
+static int64_t queryIncr = 0;
+//static int64_t queryDec = 0; 
+
 static bool validUserName(const char* user) {
   return validImpl(user, TSDB_USER_LEN - 1);
 }
@@ -350,7 +353,7 @@ TAOS_RES* taos_query_c(TAOS *taos, const char *sqlstr, uint32_t sqlLen, TAOS_RES
     terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
     return NULL;
   }
-
+  tscError("curre query count: %ld",atomic_add_fetch_64(&queryIncr, 1)); 
   tsem_init(&pSql->rspSem, 0, 0);
   doAsyncQuery(pObj, pSql, waitForQueryRsp, taos, sqlstr, sqlLen);
 
@@ -657,7 +660,10 @@ void taos_free_result(TAOS_RES *res) {
     tscError("%p already released sqlObj", res);
     return;
   }
-
+  if (0 == pSql->subState.numOfSub) {
+    tscError("current query count: %ld", atomic_sub_fetch_64(&queryIncr, 1));
+  }
+    
   bool freeNow = tscKillQueryInDnode(pSql);
   if (freeNow) {
     tscDebug("%p free sqlObj in cache", pSql);
