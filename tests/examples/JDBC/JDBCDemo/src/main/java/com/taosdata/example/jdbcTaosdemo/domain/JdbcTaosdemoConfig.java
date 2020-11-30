@@ -12,12 +12,11 @@ public final class JdbcTaosdemoConfig {
     private String password = "taosdata";
 
     //Destination database. Default is 'test'
-    private String dbName = "test";
+    private String dbName = "taosdemo_test";
     //keep
     private int keep = 3650;
     //days
     private int days = 10;
-
     //Super table Name. Default is 'meters'
     private String stbName = "meters";
     //Table name prefix. Default is 'd'
@@ -27,7 +26,9 @@ public final class JdbcTaosdemoConfig {
     //The number of records per table. Default is 2
     private int numberOfRecordsPerTable = 2;
     //The number of records per request. Default is 100
-    private int numberOfRecordsPerRequest = 100;
+    private int numberOfValuesPerInsert = 100;
+    //
+    private int sleep = 1000;
 
     //The number of threads. Default is 1.
     private int numberOfThreads = 1;
@@ -36,18 +37,22 @@ public final class JdbcTaosdemoConfig {
 
     public static void printHelp() {
         System.out.println("Usage: java -jar JdbcTaosDemo.jar [OPTION...]");
-        System.out.println("-h    host                       The host to connect to TDengine. you must input one");
-        System.out.println("-p    port                       The TCP/IP port number to use for the connection. Default is 6030");
-        System.out.println("-u    user                       The TDengine user name to use when connecting to the server. Default is 'root'");
-        System.out.println("-P    password                   The password to use when connecting to the server.Default is 'taosdata'");
-        System.out.println("-d    database                   Destination database. Default is 'test'");
-        System.out.println("-m    tablePrefix                Table prefix name. Default is 'd'");
-        System.out.println("-t    num_of_tables              The number of tables. Default is 10");
-        System.out.println("-n    num_of_records_per_table   The number of records per table. Default is 2");
-        System.out.println("-r    num_of_records_per_req     The number of records per request. Default is 100");
-        System.out.println("-T    num_of_threads             The number of threads. Default is 1");
-        System.out.println("-D    delete table               Delete data methods. Default is false");
-        System.out.println("--help                           Give this help list");
+        System.out.println("-host                    host                       The host to connect to TDengine. you must input one");
+        System.out.println("-port                    port                       The TCP/IP port number to use for the connection. Default is 6030");
+        System.out.println("-user                    user                       The TDengine user name to use when connecting to the server. Default is 'root'");
+        System.out.println("-password                password                   The password to use when connecting to the server.Default is 'taosdata'");
+        System.out.println("===========================================================================================");
+        System.out.println("-database                database                   Destination database. Default is 'test'");
+        System.out.println("-keep                    keep                       Destination database. Default is 'test'");
+        System.out.println("-days                    days                       Destination database. Default is 'test'");
+        System.out.println("===========================================================================================");
+        System.out.println("-tablePrefix             tablePrefix                Table prefix name. Default is 'd'");
+        System.out.println("-numOfTables             num_of_tables              The number of tables. Default is 10");
+        System.out.println("-numOfRecordsPerTable    num_of_records_per_table   The number of records per table. Default is 2");
+        System.out.println("-numOfValuesPerInsert    num_of_records_per_req     The number of records per request. Default is 100");
+        System.out.println("-numOfThreads            num_of_threads             The number of threads. Default is 1");
+        System.out.println("-deleteTableAfterTest    delete table               Delete data methods. Default is false");
+        System.out.println("--help                   print this help list");
 //        System.out.println("--infinite                       infinite insert mode");
     }
 
@@ -59,34 +64,40 @@ public final class JdbcTaosdemoConfig {
      */
     public JdbcTaosdemoConfig(String[] args) {
         for (int i = 0; i < args.length; i++) {
-            if ("-h".equals(args[i]) && i < args.length - 1) {
+            if ("-host".equals(args[i]) && i < args.length - 1) {
                 host = args[++i];
             }
-            if ("-p".equals(args[i]) && i < args.length - 1) {
+            if ("-port".equals(args[i]) && i < args.length - 1) {
                 port = Integer.parseInt(args[++i]);
             }
-            if ("-u".equals(args[i]) && i < args.length - 1) {
+            if ("-user".equals(args[i]) && i < args.length - 1) {
                 user = args[++i];
             }
-            if ("-P".equals(args[i]) && i < args.length - 1) {
+            if ("-password".equals(args[i]) && i < args.length - 1) {
                 password = args[++i];
             }
-            if ("-d".equals(args[i]) && i < args.length - 1) {
+            if ("-database".equals(args[i]) && i < args.length - 1) {
                 dbName = args[++i];
             }
-            if ("-m".equals(args[i]) && i < args.length - 1) {
+            if ("-keep".equals(args[i]) && i < args.length - 1) {
+                keep = Integer.parseInt(args[++i]);
+            }
+            if ("-days".equals(args[i]) && i < args.length - 1) {
+                days = Integer.parseInt(args[++i]);
+            }
+            if ("-tablePrefix".equals(args[i]) && i < args.length - 1) {
                 tbPrefix = args[++i];
             }
-            if ("-t".equals(args[i]) && i < args.length - 1) {
+            if ("-numOfTables".equals(args[i]) && i < args.length - 1) {
                 numberOfTable = Integer.parseInt(args[++i]);
             }
-            if ("-n".equals(args[i]) && i < args.length - 1) {
+            if ("-numOfRecordsPerTable".equals(args[i]) && i < args.length - 1) {
                 numberOfRecordsPerTable = Integer.parseInt(args[++i]);
             }
-            if ("-r".equals(args[i]) && i < args.length - 1) {
-                numberOfRecordsPerRequest = Integer.parseInt(args[++i]);
+            if ("-numOfValuesPerInsert".equals(args[i]) && i < args.length - 1) {
+                numberOfValuesPerInsert = Integer.parseInt(args[++i]);
             }
-            if ("-T".equals(args[i]) && i < args.length - 1) {
+            if ("-numOfThreads".equals(args[i]) && i < args.length - 1) {
                 numberOfThreads = Integer.parseInt(args[++i]);
             }
             if ("-D".equals(args[i]) && i < args.length - 1) {
@@ -147,7 +158,7 @@ public final class JdbcTaosdemoConfig {
         return deleteTable;
     }
 
-    public int getNumberOfRecordsPerRequest() {
-        return numberOfRecordsPerRequest;
+    public int getNumberOfValuesPerInsert() {
+        return numberOfValuesPerInsert;
     }
 }

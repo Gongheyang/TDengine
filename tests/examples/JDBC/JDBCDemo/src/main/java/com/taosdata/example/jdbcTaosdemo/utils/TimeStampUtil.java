@@ -2,8 +2,6 @@ package com.taosdata.example.jdbcTaosdemo.utils;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Date;
 
 public class TimeStampUtil {

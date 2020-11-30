@@ -30,7 +30,7 @@ public class InsertTableDatetimeTask implements Runnable {
     public void run() {
         try {
             Connection connection = ConnectionFactory.build(config);
-            int valuesCount = config.getNumberOfRecordsPerRequest();
+            int valuesCount = config.getNumberOfValuesPerInsert();
             for (long ts = startDatetime; ts < finishedDatetime; ts += valuesCount) {
                 for (int i = startTableIndex; i < startTableIndex + tableNumber; i++) {
                     String sql = SqlSpeller.insertBatchSizeRowsSQL(config.getDbName(), config.getTbPrefix(), i + 1, ts, valuesCount);
