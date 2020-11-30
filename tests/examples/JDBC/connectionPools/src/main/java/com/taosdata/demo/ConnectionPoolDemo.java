@@ -6,13 +6,11 @@ import com.taosdata.demo.pool.DbcpBuilder;
 import com.taosdata.demo.pool.DruidPoolBuilder;
 import com.taosdata.demo.pool.HikariCpBuilder;
 import org.apache.log4j.Logger;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -88,12 +86,9 @@ public class ConnectionPoolDemo {
         init(dataSource);
 
 
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(20);
-        executor.setMaxPoolSize(100);
-        executor.setQueueCapacity(100);
-        executor.setKeepAliveSeconds(300);
-//        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(threadPoolSize);
+//        ExecutorService executor = Executors.newFixedThreadPool(tableSize);
+
+        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(threadPoolSize);
         while (true) {
             executor.execute(new InsertTask(dataSource, dbName, tableSize, batchSize));
             logger.info("thread pool size : " + executor.getPoolSize() + ", active pool size: " + executor.getActiveCount());
@@ -103,7 +98,6 @@ public class ConnectionPoolDemo {
     }
 
     private static void init(DataSource dataSource) {
-
         try (Connection conn = dataSource.getConnection()) {
             execute(conn, "drop database if exists " + dbName + "");
             execute(conn, "create database if not exists " + dbName + "");
