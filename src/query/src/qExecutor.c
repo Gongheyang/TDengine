@@ -3631,6 +3631,9 @@ void scanOneTableDataBlocks(SQueryRuntimeEnv *pRuntimeEnv, TSKEY start) {
       // do nothing if no data blocks are found qualified during scan
       if (qstatus.lastKey != pTableQueryInfo->lastKey) {
         qstatus.curWindow.ekey = pTableQueryInfo->lastKey - step;
+      } else { // the lastkey does not increase, which means no data checked yet, and all result rows has been closed.
+        qDebug("QInfo:%p no results generated in this scan, abort", pQInfo);
+        return;
       }
 
       qstatus.lastKey = pTableQueryInfo->lastKey;
