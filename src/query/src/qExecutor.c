@@ -3632,8 +3632,7 @@ void scanOneTableDataBlocks(SQueryRuntimeEnv *pRuntimeEnv, TSKEY start) {
       if (qstatus.lastKey != pTableQueryInfo->lastKey) {
         qstatus.curWindow.ekey = pTableQueryInfo->lastKey - step;
       } else { // the lastkey does not increase, which means no data checked yet, and all result rows has been closed.
-        qDebug("QInfo:%p no results generated in this scan, abort", pQInfo);
-        return;
+        qDebug("QInfo:%p no results generated in this scan", pQInfo);
       }
 
       qstatus.lastKey = pTableQueryInfo->lastKey;
@@ -4405,7 +4404,23 @@ static TSKEY doSkipIntervalProcess(SQueryRuntimeEnv* pRuntimeEnv, STimeWindow* w
 
 static bool skipTimeInterval(SQueryRuntimeEnv *pRuntimeEnv, TSKEY* start) {
   SQuery *pQuery = pRuntimeEnv->pQuery;
-  *start = pQuery->current->lastKey;
+
+  // get the first unclosed time window
+  bool assign = false;
+  for(int32_t i = 0; i < pRuntimeEnv->windowResInfo.size; ++i) {
+    if (pRuntimeEnv->windowResInfo.pResult[i]->closed) {
+      continue;
+    }
+
+    assign = true;
+    *start = pRuntimeEnv->windowResInfo.pResult[i]->win.skey;
+  }
+
+  if (!assign) {
+    *start = pQuery->current->lastKey;
+  }
+
+  assert(*start <= pQuery->current->lastKey);
 
   // if queried with value filter, do NOT forward query start position
   if (pQuery->limit.offset <= 0 || pQuery->numOfFilterCols > 0 || pRuntimeEnv->pTSBuf != NULL || pRuntimeEnv->pFillInfo != NULL) {
