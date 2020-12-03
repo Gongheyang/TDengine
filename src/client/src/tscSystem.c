@@ -147,7 +147,7 @@ void taos_init_imp(void) {
     tscObjCache = taosCacheInit(TSDB_CACHE_PTR_KEY, refreshTime / 2, false, tscFreeRegisteredSqlObj, "sqlObj");
   }
 
-  tscRefId = taosOpenRef(200, tscCloseTscObj);
+  tscRefId = taosOpenRef(500, tscCloseTscObj);
 
   // in other language APIs, taos_cleanup is not available yet.
   // So, to make sure taos_cleanup will be invoked to clean up the allocated
