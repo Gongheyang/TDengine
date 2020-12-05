@@ -241,6 +241,16 @@ bool doFilterData(SQuery *pQuery, int32_t elemPos) {
   return true;
 }
 
+bool isCountQuery(SQuery *pQuery) {
+  for (int32_t i = 0; i < pQuery->numOfOutput; ++i) {
+    int32_t functionId = pQuery->pExpr1[i].base.functionId;
+    if (functionId == TSDB_FUNC_COUNT) {
+      return true;
+    }
+  }
+  return false;
+  
+}
 int64_t getNumOfResult(SQueryRuntimeEnv *pRuntimeEnv) {
   SQuery *pQuery = pRuntimeEnv->pQuery;
   bool    hasMainFunction = hasMainOutput(pQuery);
@@ -265,6 +275,15 @@ int64_t getNumOfResult(SQueryRuntimeEnv *pRuntimeEnv) {
   }
 
   assert(maxOutput >= 0);
+
+  // handle count on empty table
+  if (maxOutput == 0 && isCountQuery(pQuery)) {
+    maxOutput = 1;
+  }  
+  // handle 
+  if (pRuntimeEnv->groupbyNormalCol && !pRuntimeEnv->topBotQuery) {
+    maxOutput = 1;
+  }
   return maxOutput;
 }
 
@@ -4063,6 +4082,7 @@ void finalizeQueryResult(SQueryRuntimeEnv *pRuntimeEnv) {
        * the top and bottom query
        */
       buf->numOfRows = (uint16_t)getNumOfResult(pRuntimeEnv);
+      
     }
 
   } else {
@@ -7094,11 +7114,11 @@ static int32_t initQInfo(SQueryTableMsg *pQueryMsg, void *tsdb, int32_t vgId, SQ
     return TSDB_CODE_SUCCESS;
   }
 
-  if (pQInfo->tableqinfoGroupInfo.numOfTables == 0) {
-    qDebug("QInfo:%p no table qualified for tag filter, abort query", pQInfo);
-    setQueryStatus(pQuery, QUERY_COMPLETED);
-    return TSDB_CODE_SUCCESS;
-  }
+  //if (pQInfo->tableqinfoGroupInfo.numOfTables == 0) {
+  //  qDebug("QInfo:%p no table qualified for tag filter, abort query", pQInfo);
+  //  setQueryStatus(pQuery, QUERY_COMPLETED);
+  //  return TSDB_CODE_SUCCESS;
+  //}
 
   // filter the qualified
   if ((code = doInitQInfo(pQInfo, pTSBuf, tsdb, vgId, isSTable)) != TSDB_CODE_SUCCESS) {
