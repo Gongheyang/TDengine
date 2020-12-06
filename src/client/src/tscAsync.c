@@ -465,7 +465,9 @@ void tscTableMetaCallBack(void *param, TAOS_RES *res, int code) {
 
         STableMetaInfo* pTableMetaInfo = tscGetTableMetaInfoFromCmd(pCmd, pCmd->clauseIndex, 0);
         code = tscGetTableMeta(pSql, pTableMetaInfo);
-        if (code == TSDB_CODE_TSC_ACTION_IN_PROGRESS) {
+        if (code == TSDB_CODE_TSC_ACTION_IN_PROGRESS && pCmd->command == TSDB_SQL_INSERT) {
+          pSql->fp = pSql->fetchFp;
+          tscError("%p  impossible no, %pf", pSql, pSql->fp);
           return;
         } else {
           assert(code == TSDB_CODE_SUCCESS);      
@@ -510,6 +512,13 @@ void tscTableMetaCallBack(void *param, TAOS_RES *res, int code) {
         } else if (code != TSDB_CODE_SUCCESS) {
           goto _error;
         }
+        if (code == TSDB_CODE_SUCCESS && pCmd->command == TSDB_SQL_INSERT) {
+            if (pSql->fp != (void(*)())tscHandleMultivnodeInsert) {
+                tscHandleInsertRetry(pSql);
+                tscError("%p  impossible yes, %pf", pSql, pSql->fp);
+                return;
+            }
+        } 
 
         if (pCmd->insertType == TSDB_QUERY_TYPE_STMT_INSERT) {
           STableMetaInfo* pTableMetaInfo = tscGetTableMetaInfoFromCmd(pCmd, pCmd->clauseIndex, 0);
