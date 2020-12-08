@@ -333,13 +333,15 @@ void tscSetResRawPtr(SSqlRes* pRes, SQueryInfo* pQueryInfo) {
 
         if (isNull(p, TSDB_DATA_TYPE_NCHAR)) {
           memcpy(dst, p, varDataTLen(p));
-        } else {
+        } else if (varDataLen(p) > 0) {
           int32_t length = taosUcs4ToMbs(varDataVal(p), varDataLen(p), varDataVal(dst));
           varDataSetLen(dst, length);
 
           if (length == 0) {
             tscError("charset:%s to %s. val:%s convert failed.", DEFAULT_UNICODE_ENCODEC, tsCharset, (char*)p);
           }
+        } else {
+          varDataSetLen(dst, 0);
         }
 
         p += pInfo->field.bytes;
@@ -377,7 +379,7 @@ static void tscDestroyResPointerInfo(SSqlRes* pRes) {
   pRes->data = NULL;  // pRes->data points to the buffer of pRsp, no need to free
 }
 
-static void tscFreeQueryInfo(SSqlCmd* pCmd, bool removeFromCache) {
+void tscFreeQueryInfo(SSqlCmd* pCmd, bool removeFromCache) {
   if (pCmd == NULL || pCmd->numOfClause == 0) {
     return;
   }
@@ -403,12 +405,12 @@ void tscResetSqlCmdObj(SSqlCmd* pCmd, bool removeFromCache) {
   pCmd->msgType   = 0;
   pCmd->parseFinished = 0;
   pCmd->autoCreated = 0;
-  
-  taosHashCleanup(pCmd->pTableList);
-  pCmd->pTableList = NULL;
-  
+  pCmd->numOfTables = 0;
+
+  tfree(pCmd->pTableMetaList);
+
+  pCmd->pTableList = tscDestroyBlockHashTable(pCmd->pTableList);
   pCmd->pDataBlocks = tscDestroyBlockArrayList(pCmd->pDataBlocks);
-  
   tscFreeQueryInfo(pCmd, removeFromCache);
 }
 
@@ -573,6 +575,22 @@ void*  tscDestroyBlockArrayList(SArray* pDataBlockList) {
   return NULL;
 }
 
+void* tscDestroyBlockHashTable(SHashObj* pBlockHashTable) {
+  if (pBlockHashTable == NULL) {
+    return NULL;
+  }
+
+  SHashMutableIterator* iter = taosHashCreateIter(pBlockHashTable);
+  while(taosHashIterNext(iter)) {
+    STableDataBlocks** p = taosHashIterGet(iter);
+    tscDestroyDataBlock(*p);
+  }
+
+  taosHashDestroyIter(iter);
+  taosHashCleanup(pBlockHashTable);
+  return NULL;
+}
+
 int32_t tscCopyDataBlockToPayload(SSqlObj* pSql, STableDataBlocks* pDataBlock) {
   SSqlCmd* pCmd = &pSql->cmd;
   assert(pDataBlock->pTableMeta != NULL);
@@ -644,6 +662,7 @@ int32_t tscCreateDataBlock(size_t initialSize, int32_t rowSize, int32_t startOff
   dataBuf->pData = calloc(1, dataBuf->nAllocSize);
   if (dataBuf->pData == NULL) {
     tscError("failed to allocated memory, reason:%s", strerror(errno));
+    tfree(dataBuf);
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
 
@@ -668,9 +687,8 @@ int32_t tscCreateDataBlock(size_t initialSize, int32_t rowSize, int32_t startOff
   return TSDB_CODE_SUCCESS;
 }
 
-int32_t tscGetDataBlockFromList(void* pHashList, SArray* pDataBlockList, int64_t id, int32_t size,
-                                int32_t startOffset, int32_t rowSize, const char* tableId, STableMeta* pTableMeta,
-                                STableDataBlocks** dataBlocks) {
+int32_t tscGetDataBlockFromList(SHashObj* pHashList, int64_t id, int32_t size, int32_t startOffset, int32_t rowSize, const char* tableId, STableMeta* pTableMeta,
+                                STableDataBlocks** dataBlocks, SArray* pBlockList) {
   *dataBlocks = NULL;
 
   STableDataBlocks** t1 = (STableDataBlocks**)taosHashGet(pHashList, (const char*)&id, sizeof(id));
@@ -685,7 +703,9 @@ int32_t tscGetDataBlockFromList(void* pHashList, SArray* pDataBlockList, int64_t
     }
 
     taosHashPut(pHashList, (const char*)&id, sizeof(int64_t), (char*)dataBlocks, POINTER_BYTES);
-    taosArrayPush(pDataBlockList, dataBlocks);
+    if (pBlockList) {
+      taosArrayPush(pBlockList, dataBlocks);
+    }
   }
 
   return TSDB_CODE_SUCCESS;
@@ -766,7 +786,22 @@ static int32_t getRowExpandSize(STableMeta* pTableMeta) {
   return result;
 }
 
-int32_t tscMergeTableDataBlocks(SSqlObj* pSql, SArray* pTableDataBlockList) {
+static void extractTableMeta(SSqlCmd* pCmd) {
+  pCmd->numOfTables = taosHashGetSize(pCmd->pTableList);
+  pCmd->pTableMetaList = calloc(pCmd->numOfTables, POINTER_BYTES);
+
+  SHashMutableIterator* iter = taosHashCreateIter(pCmd->pTableList);
+  int32_t i = 0;
+  while(taosHashIterNext(iter)) {
+    STableDataBlocks** pBlocks = taosHashIterGet(iter);
+    pCmd->pTableMetaList[i++] = taosCacheTransfer(tscMetaCache, (void**) &(*pBlocks)->pTableMeta);
+  }
+
+  taosHashDestroyIter(iter);
+  pCmd->pTableList = tscDestroyBlockHashTable(pCmd->pTableList);
+}
+
+int32_t tscMergeTableDataBlocks(SSqlObj* pSql) {
   SSqlCmd* pCmd = &pSql->cmd;
 
   void* pVnodeDataBlockHashList = taosHashInit(128, taosGetDefaultHashFunction(TSDB_DATA_TYPE_BIGINT), true, false);
@@ -775,13 +810,11 @@ int32_t tscMergeTableDataBlocks(SSqlObj* pSql, SArray* pTableDataBlockList) {
   size_t total = taosArrayGetSize(pTableDataBlockList);
   for (int32_t i = 0; i < total; ++i) {
     // the maximum expanded size in byte when a row-wise data is converted to SDataRow format
-    STableDataBlocks* pOneTableBlock = taosArrayGetP(pTableDataBlockList, i);
     int32_t expandSize = getRowExpandSize(pOneTableBlock->pTableMeta);
     STableDataBlocks* dataBuf = NULL;
     
-    int32_t ret =
-        tscGetDataBlockFromList(pVnodeDataBlockHashList, pVnodeDataBlockList, pOneTableBlock->vgId, TSDB_PAYLOAD_SIZE,
-                                tsInsertHeadSize, 0, pOneTableBlock->tableId, pOneTableBlock->pTableMeta, &dataBuf);
+    int32_t ret = tscGetDataBlockFromList(pVnodeDataBlockHashList, pOneTableBlock->vgId, TSDB_PAYLOAD_SIZE,
+                                tsInsertHeadSize, 0, pOneTableBlock->tableId, pOneTableBlock->pTableMeta, &dataBuf, pVnodeDataBlockList);
     if (ret != TSDB_CODE_SUCCESS) {
       tscError("%p failed to prepare the data block buffer for merging table data, code:%d", pSql, ret);
       taosHashCleanup(pVnodeDataBlockHashList);
@@ -835,7 +868,6 @@ int32_t tscMergeTableDataBlocks(SSqlObj* pSql, SArray* pTableDataBlockList) {
 
     // the length does not include the SSubmitBlk structure
     pBlocks->dataLen = htonl(finalLen);
-
     dataBuf->numOfTables += 1;
   }
 
@@ -843,8 +875,6 @@ int32_t tscMergeTableDataBlocks(SSqlObj* pSql, SArray* pTableDataBlockList) {
 
   // free the table data blocks;
   pCmd->pDataBlocks = pVnodeDataBlockList;
-
-//  tscFreeUnusedDataBlocks(pCmd->pDataBlocks);
   taosHashCleanup(pVnodeDataBlockHashList);
 
   return TSDB_CODE_SUCCESS;
@@ -1559,19 +1589,6 @@ void tscGetSrcColumnInfo(SSrcColumnInfo* pColInfo, SQueryInfo* pQueryInfo) {
     }
   }
 }
-
-//void tscSetFreeHeatBeat(STscObj* pObj) {
-//  if (pObj == NULL || pObj->signature != pObj || pObj->pHb == NULL) {
-//    return;
-//  }
-//
-//  SSqlObj* pHeatBeat = pObj->pHb;
-//  assert(pHeatBeat == pHeatBeat->signature);
-//
-//  // to denote the heart-beat timer close connection and free all allocated resources
-//  SQueryInfo* pQueryInfo = tscGetQueryInfoDetail(&pHeatBeat->cmd, 0);
-//  pQueryInfo->type = TSDB_QUERY_TYPE_FREE_RESOURCE;
-//}
 
 /*
  * the following four kinds of SqlObj should not be freed
