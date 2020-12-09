@@ -12,7 +12,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
+#include <malloc.h>
 #include "os.h"
 #include "taosmsg.h"
 #include "tref.h"
@@ -38,6 +38,8 @@ void *  tscQhandle;
 void *  tscCheckDiskUsageTmr;
 int     tsInsertHeadSize;
 int     tscRefId = -1;
+void*   tscMallocTrimTmr;
+
 
 int tscNumOfThreads;
 
@@ -47,6 +49,11 @@ static pthread_once_t tscinit = PTHREAD_ONCE_INIT;
 void tscCheckDiskUsage(void *UNUSED_PARAM(para), void* UNUSED_PARAM(param)) {
   taosGetDisk();
   taosTmrReset(tscCheckDiskUsage, 1000, NULL, tscTmr, &tscCheckDiskUsageTmr);
+}
+void tscCronMallocTrim(void *UNUSED_PARAM(para), void* UNUSED_PARAM(param)) {
+  malloc_trim(0);   
+  tscError("cron trim");
+  taosTmrReset(tscCronMallocTrim, 10*1000, NULL, tscTmr, &tscMallocTrimTmr);
 }
 
 int32_t tscInitRpc(const char *user, const char *secretEncrypt, void **pDnodeConn) {
@@ -130,6 +137,7 @@ void taos_init_imp(void) {
   if(0 == tscEmbedded){
     taosTmrReset(tscCheckDiskUsage, 10, NULL, tscTmr, &tscCheckDiskUsageTmr);      
   }
+  taosTmrReset(tscCronMallocTrim, 1000, NULL, tscTmr, &tscMallocTrimTmr);
 
   int64_t refreshTime = 10; // 10 seconds by default
   if (tscMetaCache == NULL) {
