@@ -14,8 +14,17 @@ public class HikariCpBuilder {
         config.setUsername("root");
         config.setPassword("taosdata");
 
-        config.setMaximumPoolSize(poolSize);
-        config.setMinimumIdle(poolSize);
+//        config.setMaximumPoolSize(poolSize);
+//        config.setMinimumIdle(poolSize);
+        config.setMaximumPoolSize(200);
+        config.setMinimumIdle(50);
+        config.setConnectionTestQuery("show dnodes");
+
+        config.setIdleTimeout(60000);
+        config.setConnectionTimeout(60000);
+        config.setValidationTimeout(3000);
+        config.setMaxLifetime(60000);
+
         HikariDataSource ds = new HikariDataSource(config);
         return ds;
     }
