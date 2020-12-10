@@ -109,12 +109,13 @@ void tscSortRemoveDataBlockDupRows(STableDataBlocks* dataBuf);
 SParamInfo* tscAddParamToDataBlock(STableDataBlocks* pDataBlock, char type, uint8_t timePrec, int16_t bytes,
                                    uint32_t offset);
 
+void*   tscDestroyBlockHashTable(SHashObj* pBlockHashTable);
 void*   tscDestroyBlockArrayList(SArray* pDataBlockList);
 int32_t tscCopyDataBlockToPayload(SSqlObj* pSql, STableDataBlocks* pDataBlock);
-int32_t tscMergeTableDataBlocks(SSqlObj* pSql, SArray* pDataList);
-int32_t tscGetDataBlockFromList(void* pHashList, SArray* pDataBlockList, int64_t id, int32_t size,
+int32_t tscMergeTableDataBlocks(SSqlObj* pSql);
+int32_t tscGetDataBlockFromList(SHashObj* pHashList, int64_t id, int32_t size,
                                 int32_t startOffset, int32_t rowSize, const char* tableId, STableMeta* pTableMeta,
-                                STableDataBlocks** dataBlocks);
+                                STableDataBlocks** dataBlocks, SArray* pBlockList);
 
 /**
  * for the projection query on metric or point interpolation query on metric,
@@ -283,6 +284,7 @@ int  tscSetMgmtEpSetFromCfg(const char *first, const char *second);
 bool tscSetSqlOwner(SSqlObj* pSql);
 void tscClearSqlOwner(SSqlObj* pSql);
 int32_t doArithmeticCalculate(SQueryInfo* pQueryInfo, tFilePage* pOutput, int32_t rowSize, int32_t finalRowSize);
+void tscFreeQueryInfo(SSqlCmd* pCmd, bool removeFromCache);
 
 void* malloc_throw(size_t size);
 void* calloc_throw(size_t nmemb, size_t size);

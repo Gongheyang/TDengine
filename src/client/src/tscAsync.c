@@ -478,13 +478,6 @@ void tscTableMetaCallBack(void *param, TAOS_RES *res, int code) {
         } else if (code != TSDB_CODE_SUCCESS) {
           goto _error;
         }
-        if (code == TSDB_CODE_SUCCESS && pCmd->command == TSDB_SQL_INSERT) {
-            if (pSql->fp != (void(*)())tscHandleMultivnodeInsert) {
-                tscHandleInsertRetry(pSql);
-                tscError("%p  impossible yes, %pf", pSql, pSql->fp);
-                return;
-            }
-        } 
 
         if (pCmd->insertType == TSDB_QUERY_TYPE_STMT_INSERT) {
           STableMetaInfo* pTableMetaInfo = tscGetTableMetaInfoFromCmd(pCmd, pCmd->clauseIndex, 0);

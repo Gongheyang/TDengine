@@ -807,8 +807,12 @@ int32_t tscMergeTableDataBlocks(SSqlObj* pSql) {
   void* pVnodeDataBlockHashList = taosHashInit(128, taosGetDefaultHashFunction(TSDB_DATA_TYPE_BIGINT), true, false);
   SArray* pVnodeDataBlockList = taosArrayInit(8, POINTER_BYTES);
 
-  size_t total = taosArrayGetSize(pTableDataBlockList);
-  for (int32_t i = 0; i < total; ++i) {
+  SHashMutableIterator* iter = taosHashCreateIter(pCmd->pTableList);
+  STableDataBlocks* pOneTableBlock = NULL;
+
+  while(taosHashIterNext(iter)) {
+    pOneTableBlock = *(STableDataBlocks**)taosHashIterGet(iter);
+
     // the maximum expanded size in byte when a row-wise data is converted to SDataRow format
     int32_t expandSize = getRowExpandSize(pOneTableBlock->pTableMeta);
     STableDataBlocks* dataBuf = NULL;
@@ -871,7 +875,8 @@ int32_t tscMergeTableDataBlocks(SSqlObj* pSql) {
     dataBuf->numOfTables += 1;
   }
 
-  tscDestroyBlockArrayList(pTableDataBlockList);
+  taosHashDestroyIter(iter);
+  extractTableMeta(pCmd);
 
   // free the table data blocks;
   pCmd->pDataBlocks = pVnodeDataBlockList;
