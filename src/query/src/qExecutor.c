@@ -7564,30 +7564,30 @@ int32_t qRetrieveQueryResultInfo(qinfo_t qinfo, bool* buildRes, void* pRspContex
 
   int32_t code = TSDB_CODE_SUCCESS;
 
-#if _NON_BLOCKING_RETRIEVE
-  SQuery *pQuery = pQInfo->runtimeEnv.pQuery;
+  if (!tsHalfCoresForQuery) {
+    SQuery *pQuery = pQInfo->runtimeEnv.pQuery;
 
-  pthread_mutex_lock(&pQInfo->lock);
-  assert(pQInfo->rspContext == NULL);
+    pthread_mutex_lock(&pQInfo->lock);
+    assert(pQInfo->rspContext == NULL);
 
-  if (pQInfo->dataReady == QUERY_RESULT_READY) {
-    *buildRes = true;
-    qDebug("QInfo:%p retrieve result info, rowsize:%d, rows:%"PRId64", code:%d", pQInfo, pQuery->rowSize, pQuery->rec.rows,
-           pQInfo->code);
+    if (pQInfo->dataReady == QUERY_RESULT_READY) {
+      *buildRes = true;
+      qDebug("QInfo:%p retrieve result info, rowsize:%d, rows:%" PRId64 ", code:%d", pQInfo, pQuery->rowSize,
+             pQuery->rec.rows, pQInfo->code);
+    } else {
+      *buildRes = false;
+      qDebug("QInfo:%p retrieve req set query return result after paused", pQInfo);
+      pQInfo->rspContext = pRspContext;
+      assert(pQInfo->rspContext != NULL);
+    }
+
+    code = pQInfo->code;
+    pthread_mutex_unlock(&pQInfo->lock);
   } else {
-    *buildRes = false;
-    qDebug("QInfo:%p retrieve req set query return result after paused", pQInfo);
-    pQInfo->rspContext = pRspContext;
-    assert(pQInfo->rspContext != NULL);
+    tsem_wait(&pQInfo->ready);
+    *buildRes = true;
+    code = pQInfo->code;
   }
-
-  code = pQInfo->code;
-  pthread_mutex_unlock(&pQInfo->lock);
-#else
-  tsem_wait(&pQInfo->ready);
-  *buildRes = true;
-  code = pQInfo->code;
-#endif
 
   return code;
 }
