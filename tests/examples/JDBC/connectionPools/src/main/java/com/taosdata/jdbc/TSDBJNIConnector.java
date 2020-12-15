@@ -14,6 +14,8 @@
  *****************************************************************************/
 package com.taosdata.jdbc;
 
+import com.taosdata.jdbc.utils.TimeStampUtil;
+
 import java.sql.SQLException;
 import java.sql.SQLWarning;
 import java.util.List;
@@ -104,7 +106,7 @@ public class TSDBJNIConnector {
             throw new SQLException(TSDBConstants.WrapErrMsg(this.getErrMsg(0L)), "", this.getErrCode(0l));
         }
         /***************/
-        System.out.println(Thread.currentThread().getName() + " >>> open: " + ++openCnt + ",close: " + closeCnt + " connection size: " + connectSize.incrementAndGet());
+        System.out.println(TimeStampUtil.longToDatetime(System.currentTimeMillis()) + " " + Thread.currentThread().getName() + " >>> open: " + ++openCnt + ",close: " + closeCnt + " connection size: " + connectSize.incrementAndGet());
         return true;
     }
 
@@ -269,7 +271,7 @@ public class TSDBJNIConnector {
             throw new SQLException("Undefined error code returned by TDengine when closing a connection");
         }
         /***************/
-        System.out.println(Thread.currentThread().getName() + " >>> open: " + openCnt + ",close: " + ++closeCnt + " connection size: " + connectSize.decrementAndGet());
+        System.out.println(TimeStampUtil.longToDatetime(System.currentTimeMillis()) + " " + Thread.currentThread().getName() + " >>> open: " + openCnt + ",close: " + ++closeCnt + " connection size: " + connectSize.decrementAndGet());
 
     }
 
