@@ -80,7 +80,7 @@ public class ConnectionPoolDemo {
                 try {
                     Connection connection = dataSource.getConnection();
                     while (true) {
-                        TimeUnit.MILLISECONDS.sleep(100);
+                        TimeUnit.MILLISECONDS.sleep(5000);
                         System.out.println(Thread.currentThread().getName() + "' connect: >>>" + connection);
                     }
                 } catch (SQLException e) {
