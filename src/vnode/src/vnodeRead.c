@@ -373,8 +373,6 @@ static int32_t vnodeProcessFetchMsg(SVnodeObj *pVnode, SVReadMsg *pRead) {
     memset(pRet->rsp, 0, sizeof(SRetrieveTableRsp));
     freeHandle = true;
   } else {  // result is not ready, return immediately
-    assert(buildRes == true);
-
     // Only effects in the non-blocking model
     if (!tsHalfCoresForQuery) {
       if (!buildRes) {
