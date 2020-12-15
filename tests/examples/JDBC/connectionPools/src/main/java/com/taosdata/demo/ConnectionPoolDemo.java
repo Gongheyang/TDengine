@@ -78,7 +78,7 @@ public class ConnectionPoolDemo {
         logger.info(">>>>>>>>>>>>>> connection pool Type: " + poolType);
 
         while (true) {
-            TimeUnit.MILLISECONDS.sleep(5);
+            TimeUnit.SECONDS.sleep(5);
             System.out.println(">>>" + Thread.currentThread().getName());
         }
 
