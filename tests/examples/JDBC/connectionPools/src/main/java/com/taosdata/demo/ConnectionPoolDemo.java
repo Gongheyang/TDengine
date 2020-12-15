@@ -9,6 +9,7 @@ import org.apache.log4j.Logger;
 import javax.sql.DataSource;
 import java.sql.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 public class ConnectionPoolDemo {
 
@@ -74,28 +75,43 @@ public class ConnectionPoolDemo {
         }
 
         logger.info(">>>>>>>>>>>>>> connection pool Type: " + poolType);
-
-        while (true) {
-            try {
-                TimeUnit.MILLISECONDS.sleep(100);
-                Connection connection = dataSource.getConnection();
-                Statement statement = connection.createStatement();
-                ResultSet rs = statement.executeQuery("select server_status()");
-                while (rs.next()) {
-                    ResultSetMetaData metaData = rs.getMetaData();
-                    for (int i = 1; i <= metaData.getColumnCount(); i++) {
-                        System.out.print(metaData.getColumnLabel(i) + " : " + rs.getString(i));
+        for (int i = 0; i < 15; i++) {
+            Thread thread = new Thread(() -> {
+                try {
+                    Connection connection = dataSource.getConnection();
+                    while (true) {
+                        TimeUnit.MILLISECONDS.sleep(100);
+                        System.out.println(Thread.currentThread().getName() + "' connect: >>>" + connection);
                     }
-                    System.out.println();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
-                System.out.println(">>>" + Thread.currentThread().getName());
-                statement.close();
-                connection.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-
+            });
+            thread.start();
         }
+
+//        while (true) {
+//            try {
+//                TimeUnit.MILLISECONDS.sleep(100);
+//                Connection connection = dataSource.getConnection();
+//                Statement statement = connection.createStatement();
+//                ResultSet rs = statement.executeQuery("select server_status()");
+//                while (rs.next()) {
+//                    ResultSetMetaData metaData = rs.getMetaData();
+//                    for (int i = 1; i <= metaData.getColumnCount(); i++) {
+//                        System.out.print(metaData.getColumnLabel(i) + " : " + rs.getString(i));
+//                    }
+//                    System.out.println();
+//                }
+//                System.out.println(">>>" + Thread.currentThread().getName());
+//                statement.close();
+//                connection.close();
+//            } catch (SQLException e) {
+//                e.printStackTrace();
+//            }
+//        }
 
 //        init(dataSource);
 

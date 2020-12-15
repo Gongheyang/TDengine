@@ -16,8 +16,8 @@ public class HikariCpBuilder {
 
 //        config.setMaximumPoolSize(poolSize);
 //        config.setMinimumIdle(poolSize);
-        config.setMaximumPoolSize(200);
-        config.setMinimumIdle(50);
+        config.setMaximumPoolSize(10);
+        config.setMinimumIdle(5);
         config.setConnectionTestQuery("show dnodes");
         config.setIdleTimeout(0);
         config.setConnectionTimeout(60000);
