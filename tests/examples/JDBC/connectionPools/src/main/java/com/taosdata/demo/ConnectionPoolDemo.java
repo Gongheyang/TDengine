@@ -77,10 +77,10 @@ public class ConnectionPoolDemo {
 
         while (true) {
             try {
-                TimeUnit.SECONDS.sleep(5);
+                TimeUnit.MILLISECONDS.sleep(100);
                 Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement();
-                ResultSet rs = statement.executeQuery("show databases");
+                ResultSet rs = statement.executeQuery("select server_status()");
                 while (rs.next()) {
                     ResultSetMetaData metaData = rs.getMetaData();
                     for (int i = 1; i <= metaData.getColumnCount(); i++) {
@@ -89,6 +89,8 @@ public class ConnectionPoolDemo {
                     System.out.println();
                 }
                 System.out.println(">>>" + Thread.currentThread().getName());
+                statement.close();
+                connection.close();
             } catch (SQLException e) {
                 e.printStackTrace();
             }
