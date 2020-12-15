@@ -1,6 +1,5 @@
 package com.taosdata.demo;
 
-import com.taosdata.demo.common.InsertTask;
 import com.taosdata.demo.pool.C3p0Builder;
 import com.taosdata.demo.pool.DbcpBuilder;
 import com.taosdata.demo.pool.DruidPoolBuilder;
@@ -11,9 +10,6 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 public class ConnectionPoolDemo {
 
@@ -80,14 +76,14 @@ public class ConnectionPoolDemo {
 
         logger.info(">>>>>>>>>>>>>> connection pool Type: " + poolType);
 
-        init(dataSource);
+//        init(dataSource);
 
-        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-        while (true) {
-            executor.execute(new InsertTask(dataSource, dbName, tableSize, batchSize));
-            if (sleep > 0)
-                TimeUnit.MILLISECONDS.sleep(sleep);
-        }
+//        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+//        while (true) {
+//            executor.execute(new InsertTask(dataSource, dbName, tableSize, batchSize));
+//            if (sleep > 0)
+//                TimeUnit.MILLISECONDS.sleep(sleep);
+//        }
     }
 
     private static void init(DataSource dataSource) {
