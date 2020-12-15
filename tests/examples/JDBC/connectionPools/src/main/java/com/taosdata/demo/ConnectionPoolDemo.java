@@ -7,9 +7,7 @@ import com.taosdata.demo.pool.HikariCpBuilder;
 import org.apache.log4j.Logger;
 
 import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.concurrent.TimeUnit;
 
 public class ConnectionPoolDemo {
@@ -78,8 +76,23 @@ public class ConnectionPoolDemo {
         logger.info(">>>>>>>>>>>>>> connection pool Type: " + poolType);
 
         while (true) {
-            TimeUnit.SECONDS.sleep(5);
-            System.out.println(">>>" + Thread.currentThread().getName());
+            try {
+                TimeUnit.SECONDS.sleep(5);
+                Connection connection = dataSource.getConnection();
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery("show databases");
+                while (rs.next()) {
+                    ResultSetMetaData metaData = rs.getMetaData();
+                    for (int i = 1; i <= metaData.getColumnCount(); i++) {
+                        System.out.print(metaData.getColumnLabel(i) + " : " + rs.getString(i));
+                    }
+                    System.out.println();
+                }
+                System.out.println(">>>" + Thread.currentThread().getName());
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+
         }
 
 //        init(dataSource);
