@@ -16,13 +16,13 @@ public class HikariCpBuilder {
 
 //        config.setMaximumPoolSize(poolSize);
 //        config.setMinimumIdle(poolSize);
-        config.setMaximumPoolSize(200);
-        config.setMinimumIdle(50);
+        config.setMaximumPoolSize(2000);
+        config.setMinimumIdle(1000);
         config.setConnectionTestQuery("show dnodes");
-        config.setIdleTimeout(60000);
+        config.setIdleTimeout(0);
         config.setConnectionTimeout(60000);
         config.setValidationTimeout(3000);
-        config.setMaxLifetime(60000);
+        config.setMaxLifetime(0);
 
         HikariDataSource ds = new HikariDataSource(config);
         return ds;
