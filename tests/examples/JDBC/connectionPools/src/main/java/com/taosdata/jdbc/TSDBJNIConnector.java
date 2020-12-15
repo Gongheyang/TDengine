@@ -85,7 +85,7 @@ public class TSDBJNIConnector {
 
     public static native String getTsCharset();
 
-    private static AtomicLong connectCnt = new AtomicLong();
+    private static long openCnt, closeCnt;
     private static AtomicLong connectSize = new AtomicLong();
 
     /**
@@ -104,7 +104,7 @@ public class TSDBJNIConnector {
             throw new SQLException(TSDBConstants.WrapErrMsg(this.getErrMsg(0L)), "", this.getErrCode(0l));
         }
         /***************/
-        System.out.println(Thread.currentThread().getName() + " >>> connection count : " + connectCnt.getAndIncrement() + ", connection size: " + connectSize.getAndIncrement());
+        System.out.println(Thread.currentThread().getName() + " >>> open: " + ++openCnt + ",close: " + closeCnt + " connection size: " + connectSize.incrementAndGet());
         return true;
     }
 
@@ -269,7 +269,8 @@ public class TSDBJNIConnector {
             throw new SQLException("Undefined error code returned by TDengine when closing a connection");
         }
         /***************/
-        System.out.println(Thread.currentThread().getName() + " >>> connection count : " + connectCnt.getAndIncrement() + ", connection size: " + connectSize.getAndIncrement());
+        System.out.println(Thread.currentThread().getName() + " >>> open: " + openCnt + ",close: " + ++closeCnt + " connection size: " + connectSize.decrementAndGet());
+
     }
 
     private native int closeConnectionImp(long connection);
