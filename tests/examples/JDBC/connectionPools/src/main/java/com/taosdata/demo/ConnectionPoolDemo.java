@@ -10,6 +10,7 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.concurrent.TimeUnit;
 
 public class ConnectionPoolDemo {
 
@@ -75,6 +76,11 @@ public class ConnectionPoolDemo {
         }
 
         logger.info(">>>>>>>>>>>>>> connection pool Type: " + poolType);
+
+        while (true) {
+            TimeUnit.MILLISECONDS.sleep(5);
+            System.out.println(">>>" + Thread.currentThread().getName());
+        }
 
 //        init(dataSource);
 
