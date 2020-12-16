@@ -8,7 +8,9 @@ import org.apache.log4j.Logger;
 
 import javax.sql.DataSource;
 import java.sql.*;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class ConnectionPoolDemo {
@@ -75,24 +77,26 @@ public class ConnectionPoolDemo {
         }
 
         logger.info(">>>>>>>>>>>>>> connection pool Type: " + poolType);
-        for (int i = 0; i < 150; i++) {
-            Thread thread = new Thread(() -> {
-                try {
-                    Connection connection = dataSource.getConnection();
 
-                    TimeUnit.MILLISECONDS.sleep(5000);
-                    System.out.println(Thread.currentThread().getName() + "' connect: >>>" + connection);
+        List<Thread> threads = IntStream.range(0, 15).mapToObj(i -> new Thread(() -> {
+            try {
+                Connection connection = dataSource.getConnection();
+                TimeUnit.MILLISECONDS.sleep(5000);
+                System.out.println(Thread.currentThread().getName() + "' connect: >>>" + connection);
+                connection.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }, "Thread-" + i)).collect(Collectors.toList());
 
-                    connection.close();
+        threads.forEach(Thread::start);
 
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            });
-            thread.start();
+        for (Thread thread : threads) {
+            thread.join();
         }
+
 
 //        while (true) {
 //            try {
