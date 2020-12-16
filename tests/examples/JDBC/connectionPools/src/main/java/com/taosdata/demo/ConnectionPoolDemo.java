@@ -75,14 +75,16 @@ public class ConnectionPoolDemo {
         }
 
         logger.info(">>>>>>>>>>>>>> connection pool Type: " + poolType);
-        for (int i = 0; i < 15; i++) {
+        for (int i = 0; i < 150; i++) {
             Thread thread = new Thread(() -> {
                 try {
                     Connection connection = dataSource.getConnection();
-                    while (true) {
-                        TimeUnit.MILLISECONDS.sleep(5000);
-                        System.out.println(Thread.currentThread().getName() + "' connect: >>>" + connection);
-                    }
+
+                    TimeUnit.MILLISECONDS.sleep(5000);
+                    System.out.println(Thread.currentThread().getName() + "' connect: >>>" + connection);
+
+                    connection.close();
+
                 } catch (SQLException e) {
                     e.printStackTrace();
                 } catch (InterruptedException e) {

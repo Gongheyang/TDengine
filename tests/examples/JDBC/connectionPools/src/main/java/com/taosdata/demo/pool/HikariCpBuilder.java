@@ -20,7 +20,7 @@ public class HikariCpBuilder {
         config.setMinimumIdle(5);
         config.setConnectionTestQuery("show dnodes");
         config.setIdleTimeout(0);
-        config.setConnectionTimeout(60000);
+        config.setConnectionTimeout(30000);
         config.setValidationTimeout(3000);
         config.setMaxLifetime(0);
 
