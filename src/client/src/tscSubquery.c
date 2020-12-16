@@ -2303,6 +2303,7 @@ int32_t tscHandleMultivnodeInsert(SSqlObj *pSql) {
 
   // it is the failure retry insert
   if (pSql->pSubs != NULL) {
+    tscDebug("%p previous inserted rows:%d", pSql, pSql->res.numOfRows);
     for(int32_t i = 0; i < pSql->subState.numOfSub; ++i) {
       SSqlObj* pSub = pSql->pSubs[i];
 
@@ -2311,8 +2312,8 @@ int32_t tscHandleMultivnodeInsert(SSqlObj *pSql) {
       pSup->index = i;
 
       pSub->param = pSup;
-      tscDebug("%p sub:%p launch sub insert, orderOfSub:%d", pSql, pSub, i);
       if (pSub->res.code != TSDB_CODE_SUCCESS) {
+        tscDebug("%p sub:%p launch sub insert, orderOfSub:%d", pSql, pSub, i);
         tscHandleInsertRetry(pSql, pSub);
       }
     }

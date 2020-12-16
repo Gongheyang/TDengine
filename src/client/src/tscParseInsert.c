@@ -1298,7 +1298,6 @@ int tsInsertInitialCheck(SSqlObj *pSql) {
 
   pCmd->count = 0;
   pCmd->command = TSDB_SQL_INSERT;
-  pSql->res.numOfRows = 0;
 
   SQueryInfo *pQueryInfo = tscGetQueryInfoDetailSafely(pCmd, pCmd->clauseIndex);
 
