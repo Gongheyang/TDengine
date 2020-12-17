@@ -38,14 +38,14 @@ extern int32_t wDebugFlag;
 #define WAL_SIGNATURE  ((uint32_t)(0xFAFBFDFE))
 #define WAL_PATH_LEN   (TSDB_FILENAME_LEN + 12)
 #define WAL_FILE_LEN   (WAL_PATH_LEN + 32)
-#define WAL_FILE_NUM   3
+#define WAL_FILE_NUM   1 // 3
 
 typedef struct {
   uint64_t version;
   int64_t  fileId;
   int64_t  rid;
+  int64_t  tfd;
   int32_t  vgId;
-  int32_t  fd;
   int32_t  keep;
   int32_t  level;
   int32_t  fsyncPeriod;

@@ -27,16 +27,22 @@ extern "C" {
 #define sDebug(...) { if (sDebugFlag & DEBUG_DEBUG) { taosPrintLog("SYN ", sDebugFlag, __VA_ARGS__); }}
 #define sTrace(...) { if (sDebugFlag & DEBUG_TRACE) { taosPrintLog("SYN ", sDebugFlag, __VA_ARGS__); }}
 
-#define TAOS_SMSG_SYNC_DATA    1
-#define TAOS_SMSG_FORWARD      2
-#define TAOS_SMSG_FORWARD_RSP  3
-#define TAOS_SMSG_SYNC_REQ     4 
-#define TAOS_SMSG_SYNC_RSP     5
-#define TAOS_SMSG_SYNC_MUST    6
-#define TAOS_SMSG_STATUS       7
+typedef enum {
+  TAOS_SMSG_SYNC_DATA     = 1,
+  TAOS_SMSG_FORWARD       = 2,
+  TAOS_SMSG_FORWARD_RSP   = 3,
+  TAOS_SMSG_SYNC_REQ      = 4,
+  TAOS_SMSG_SYNC_RSP      = 5,
+  TAOS_SMSG_SYNC_MUST     = 6,
+  TAOS_SMSG_STATUS        = 7,
+  TAOS_SMSG_SYNC_DATA_RSP = 8,
+} ESyncMsgType;
 
 #define SYNC_MAX_SIZE (TSDB_MAX_WAL_SIZE + sizeof(SWalHead) + sizeof(SSyncHead) + 16)
 #define SYNC_RECV_BUFFER_SIZE (5*1024*1024)
+#define SYNC_FWD_TIMER  300
+#define SYNC_ROLE_TIMER 10000
+#define SYNC_WAIT_AFTER_CHOOSE_MASTER 3
 
 #define nodeRole    pNode->peerInfo[pNode->selfIndex]->role
 #define nodeVersion pNode->peerInfo[pNode->selfIndex]->version
@@ -56,9 +62,16 @@ typedef struct {
 typedef struct {
   SSyncHead syncHead;
   uint16_t  port;
+  uint16_t  tranId;
   char      fqdn[TSDB_FQDN_LEN];
   int32_t   sourceId;  // only for arbitrator
 } SFirstPkt;
+
+typedef struct {
+  int8_t   sync;
+  int8_t   reserved;
+  uint16_t tranId;
+} SFirstPktRsp;
 
 typedef struct {
   int8_t    role;
@@ -68,6 +81,9 @@ typedef struct {
 typedef struct {
   int8_t      role;
   int8_t      ack;
+  int8_t      type;
+  int8_t      reserved[3];
+  uint16_t    tranId;
   uint64_t    version;
   SPeerStatus peersStatus[];
 } SPeersStatus;
@@ -120,22 +136,21 @@ typedef struct SsyncPeer {
   int32_t  nodeId;
   uint32_t ip;
   uint16_t port;
+  int8_t   role;
+  int8_t   sstatus;               // sync status
   char     fqdn[TSDB_FQDN_LEN];   // peer ip string
   char     id[TSDB_EP_LEN + 32];  // peer vgId + end point
-  int8_t   role;
-  int8_t   sstatus;   // sync status
   uint64_t version;
-  uint64_t sversion;  // track the peer version in retrieve process
+  uint64_t sversion;        // track the peer version in retrieve process
+  uint64_t lastFileVer;     // track the file version while retrieve
+  uint64_t lastWalVer;      // track the wal version while retrieve
   int32_t  syncFd;
   int32_t  peerFd;          // forward FD
   int32_t  numOfRetrieves;  // number of retrieves tried
   int32_t  fileChanged;     // a flag to indicate file is changed during retrieving process
   void *   timer;
   void *   pConn;
-  int32_t  notifyFd;
-  int32_t  watchNum;
-  int32_t *watchFd;
-  int8_t   refCount;  // reference count
+  int32_t  refCount;  // reference count
   struct   SSyncNode *pSyncNode;
 } SSyncPeer;
 
@@ -143,29 +158,30 @@ typedef struct SSyncNode {
   char         path[TSDB_FILENAME_LEN];
   int8_t       replica;
   int8_t       quorum;
+  int8_t       selfIndex;
   uint32_t     vgId;
   int64_t      rid;
-  void        *ahandle;
-  int8_t       selfIndex;
-  SSyncPeer   *peerInfo[TAOS_SYNC_MAX_REPLICA+1];  // extra one for arbitrator
-  SSyncPeer   *pMaster;
-  int8_t       refCount;
+  SSyncPeer *  peerInfo[TAOS_SYNC_MAX_REPLICA + 1];  // extra one for arbitrator
+  SSyncPeer *  pMaster;
   SRecvBuffer *pRecv;
-  SSyncFwds   *pSyncFwds;  // saved forward info if quorum >1
-  void        *pFwdTimer;
-  FGetFileInfo    getFileInfo;
-  FGetWalInfo     getWalInfo;
-  FWriteToCache   writeToCache;
-  FConfirmForward confirmForward;
-  FNotifyRole     notifyRole;
-  FNotifyFlowCtrl notifyFlowCtrl;
+  SSyncFwds *  pSyncFwds;  // saved forward info if quorum >1
+  void *       pFwdTimer;
+  void *       pRoleTimer;
+  FGetFileInfo      getFileInfo;
+  FGetWalInfo       getWalInfo;
+  FWriteToCache     writeToCache;
+  FConfirmForward   confirmForward;
+  FNotifyRole       notifyRole;
+  FNotifyFlowCtrl   notifyFlowCtrl;
   FNotifyFileSynced notifyFileSynced;
-  pthread_mutex_t mutex;
+  FGetVersion       getVersion;
+  pthread_mutex_t   mutex;
 } SSyncNode;
 
 // sync module global
 extern int32_t tsSyncNum;
 extern char    tsNodeFqdn[TSDB_FQDN_LEN];
+extern char *  syncStatus[];
 
 void *syncRetrieveData(void *param);
 void *syncRestoreData(void *param);
@@ -174,6 +190,7 @@ void    syncRestartConnection(SSyncPeer *pPeer);
 void    syncBroadcastStatus(SSyncNode *pNode);
 void    syncAddPeerRef(SSyncPeer *pPeer);
 int32_t syncDecPeerRef(SSyncPeer *pPeer);
+uint16_t syncGenTranId();
 
 #ifdef __cplusplus
 }

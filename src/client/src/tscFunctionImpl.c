@@ -54,8 +54,8 @@
 
 #define DO_UPDATE_TAG_COLUMNS(ctx, ts)                                           \
   do {                                                                           \
-    for (int32_t i = 0; i < (ctx)->tagInfo.numOfTagCols; ++i) {                  \
-      SQLFunctionCtx *__ctx = (ctx)->tagInfo.pTagCtxList[i];                     \
+    for (int32_t _i = 0; _i < (ctx)->tagInfo.numOfTagCols; ++_i) {                  \
+      SQLFunctionCtx *__ctx = (ctx)->tagInfo.pTagCtxList[_i];                     \
       if (__ctx->functionId == TSDB_FUNC_TS_DUMMY) {                             \
         __ctx->tag.i64Key = (ts); \
         __ctx->tag.nType = TSDB_DATA_TYPE_BIGINT; \
@@ -64,13 +64,13 @@
     }                                                                            \
   } while (0);
 
-#define DO_UPDATE_TAG_COLUMNS_WITHOUT_TS(ctx) \
-do {\
-for (int32_t i = 0; i < (ctx)->tagInfo.numOfTagCols; ++i) {                  \
-      SQLFunctionCtx *__ctx = (ctx)->tagInfo.pTagCtxList[i];                     \
-      aAggs[TSDB_FUNC_TAG].xFunction(__ctx);                                     \
-    }     \
-} while(0);
+#define DO_UPDATE_TAG_COLUMNS_WITHOUT_TS(ctx)                   \
+  do {                                                          \
+    for (int32_t _i = 0; _i < (ctx)->tagInfo.numOfTagCols; ++_i) { \
+      SQLFunctionCtx *__ctx = (ctx)->tagInfo.pTagCtxList[_i];    \
+      aAggs[TSDB_FUNC_TAG].xFunction(__ctx);                    \
+    }                                                           \
+  } while (0);
 
 void noop1(SQLFunctionCtx *UNUSED_PARAM(pCtx)) {}
 void noop2(SQLFunctionCtx *UNUSED_PARAM(pCtx), int32_t UNUSED_PARAM(index)) {}
@@ -130,11 +130,11 @@ typedef struct STopBotInfo {
 } STopBotInfo;
 
 // leastsquares do not apply to super table
-typedef struct SLeastsquareInfo {
+typedef struct SLeastsquaresInfo {
   double  mat[2][3];
   double  startVal;
   int64_t num;
-} SLeastsquareInfo;
+} SLeastsquaresInfo;
 
 typedef struct SAPercentileInfo {
   SHistogramInfo *pHisto;
@@ -305,7 +305,7 @@ int32_t getResultDataInfo(int32_t dataType, int32_t dataBytes, int32_t functionI
   } else if (functionId == TSDB_FUNC_FIRST || functionId == TSDB_FUNC_LAST) {
     *type = (int16_t)dataType;
     *bytes = (int16_t)dataBytes;
-    *interBytes = dataBytes;
+    *interBytes = (int16_t)(dataBytes + sizeof(SFirstLastInfo));
   } else if (functionId == TSDB_FUNC_SPREAD) {
     *type = (int16_t)TSDB_DATA_TYPE_DOUBLE;
     *bytes = sizeof(double);
@@ -316,7 +316,7 @@ int32_t getResultDataInfo(int32_t dataType, int32_t dataBytes, int32_t functionI
     *interBytes = (int16_t)sizeof(SPercentileInfo);
   } else if (functionId == TSDB_FUNC_LEASTSQR) {
     *type = TSDB_DATA_TYPE_BINARY;
-    *bytes = TSDB_AVG_FUNCTION_INTER_BUFFER_SIZE;  // string
+    *bytes = MAX(TSDB_AVG_FUNCTION_INTER_BUFFER_SIZE, sizeof(SLeastsquaresInfo));  // string
     *interBytes = *bytes;
   } else if (functionId == TSDB_FUNC_FIRST_DST || functionId == TSDB_FUNC_LAST_DST) {
     *type = TSDB_DATA_TYPE_BINARY;
@@ -426,8 +426,7 @@ static void count_function_f(SQLFunctionCtx *pCtx, int32_t index) {
   }
   
   SET_VAL(pCtx, 1, 1);
-  
-  *((int64_t *)pCtx->aOutputBuf) += 1;
+  *((int64_t *)pCtx->aOutputBuf) += pCtx->size;
   
   // do not need it actually
   SResultRowCellInfo *pInfo = GET_RES_INFO(pCtx);
@@ -681,7 +680,7 @@ static int32_t firstFuncRequired(SQLFunctionCtx *pCtx, TSKEY start, TSKEY end, i
   }
   
   // no result for first query, data block is required
-  if (GET_RES_INFO(pCtx)->numOfRes <= 0) {
+  if (GET_RES_INFO(pCtx) == NULL || GET_RES_INFO(pCtx)->numOfRes <= 0) {
     return BLK_DATA_ALL_NEEDED;
   } else {
     return BLK_DATA_NO_NEEDED;
@@ -693,7 +692,7 @@ static int32_t lastFuncRequired(SQLFunctionCtx *pCtx, TSKEY start, TSKEY end, in
     return BLK_DATA_NO_NEEDED;
   }
   
-  if (GET_RES_INFO(pCtx)->numOfRes <= 0) {
+  if (GET_RES_INFO(pCtx) == NULL || GET_RES_INFO(pCtx)->numOfRes <= 0) {
     return BLK_DATA_ALL_NEEDED;
   } else {
     return BLK_DATA_NO_NEEDED;
@@ -1170,8 +1169,8 @@ static int32_t minmax_merge_impl(SQLFunctionCtx *pCtx, int32_t bytes, char *outp
         if ((*(int32_t *)output < v) ^ isMin) {
           *(int32_t *)output = v;
           
-          for (int32_t i = 0; i < pCtx->tagInfo.numOfTagCols; ++i) {
-            SQLFunctionCtx *__ctx = pCtx->tagInfo.pTagCtxList[i];
+          for (int32_t j = 0; j < pCtx->tagInfo.numOfTagCols; ++j) {
+            SQLFunctionCtx *__ctx = pCtx->tagInfo.pTagCtxList[j];
             aAggs[TSDB_FUNC_TAG].xFunction(__ctx);
           }
           
@@ -1680,16 +1679,35 @@ static void last_function_f(SQLFunctionCtx *pCtx, int32_t index) {
   if (pCtx->hasNull && isNull(pData, pCtx->inputType)) {
     return;
   }
-  
-  SET_VAL(pCtx, 1, 1);
-  memcpy(pCtx->aOutputBuf, pData, pCtx->inputBytes);
-  
-  TSKEY ts = pCtx->ptsList[index];
-  DO_UPDATE_TAG_COLUMNS(pCtx, ts);
-  
-  SResultRowCellInfo *pResInfo = GET_RES_INFO(pCtx);
-  pResInfo->hasResult = DATA_SET_FLAG;
-  pResInfo->complete = true;  // set query completed
+
+  // the scan order is not the required order, ignore it
+  if (pCtx->order != pCtx->param[0].i64Key) {
+    return;
+  }
+
+  if (pCtx->order == TSDB_ORDER_DESC) {
+    SET_VAL(pCtx, 1, 1);
+    memcpy(pCtx->aOutputBuf, pData, pCtx->inputBytes);
+
+    TSKEY ts = pCtx->ptsList[index];
+    DO_UPDATE_TAG_COLUMNS(pCtx, ts);
+
+    SResultRowCellInfo *pResInfo = GET_RES_INFO(pCtx);
+    pResInfo->hasResult = DATA_SET_FLAG;
+    pResInfo->complete = true;  // set query completed
+  } else { // in case of ascending order check, all data needs to be checked
+    SResultRowCellInfo* pResInfo = GET_RES_INFO(pCtx);
+    TSKEY ts = pCtx->ptsList[index];
+
+    char* buf = GET_ROWCELL_INTERBUF(pResInfo);
+    if (pResInfo->hasResult != DATA_SET_FLAG || (*(TSKEY*)buf) < ts) {
+      pResInfo->hasResult = DATA_SET_FLAG;
+      memcpy(pCtx->aOutputBuf, pData, pCtx->inputBytes);
+
+      *(TSKEY*)buf = ts;
+      DO_UPDATE_TAG_COLUMNS(pCtx, ts);
+    }
+  }
 }
 
 static void last_data_assign_impl(SQLFunctionCtx *pCtx, char *pData, int32_t index) {
@@ -1712,7 +1730,7 @@ static void last_data_assign_impl(SQLFunctionCtx *pCtx, char *pData, int32_t ind
 
 static void last_dist_function(SQLFunctionCtx *pCtx) {
   /*
-   * 1. for scan data in asc order, no need to check data
+   * 1. for scan data is not the required order
    * 2. for data blocks that are not loaded, no need to check data
    */
   if (pCtx->order != pCtx->param[0].i64Key) {
@@ -2204,7 +2222,8 @@ static void buildTopBotStruct(STopBotInfo *pTopBotInfo, SQLFunctionCtx *pCtx) {
   tmp += POINTER_BYTES * pCtx->param[0].i64Key;
   
   size_t size = sizeof(tValuePair) + pCtx->tagInfo.tagsLen;
-  
+//  assert(pCtx->param[0].i64Key > 0);
+
   for (int32_t i = 0; i < pCtx->param[0].i64Key; ++i) {
     pTopBotInfo->res[i] = (tValuePair*) tmp;
     pTopBotInfo->res[i]->pTags = tmp + sizeof(tValuePair);
@@ -2448,7 +2467,7 @@ static bool percentile_function_setup(SQLFunctionCtx *pCtx) {
 static void percentile_function(SQLFunctionCtx *pCtx) {
   int32_t notNullElems = 0;
   
-  SResultRowCellInfo *    pResInfo = GET_RES_INFO(pCtx);
+  SResultRowCellInfo *pResInfo = GET_RES_INFO(pCtx);
   SPercentileInfo *pInfo = GET_ROWCELL_INTERBUF(pResInfo);
 
   // the first stage, only acquire the min/max value
@@ -2549,12 +2568,14 @@ static void percentile_finalizer(SQLFunctionCtx *pCtx) {
   double v = pCtx->param[0].nType == TSDB_DATA_TYPE_INT ? pCtx->param[0].i64Key : pCtx->param[0].dKey;
   
   SResultRowCellInfo *pResInfo = GET_RES_INFO(pCtx);
-  tMemBucket * pMemBucket = ((SPercentileInfo *)GET_ROWCELL_INTERBUF(pResInfo))->pMemBucket;
-  
-  if (pMemBucket->total > 0) {  // check for null
-    *(double *)pCtx->aOutputBuf = getPercentile(pMemBucket, v);
-  } else {
+  SPercentileInfo* ppInfo = (SPercentileInfo *) GET_ROWCELL_INTERBUF(pResInfo);
+
+  tMemBucket * pMemBucket = ppInfo->pMemBucket;
+  if (pMemBucket == NULL || pMemBucket->total == 0) {  // check for null
+    assert(ppInfo->numOfElems == 0);
     setNull(pCtx->aOutputBuf, pCtx->outputType, pCtx->outputBytes);
+  } else {
+    *(double *)pCtx->aOutputBuf = getPercentile(pMemBucket, v);
   }
   
   tMemBucketDestroy(pMemBucket);
@@ -2569,10 +2590,11 @@ static void percentile_next_step(SQLFunctionCtx *pCtx) {
     // all data are null, set it completed
     if (pInfo->numOfElems == 0) {
       pResInfo->complete = true;
+    } else {
+      pInfo->pMemBucket = tMemBucketCreate(pCtx->inputBytes, pCtx->inputType, GET_DOUBLE_VAL(&pInfo->minval), GET_DOUBLE_VAL(&pInfo->maxval));
     }
 
     pInfo->stage += 1;
-    pInfo->pMemBucket = tMemBucketCreate(pCtx->inputBytes, pCtx->inputType, GET_DOUBLE_VAL(&pInfo->minval), GET_DOUBLE_VAL(&pInfo->maxval));
   } else {
     pResInfo->complete = true;
   }
@@ -2756,7 +2778,7 @@ static bool leastsquares_function_setup(SQLFunctionCtx *pCtx) {
   }
   
   SResultRowCellInfo *     pResInfo = GET_RES_INFO(pCtx);
-  SLeastsquareInfo *pInfo = GET_ROWCELL_INTERBUF(pResInfo);
+  SLeastsquaresInfo *pInfo = GET_ROWCELL_INTERBUF(pResInfo);
   
   // 2*3 matrix
   pInfo->startVal = pCtx->param[0].dKey;
@@ -2783,7 +2805,7 @@ static bool leastsquares_function_setup(SQLFunctionCtx *pCtx) {
 
 static void leastsquares_function(SQLFunctionCtx *pCtx) {
   SResultRowCellInfo *     pResInfo = GET_RES_INFO(pCtx);
-  SLeastsquareInfo *pInfo = GET_ROWCELL_INTERBUF(pResInfo);
+  SLeastsquaresInfo *pInfo = GET_ROWCELL_INTERBUF(pResInfo);
   
   double(*param)[3] = pInfo->mat;
   double x = pInfo->startVal;
@@ -2853,40 +2875,40 @@ static void leastsquares_function_f(SQLFunctionCtx *pCtx, int32_t index) {
     return;
   }
   
-  SResultRowCellInfo *     pResInfo = GET_RES_INFO(pCtx);
-  SLeastsquareInfo *pInfo = GET_ROWCELL_INTERBUF(pResInfo);
+  SResultRowCellInfo *pResInfo = GET_RES_INFO(pCtx);
+  SLeastsquaresInfo *pInfo = GET_ROWCELL_INTERBUF(pResInfo);
   
   double(*param)[3] = pInfo->mat;
   
   switch (pCtx->inputType) {
     case TSDB_DATA_TYPE_INT: {
       int32_t *p = pData;
-      LEASTSQR_CAL(param, pInfo->startVal, p, index, pCtx->param[1].dKey);
+      LEASTSQR_CAL(param, pInfo->startVal, p, 0, pCtx->param[1].dKey);
       break;
     };
     case TSDB_DATA_TYPE_TINYINT: {
       int8_t *p = pData;
-      LEASTSQR_CAL(param, pInfo->startVal, p, index, pCtx->param[1].dKey);
+      LEASTSQR_CAL(param, pInfo->startVal, p, 0, pCtx->param[1].dKey);
       break;
     }
     case TSDB_DATA_TYPE_SMALLINT: {
       int16_t *p = pData;
-      LEASTSQR_CAL(param, pInfo->startVal, p, index, pCtx->param[1].dKey);
+      LEASTSQR_CAL(param, pInfo->startVal, p, 0, pCtx->param[1].dKey);
       break;
     }
     case TSDB_DATA_TYPE_BIGINT: {
       int64_t *p = pData;
-      LEASTSQR_CAL(param, pInfo->startVal, p, index, pCtx->param[1].dKey);
+      LEASTSQR_CAL(param, pInfo->startVal, p, 0, pCtx->param[1].dKey);
       break;
     }
     case TSDB_DATA_TYPE_FLOAT: {
       float *p = pData;
-      LEASTSQR_CAL(param, pInfo->startVal, p, index, pCtx->param[1].dKey);
+      LEASTSQR_CAL(param, pInfo->startVal, p, 0, pCtx->param[1].dKey);
       break;
     }
     case TSDB_DATA_TYPE_DOUBLE: {
       double *p = pData;
-      LEASTSQR_CAL(param, pInfo->startVal, p, index, pCtx->param[1].dKey);
+      LEASTSQR_CAL(param, pInfo->startVal, p, 0, pCtx->param[1].dKey);
       break;
     }
     default:
@@ -2904,15 +2926,10 @@ static void leastsquares_function_f(SQLFunctionCtx *pCtx, int32_t index) {
 static void leastsquares_finalizer(SQLFunctionCtx *pCtx) {
   // no data in query
   SResultRowCellInfo *     pResInfo = GET_RES_INFO(pCtx);
-  SLeastsquareInfo *pInfo = GET_ROWCELL_INTERBUF(pResInfo);
+  SLeastsquaresInfo *pInfo = GET_ROWCELL_INTERBUF(pResInfo);
   
   if (pInfo->num == 0) {
-    if (pCtx->outputType == TSDB_DATA_TYPE_BINARY || pCtx->outputType == TSDB_DATA_TYPE_NCHAR) {
-      setVardataNull(pCtx->aOutputBuf, pCtx->outputType);
-    } else {
-      setNull(pCtx->aOutputBuf, pCtx->outputType, pCtx->outputBytes);
-    }
-    
+    setNull(pCtx->aOutputBuf, pCtx->outputType, pCtx->outputBytes);
     return;
   }
   
@@ -3629,94 +3646,168 @@ static bool twa_function_setup(SQLFunctionCtx *pCtx) {
     return false;
   }
   
-  SResultRowCellInfo *pResInfo = GET_RES_INFO(pCtx);  //->aOutputBuf + pCtx->outputBytes;
-  STwaInfo *   pInfo = GET_ROWCELL_INTERBUF(pResInfo);
-  
-  pInfo->lastKey = INT64_MIN;
-  pInfo->type = pCtx->inputType;
-  
+  SResultRowCellInfo *pResInfo = GET_RES_INFO(pCtx);
+
+  STwaInfo *pInfo = GET_ROWCELL_INTERBUF(pResInfo);
+  pInfo->p.key    = INT64_MIN;
+  pInfo->win      = TSWINDOW_INITIALIZER;
   return true;
 }
 
-static FORCE_INLINE void setTWALastVal(SQLFunctionCtx *pCtx, const char *data, int32_t i, STwaInfo *pInfo) {
-  switch (pCtx->inputType) {
-    case TSDB_DATA_TYPE_INT:
-      pInfo->iLastValue = GET_INT32_VAL(data + pCtx->inputBytes * i);
-      break;
-    case TSDB_DATA_TYPE_TINYINT:
-      pInfo->iLastValue = GET_INT8_VAL(data + pCtx->inputBytes * i);
-      break;
-    case TSDB_DATA_TYPE_SMALLINT:
-      pInfo->iLastValue = GET_INT16_VAL(data + pCtx->inputBytes * i);
-      break;
-    case TSDB_DATA_TYPE_BIGINT:
-      pInfo->iLastValue = GET_INT64_VAL(data + pCtx->inputBytes * i);
-      break;
-    case TSDB_DATA_TYPE_FLOAT:
-      pInfo->dLastValue = GET_FLOAT_VAL(data + pCtx->inputBytes * i);
-      break;
-    case TSDB_DATA_TYPE_DOUBLE:
-      pInfo->dLastValue = GET_DOUBLE_VAL(data + pCtx->inputBytes * i);
-      break;
-    default:
-      assert(0);
+static double twa_get_area(SPoint1 s, SPoint1 e) {
+  if ((s.val >= 0 && e.val >= 0)|| (s.val <=0 && e.val <= 0)) {
+    return (s.val + e.val) * (e.key - s.key) / 2;
   }
+
+  double x = (s.key * e.val - e.key * s.val)/(e.val - s.val);
+  double val = (s.val * (x - s.key) + e.val * (e.key - x)) / 2;
+  return val;
+}
+
+static int32_t twa_function_impl(SQLFunctionCtx* pCtx, int32_t tsIndex, int32_t index, int32_t size) {
+  int32_t notNullElems = 0;
+  TSKEY *primaryKey = pCtx->ptsList;
+  
+  SResultRowCellInfo *pResInfo = GET_RES_INFO(pCtx);
+
+  STwaInfo *pInfo = GET_ROWCELL_INTERBUF(pResInfo);
+
+  int32_t i = index;
+  int32_t step = GET_FORWARD_DIRECTION_FACTOR(pCtx->order);
+  SPoint1* last = &pInfo->p;
+
+  if (pCtx->start.key != INT64_MIN) {
+    assert((pCtx->start.key < primaryKey[tsIndex + i] && pCtx->order == TSDB_ORDER_ASC) ||
+               (pCtx->start.key > primaryKey[tsIndex + i] && pCtx->order == TSDB_ORDER_DESC));
+
+    assert(last->key == INT64_MIN);
+
+    last->key = primaryKey[tsIndex + i];
+    GET_TYPED_DATA(last->val, double, pCtx->inputType, GET_INPUT_CHAR_INDEX(pCtx, index));
+
+    pInfo->dOutput += twa_get_area(pCtx->start, *last);
+
+    pInfo->hasResult = DATA_SET_FLAG;
+    pInfo->win.skey = pCtx->start.key;
+    notNullElems++;
+    i += step;
+  } else if (pInfo->p.key == INT64_MIN) {
+    last->key = primaryKey[tsIndex + i];
+    GET_TYPED_DATA(last->val, double, pCtx->inputType, GET_INPUT_CHAR_INDEX(pCtx, index));
+
+    pInfo->hasResult = DATA_SET_FLAG;
+    pInfo->win.skey = last->key;
+    notNullElems++;
+    i += step;
+  }
+
+  // calculate the value of
+  switch(pCtx->inputType) {
+    case TSDB_DATA_TYPE_TINYINT: {
+      int8_t *val = (int8_t*) GET_INPUT_CHAR_INDEX(pCtx, 0);
+      for (; i < size && i >= 0; i += step) {
+        if (pCtx->hasNull && isNull((const char*) &val[i], pCtx->inputType)) {
+          continue;
+        }
+
+        SPoint1 st = {.key = primaryKey[i + tsIndex], .val = val[i]};
+        pInfo->dOutput += twa_get_area(pInfo->p, st);
+        pInfo->p = st;
+      }
+      break;
+    }
+    case TSDB_DATA_TYPE_SMALLINT: {
+      int16_t *val = (int16_t*) GET_INPUT_CHAR_INDEX(pCtx, 0);
+      for (; i < size && i >= 0; i += step) {
+        if (pCtx->hasNull && isNull((const char*) &val[i], pCtx->inputType)) {
+          continue;
+        }
+
+        SPoint1 st = {.key = primaryKey[i + tsIndex], .val = val[i]};
+        pInfo->dOutput += twa_get_area(pInfo->p, st);
+        pInfo->p = st;
+      }
+      break;
+    }
+    case TSDB_DATA_TYPE_INT: {
+      int32_t *val = (int32_t*) GET_INPUT_CHAR_INDEX(pCtx, 0);
+      for (; i < size && i >= 0; i += step) {
+        if (pCtx->hasNull && isNull((const char*) &val[i], pCtx->inputType)) {
+          continue;
+        }
+
+        SPoint1 st = {.key = primaryKey[i + tsIndex], .val = val[i]};
+        pInfo->dOutput += twa_get_area(pInfo->p, st);
+        pInfo->p = st;
+      }
+      break;
+    }
+    case TSDB_DATA_TYPE_BIGINT: {
+      int64_t *val = (int64_t*) GET_INPUT_CHAR_INDEX(pCtx, 0);
+      for (; i < size && i >= 0; i += step) {
+        if (pCtx->hasNull && isNull((const char*) &val[i], pCtx->inputType)) {
+          continue;
+        }
+
+        SPoint1 st = {.key = primaryKey[i + tsIndex], .val = (double) val[i]};
+        pInfo->dOutput += twa_get_area(pInfo->p, st);
+        pInfo->p = st;
+      }
+      break;
+    }
+    case TSDB_DATA_TYPE_FLOAT: {
+      float *val = (float*) GET_INPUT_CHAR_INDEX(pCtx, 0);
+      for (; i < size && i >= 0; i += step) {
+        if (pCtx->hasNull && isNull((const char*) &val[i], pCtx->inputType)) {
+          continue;
+        }
+
+        SPoint1 st = {.key = primaryKey[i + tsIndex], .val = val[i]};
+        pInfo->dOutput += twa_get_area(pInfo->p, st);
+        pInfo->p = st;
+      }
+      break;
+    }
+    case TSDB_DATA_TYPE_DOUBLE: {
+      double *val = (double*) GET_INPUT_CHAR_INDEX(pCtx, 0);
+      for (; i < size && i >= 0; i += step) {
+        if (pCtx->hasNull && isNull((const char*) &val[i], pCtx->inputType)) {
+          continue;
+        }
+
+        SPoint1 st = {.key = primaryKey[i + tsIndex], .val = val[i]};
+        pInfo->dOutput += twa_get_area(pInfo->p, st);
+        pInfo->p = st;
+      }
+      break;
+    }
+    default: assert(0);
+  }
+
+  // the last interpolated time window value
+  if (pCtx->end.key != INT64_MIN) {
+    pInfo->dOutput  += twa_get_area(pInfo->p, pCtx->end);
+    pInfo->p = pCtx->end;
+  }
+
+  pInfo->win.ekey  = pInfo->p.key;
+  return notNullElems;
 }
 
 static void twa_function(SQLFunctionCtx *pCtx) {
-  void * data = GET_INPUT_CHAR(pCtx);
-  TSKEY *primaryKey = pCtx->ptsList;
-  
-  int32_t notNullElems = 0;
-  
+  void *data = GET_INPUT_CHAR(pCtx);
+
   SResultRowCellInfo *pResInfo = GET_RES_INFO(pCtx);
-  STwaInfo *   pInfo = GET_ROWCELL_INTERBUF(pResInfo);
-  
-  int32_t i = 0;
+  STwaInfo *pInfo = GET_ROWCELL_INTERBUF(pResInfo);
   
   // skip null value
+  int32_t step = GET_FORWARD_DIRECTION_FACTOR(pCtx->order);
+  int32_t i = (pCtx->order == TSDB_ORDER_ASC)? 0:(pCtx->size - 1);
   while (pCtx->hasNull && i < pCtx->size && isNull((char *)data + pCtx->inputBytes * i, pCtx->inputType)) {
-    i++;
+    i += step;
   }
-  
-  if (i >= pCtx->size) {
-    return;
-  }
-  
-  if (pInfo->lastKey == INT64_MIN) {
-    pInfo->lastKey = pCtx->nStartQueryTimestamp;
-    setTWALastVal(pCtx, data, i, pInfo);
-    
-    pInfo->hasResult = DATA_SET_FLAG;
-  }
-  
-  notNullElems++;
-  
-  if (pCtx->inputType == TSDB_DATA_TYPE_FLOAT || pCtx->inputType == TSDB_DATA_TYPE_DOUBLE) {
-    pInfo->dOutput += pInfo->dLastValue * (primaryKey[i] - pInfo->lastKey);
-  } else {
-    pInfo->iOutput += pInfo->iLastValue * (primaryKey[i] - pInfo->lastKey);
-  }
-  
-  pInfo->lastKey = primaryKey[i];
-  setTWALastVal(pCtx, data, i, pInfo);
-  
-  for (++i; i < pCtx->size; i++) {
-    if (pCtx->hasNull && isNull((char *)data + pCtx->inputBytes * i, pCtx->inputType)) {
-      continue;
-    }
-    
-    notNullElems++;
-    if (pCtx->inputType == TSDB_DATA_TYPE_FLOAT || pCtx->inputType == TSDB_DATA_TYPE_DOUBLE) {
-      pInfo->dOutput += pInfo->dLastValue * (primaryKey[i] - pInfo->lastKey);
-    } else {
-      pInfo->iOutput += pInfo->iLastValue * (primaryKey[i] - pInfo->lastKey);
-    }
-    
-    pInfo->lastKey = primaryKey[i];
-    setTWALastVal(pCtx, data, i, pInfo);
-  }
-  
+
+  int32_t notNullElems = twa_function_impl(pCtx, pCtx->startOffset, i, pCtx->size);
   SET_VAL(pCtx, notNullElems, 1);
   
   if (notNullElems > 0) {
@@ -3726,43 +3817,143 @@ static void twa_function(SQLFunctionCtx *pCtx) {
   if (pCtx->stableQuery) {
     memcpy(pCtx->aOutputBuf, pInfo, sizeof(STwaInfo));
   }
-  
-  //  pCtx->numOfIteratedElems += notNullElems;
 }
 
+//TODO refactor
 static void twa_function_f(SQLFunctionCtx *pCtx, int32_t index) {
   void *pData = GET_INPUT_CHAR_INDEX(pCtx, index);
   if (pCtx->hasNull && isNull(pData, pCtx->inputType)) {
     return;
   }
-  
-  SET_VAL(pCtx, 1, 1);
-  
+
+  int32_t notNullElems = 0;
   TSKEY *primaryKey = pCtx->ptsList;
-  
+
   SResultRowCellInfo *pResInfo = GET_RES_INFO(pCtx);
+
   STwaInfo *pInfo = GET_ROWCELL_INTERBUF(pResInfo);
-  
-  if (pInfo->lastKey == INT64_MIN) {
-    pInfo->lastKey = pCtx->nStartQueryTimestamp;
-    setTWALastVal(pCtx, pData, 0, pInfo);
-    
+  int32_t i = pCtx->startOffset;
+  int32_t size = pCtx->size;
+
+  if (pCtx->start.key != INT64_MIN) {
+    assert(pInfo->p.key == INT64_MIN);
+
+    pInfo->p.key = primaryKey[index];
+    GET_TYPED_DATA(pInfo->p.val, double, pCtx->inputType, GET_INPUT_CHAR_INDEX(pCtx, index));
+
+    pInfo->dOutput += twa_get_area(pCtx->start, pInfo->p);
+
     pInfo->hasResult = DATA_SET_FLAG;
+    pInfo->win.skey = pCtx->start.key;
+    notNullElems++;
+    i += 1;
+  } else if (pInfo->p.key == INT64_MIN) {
+    pInfo->p.key = primaryKey[index];
+    GET_TYPED_DATA(pInfo->p.val, double, pCtx->inputType, GET_INPUT_CHAR_INDEX(pCtx, index));
+
+    pInfo->hasResult = DATA_SET_FLAG;
+    pInfo->win.skey = pInfo->p.key;
+    notNullElems++;
+    i += 1;
   }
-  
-  if (pCtx->inputType == TSDB_DATA_TYPE_FLOAT || pCtx->inputType == TSDB_DATA_TYPE_DOUBLE) {
-    pInfo->dOutput += pInfo->dLastValue * (primaryKey[index] - pInfo->lastKey);
-  } else {
-    pInfo->iOutput += pInfo->iLastValue * (primaryKey[index] - pInfo->lastKey);
+
+  // calculate the value of
+  switch(pCtx->inputType) {
+    case TSDB_DATA_TYPE_TINYINT: {
+      int8_t *val = (int8_t*) GET_INPUT_CHAR_INDEX(pCtx, index);
+      for (; i < size; i++) {
+        if (pCtx->hasNull && isNull((const char*) &val[i], pCtx->inputType)) {
+          continue;
+        }
+
+        SPoint1 st = {.key = primaryKey[i + index], .val = val[i]};
+        pInfo->dOutput += twa_get_area(pInfo->p, st);
+        pInfo->p = st;
+      }
+      break;
+    }
+    case TSDB_DATA_TYPE_SMALLINT: {
+      int16_t *val = (int16_t*) GET_INPUT_CHAR_INDEX(pCtx, index);
+      for (; i < size; i++) {
+        if (pCtx->hasNull && isNull((const char*) &val[i], pCtx->inputType)) {
+          continue;
+        }
+
+        SPoint1 st = {.key = primaryKey[i + index], .val = val[i]};
+        pInfo->dOutput += twa_get_area(pInfo->p, st);
+        pInfo->p = st;
+      }
+      break;
+    }
+    case TSDB_DATA_TYPE_INT: {
+      int32_t *val = (int32_t*) GET_INPUT_CHAR_INDEX(pCtx, index);
+      for (; i < size; i++) {
+        if (pCtx->hasNull && isNull((const char*) &val[i], pCtx->inputType)) {
+          continue;
+        }
+
+        SPoint1 st = {.key = primaryKey[i + index], .val = val[i]};
+        pInfo->dOutput += twa_get_area(pInfo->p, st);
+        pInfo->p = st;
+      }
+      break;
+    }
+    case TSDB_DATA_TYPE_BIGINT: {
+      int64_t *val = (int64_t*) GET_INPUT_CHAR_INDEX(pCtx, index);
+      for (; i < size; i++) {
+        if (pCtx->hasNull && isNull((const char*) &val[i], pCtx->inputType)) {
+          continue;
+        }
+
+        SPoint1 st = {.key = primaryKey[i + index], .val = (double) val[i]};
+        pInfo->dOutput += twa_get_area(pInfo->p, st);
+        pInfo->p = st;
+      }
+      break;
+    }
+    case TSDB_DATA_TYPE_FLOAT: {
+      float *val = (float*) GET_INPUT_CHAR_INDEX(pCtx, index);
+      for (; i < size; i++) {
+        if (pCtx->hasNull && isNull((const char*) &val[i], pCtx->inputType)) {
+          continue;
+        }
+
+        SPoint1 st = {.key = primaryKey[i + index], .val = val[i]};
+        pInfo->dOutput += twa_get_area(pInfo->p, st);//((val[i] + pInfo->p.val) / 2) * (primaryKey[i + index] - pInfo->p.key);
+        pInfo->p = st;
+      }
+      break;
+    }
+    case TSDB_DATA_TYPE_DOUBLE: {
+      double *val = (double*) GET_INPUT_CHAR_INDEX(pCtx, index);
+      for (; i < size; i++) {
+        if (pCtx->hasNull && isNull((const char*) &val[i], pCtx->inputType)) {
+          continue;
+        }
+
+        SPoint1 st = {.key = primaryKey[i + index], .val = val[i]};
+        pInfo->dOutput += twa_get_area(pInfo->p, st);//((val[i] + pInfo->p.val) / 2) * (primaryKey[i + index] - pInfo->p.key);
+        pInfo->p = st;
+      }
+      break;
+    }
+    default: assert(0);
   }
-  
-  // record the last key/value
-  pInfo->lastKey = primaryKey[index];
-  setTWALastVal(pCtx, pData, 0, pInfo);
-  
-  //  pCtx->numOfIteratedElems += 1;
-  pResInfo->hasResult = DATA_SET_FLAG;
-  
+
+  // the last interpolated time window value
+  if (pCtx->end.key != INT64_MIN) {
+    pInfo->dOutput  += twa_get_area(pInfo->p, pCtx->end);//((pInfo->p.val + pCtx->end.val) / 2) * (pCtx->end.key - pInfo->p.key);
+    pInfo->p = pCtx->end;
+  }
+
+  pInfo->win.ekey  = pInfo->p.key;
+
+  SET_VAL(pCtx, notNullElems, 1);
+
+  if (notNullElems > 0) {
+    pResInfo->hasResult = DATA_SET_FLAG;
+  }
+
   if (pCtx->stableQuery) {
     memcpy(pCtx->aOutputBuf, GET_ROWCELL_INTERBUF(pResInfo), sizeof(STwaInfo));
   }
@@ -3783,16 +3974,10 @@ static void twa_func_merge(SQLFunctionCtx *pCtx) {
     }
     
     numOfNotNull++;
-    if (pCtx->inputType >= TSDB_DATA_TYPE_TINYINT && pCtx->inputType <= TSDB_DATA_TYPE_BIGINT) {
-      pBuf->iOutput += pInput->iOutput;
-    } else {
-      pBuf->dOutput += pInput->dOutput;
-    }
-    
-    pBuf->SKey = pInput->SKey;
-    pBuf->EKey = pInput->EKey;
-    pBuf->lastKey = pInput->lastKey;
-    pBuf->iLastValue = pInput->iLastValue;
+    pBuf->dOutput += pInput->dOutput;
+
+    pBuf->win = pInput->win;
+    pBuf->p   = pInput->p;
   }
   
   SET_VAL(pCtx, numOfNotNull, 1);
@@ -3819,21 +4004,16 @@ void twa_function_finalizer(SQLFunctionCtx *pCtx) {
   SResultRowCellInfo *pResInfo = GET_RES_INFO(pCtx);
   
   STwaInfo *pInfo = (STwaInfo *)GET_ROWCELL_INTERBUF(pResInfo);
-  assert(pInfo->EKey >= pInfo->lastKey && pInfo->hasResult == pResInfo->hasResult);
-  
   if (pInfo->hasResult != DATA_SET_FLAG) {
     setNull(pCtx->aOutputBuf, TSDB_DATA_TYPE_DOUBLE, sizeof(double));
     return;
   }
-  
-  if (pInfo->SKey == pInfo->EKey) {
-    *(double *)pCtx->aOutputBuf = 0;
-  } else if (pInfo->type >= TSDB_DATA_TYPE_TINYINT && pInfo->type <= TSDB_DATA_TYPE_BIGINT) {
-    pInfo->iOutput += pInfo->iLastValue * (pInfo->EKey - pInfo->lastKey);
-    *(double *)pCtx->aOutputBuf = pInfo->iOutput / (double)(pInfo->EKey - pInfo->SKey);
+
+  assert(pInfo->win.ekey == pInfo->p.key && pInfo->hasResult == pResInfo->hasResult);
+  if (pInfo->win.ekey == pInfo->win.skey) {
+    *(double *)pCtx->aOutputBuf = pInfo->p.val;
   } else {
-    pInfo->dOutput += pInfo->dLastValue * (pInfo->EKey - pInfo->lastKey);
-    *(double *)pCtx->aOutputBuf = pInfo->dOutput / (pInfo->EKey - pInfo->SKey);
+    *(double *)pCtx->aOutputBuf = pInfo->dOutput / (pInfo->win.ekey - pInfo->win.skey);
   }
   
   GET_RES_INFO(pCtx)->numOfRes = 1;
@@ -4392,11 +4572,11 @@ static void sumrate_finalizer(SQLFunctionCtx *pCtx) {
  *
  */
 int32_t functionCompatList[] = {
-    // count,       sum,      avg,       min,      max,  stddev,    percentile, apercentile, first,   last
-    1,          1,        1,         1,        1,      1,          1,           1,        1,      1,
-    // last_row,    top,    bottom,     spread,    twa,  leastsqr,     ts,       ts_dummy, tag_dummy, ts_z
+    // count,   sum,      avg,       min,      max,    stddev,    percentile,   apercentile, first,   last
+    1,          1,        1,         1,        1,      1,          1,           1,           1,      1,
+    // last_row,top,      bottom,    spread,   twa,    leastsqr,   ts,          ts_dummy, tag_dummy, ts_z
     4,         -1,       -1,         1,        1,      1,          1,           1,        1,     -1,
-    //  tag,       colprj,  tagprj,   arithmetic, diff, first_dist, last_dist,    interp      rate   irate
+    //  tag,    colprj,   tagprj,    arithmetic, diff, first_dist, last_dist,   interp    rate    irate
     1,          1,        1,         1,       -1,      1,          1,           5,        1,      1,
     // sum_rate, sum_irate, avg_rate, avg_irate
     1,          1,        1,         1,

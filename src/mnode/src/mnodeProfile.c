@@ -34,7 +34,6 @@
 #define QUERY_ID_SIZE   20
 #define QUERY_STREAM_SAVE_SIZE 20
 
-extern void *tsMnodeTmr;
 static SCacheObj *tsMnodeConnCache = NULL;
 static int32_t tsConnIndex = 0;
 
@@ -42,6 +41,7 @@ static int32_t mnodeGetQueryMeta(STableMetaMsg *pMeta, SShowObj *pShow, void *pC
 static int32_t mnodeRetrieveQueries(SShowObj *pShow, char *data, int32_t rows, void *pConn);
 static int32_t mnodeGetConnsMeta(STableMetaMsg *pMeta, SShowObj *pShow, void *pConn);
 static int32_t mnodeRetrieveConns(SShowObj *pShow, char *data, int32_t rows, void *pConn);
+static void    mnodeCancelGetNextConn(void *pIter);
 static int32_t mnodeGetStreamMeta(STableMetaMsg *pMeta, SShowObj *pShow, void *pConn);
 static int32_t mnodeRetrieveStreams(SShowObj *pShow, char *data, int32_t rows, void *pConn);
 static void    mnodeFreeConn(void *data);
@@ -52,10 +52,13 @@ static int32_t mnodeProcessKillConnectionMsg(SMnodeMsg *pMsg);
 int32_t mnodeInitProfile() {
   mnodeAddShowMetaHandle(TSDB_MGMT_TABLE_QUERIES, mnodeGetQueryMeta);
   mnodeAddShowRetrieveHandle(TSDB_MGMT_TABLE_QUERIES, mnodeRetrieveQueries);
+  mnodeAddShowFreeIterHandle(TSDB_MGMT_TABLE_QUERIES, mnodeCancelGetNextConn);
   mnodeAddShowMetaHandle(TSDB_MGMT_TABLE_CONNS, mnodeGetConnsMeta);
   mnodeAddShowRetrieveHandle(TSDB_MGMT_TABLE_CONNS, mnodeRetrieveConns);
+  mnodeAddShowFreeIterHandle(TSDB_MGMT_TABLE_CONNS, mnodeCancelGetNextConn);
   mnodeAddShowMetaHandle(TSDB_MGMT_TABLE_STREAMS, mnodeGetStreamMeta);
   mnodeAddShowRetrieveHandle(TSDB_MGMT_TABLE_STREAMS, mnodeRetrieveStreams);
+  mnodeAddShowFreeIterHandle(TSDB_MGMT_TABLE_STREAMS, mnodeCancelGetNextConn);
 
   mnodeAddWriteMsgHandle(TSDB_MSG_TYPE_CM_KILL_QUERY, mnodeProcessKillQueryMsg);
   mnodeAddWriteMsgHandle(TSDB_MSG_TYPE_CM_KILL_STREAM, mnodeProcessKillStreamMsg);
@@ -137,26 +140,24 @@ static void mnodeFreeConn(void *data) {
   mDebug("connId:%d, is destroyed", pConn->connId);
 }
 
-static void *mnodeGetNextConn(SHashMutableIterator *pIter, SConnObj **pConn) {
+static void *mnodeGetNextConn(void *pIter, SConnObj **pConn) {
   *pConn = NULL;
 
-  if (pIter == NULL) {
-    pIter = taosHashCreateIter(tsMnodeConnCache->pHashTable);
-  }
+  pIter = taosHashIterate(tsMnodeConnCache->pHashTable, pIter);
+  if (pIter == NULL) return NULL;
 
-  if (!taosHashIterNext(pIter)) {
-    taosHashDestroyIter(pIter);
-    return NULL;
-  }
-
-  SCacheDataNode **pNode = taosHashIterGet(pIter);
+  SCacheDataNode **pNode = pIter;
   if (pNode == NULL || *pNode == NULL) {
-    taosHashDestroyIter(pIter);
+    taosHashCancelIterate(tsMnodeConnCache->pHashTable, pIter);
     return NULL;
   }
 
   *pConn = (SConnObj*)((*pNode)->data);
   return pIter;
+}
+
+static void mnodeCancelGetNextConn(void *pIter) {
+  taosHashCancelIterate(tsMnodeConnCache->pHashTable, pIter);
 }
 
 static int32_t mnodeGetConnsMeta(STableMetaMsg *pMeta, SShowObj *pShow, void *pConn) {
@@ -281,27 +282,34 @@ static int32_t mnodeRetrieveConns(SShowObj *pShow, char *data, int32_t rows, voi
 
 // not thread safe, need optimized
 int32_t mnodeSaveQueryStreamList(SConnObj *pConn, SHeartBeatMsg *pHBMsg) {
-  pConn->numOfQueries = htonl(pHBMsg->numOfQueries);
-  if (pConn->numOfQueries > 0) {
+  pConn->numOfQueries = 0;	
+  pConn->numOfStreams = 0;
+  int32_t numOfQueries = htonl(pHBMsg->numOfQueries);
+  int32_t numOfStreams = htonl(pHBMsg->numOfStreams);
+  
+  if (numOfQueries > 0) {
     if (pConn->pQueries == NULL) {
       pConn->pQueries = calloc(sizeof(SQueryDesc), QUERY_STREAM_SAVE_SIZE);
     }
 
-    int32_t saveSize = MIN(QUERY_STREAM_SAVE_SIZE, pConn->numOfQueries) * sizeof(SQueryDesc);
+    pConn->numOfQueries = MIN(QUERY_STREAM_SAVE_SIZE, numOfQueries);
+
+    int32_t saveSize = pConn->numOfQueries * sizeof(SQueryDesc);
     if (saveSize > 0 && pConn->pQueries != NULL) {
       memcpy(pConn->pQueries, pHBMsg->pData, saveSize);
     }
   }
 
-  pConn->numOfStreams = htonl(pHBMsg->numOfStreams);
-  if (pConn->numOfStreams > 0) {
+  if (numOfStreams > 0) {
     if (pConn->pStreams == NULL) {
       pConn->pStreams = calloc(sizeof(SStreamDesc), QUERY_STREAM_SAVE_SIZE);
     }
 
-    int32_t saveSize = MIN(QUERY_STREAM_SAVE_SIZE, pConn->numOfStreams) * sizeof(SStreamDesc);
+    pConn->numOfStreams = MIN(QUERY_STREAM_SAVE_SIZE, numOfStreams);
+
+    int32_t saveSize = pConn->numOfStreams * sizeof(SStreamDesc);
     if (saveSize > 0 && pConn->pStreams != NULL) {
-      memcpy(pConn->pStreams, pHBMsg->pData + pConn->numOfQueries * sizeof(SQueryDesc), saveSize);
+      memcpy(pConn->pStreams, pHBMsg->pData + numOfQueries * sizeof(SQueryDesc), saveSize);
     }
   }
 
@@ -449,6 +457,12 @@ static int32_t mnodeGetStreamMeta(STableMetaMsg *pMeta, SShowObj *pShow, void *p
   pSchema[cols].bytes = htons(pShow->bytes[cols]);
   cols++;
 
+  pShow->bytes[cols] = TSDB_TABLE_NAME_LEN + VARSTR_HEADER_SIZE;
+  pSchema[cols].type = TSDB_DATA_TYPE_BINARY;
+  strcpy(pSchema[cols].name, "dest table");
+  pSchema[cols].bytes = htons(pShow->bytes[cols]);
+  cols++;
+
   pShow->bytes[cols] = TSDB_IPv4ADDR_LEN + 6 + VARSTR_HEADER_SIZE;
   pSchema[cols].type = TSDB_DATA_TYPE_BINARY;
   strcpy(pSchema[cols].name, "ip:port");
@@ -521,6 +535,10 @@ static int32_t mnodeRetrieveStreams(SShowObj *pShow, char *data, int32_t rows, v
 
       pWrite = data + pShow->offset[cols] * rows + pShow->bytes[cols] * numOfRows;
       STR_WITH_MAXSIZE_TO_VARSTR(pWrite, pConnObj->user, pShow->bytes[cols]);
+      cols++;
+
+      pWrite = data + pShow->offset[cols] * rows + pShow->bytes[cols] * numOfRows;
+      STR_WITH_MAXSIZE_TO_VARSTR(pWrite, pDesc->dstTable, pShow->bytes[cols]);
       cols++;
 
       pWrite = data + pShow->offset[cols] * rows + pShow->bytes[cols] * numOfRows;

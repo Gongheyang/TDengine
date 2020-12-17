@@ -15,16 +15,11 @@
 
 #define _DEFAULT_SOURCE
 #include "os.h"
-#include "taoserror.h"
-#include "taosmsg.h"
-#include "tutil.h"
 #include "tqueue.h"
 #include "twal.h"
-#include "tglobal.h"
 #include "mnode.h"
-#include "dnode.h"
-#include "dnodeInt.h"
-#include "dnodeMgmt.h"
+#include "dnodeVMgmt.h"
+#include "dnodeMInfos.h"
 #include "dnodeMRead.h"
 
 typedef struct {
@@ -129,8 +124,6 @@ void dnodeDispatchToMReadQueue(SRpcMsg *pMsg) {
     SMnodeMsg *pRead = mnodeCreateMsg(pMsg);
     taosWriteQitem(tsMReadQueue, TAOS_QTYPE_RPC, pRead);
   }
-
-  rpcFreeCont(pMsg->pCont);
 }
 
 static void dnodeFreeMReadMsg(SMnodeMsg *pRead) {
@@ -168,7 +161,8 @@ static void *dnodeProcessMReadQueue(void *param) {
       break;
     }
 
-    dDebug("%p, msg:%s will be processed in mread queue", pRead->rpcMsg.ahandle, taosMsg[pRead->rpcMsg.msgType]);
+    dTrace("msg:%p, app:%p type:%s will be processed in mread queue", pRead->rpcMsg.ahandle, pRead,
+           taosMsg[pRead->rpcMsg.msgType]);
     int32_t code = mnodeProcessRead(pRead);
     dnodeSendRpcMReadRsp(pRead, code);
   }

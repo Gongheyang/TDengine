@@ -37,40 +37,6 @@ extern "C" {
 #include "qTsbuf.h"
 #include "tcmdtype.h"
 
-#if 0
-static UNUSED_FUNC void *u_malloc (size_t __size) {
-  uint32_t v = rand();
-
-  if (v % 5000 <= 0) {
-    return NULL;
-  } else {
-    return malloc(__size);
-  }
-}
-
-static UNUSED_FUNC void* u_calloc(size_t num, size_t __size) {
-  uint32_t v = rand();
-  if (v % 5000 <= 0) {
-    return NULL;
-  } else {
-    return calloc(num, __size);
-  }
-}
-
-static UNUSED_FUNC void* u_realloc(void* p, size_t __size) {
-  uint32_t v = rand();
-  if (v % 5000 <= 0) {
-    return NULL;
-  } else {
-    return realloc(p, __size);
-  }
-}
-
-#define calloc  u_calloc
-#define malloc  u_malloc
-#define realloc u_realloc
-#endif
-
 // forward declaration
 struct SSqlInfo;
 struct SLocalReducer;
@@ -78,7 +44,7 @@ struct SLocalReducer;
 // data source from sql string or from file
 enum {
   DATA_FROM_SQL_STRING = 1,
-  DATA_FROM_DATA_FILE = 2,
+  DATA_FROM_DATA_FILE  = 2,
 };
 
 typedef void (*__async_cb_func_t)(void *param, TAOS_RES *tres, int32_t numOfRows);
@@ -118,10 +84,10 @@ typedef struct STableMetaInfo {
    * 1. keep the vgroup index during the multi-vnode super table projection query
    * 2. keep the vgroup index for multi-vnode insertion
    */
-  int32_t vgroupIndex;
-  char    name[TSDB_TABLE_FNAME_LEN];        // (super) table name
-  char    aliasName[TSDB_TABLE_NAME_LEN];    // alias name of table specified in query sql
-  SArray* tagColList;                        // SArray<SColumn*>, involved tag columns
+  int32_t       vgroupIndex;
+  char          name[TSDB_TABLE_FNAME_LEN];        // (super) table name
+  char          aliasName[TSDB_TABLE_NAME_LEN];    // alias name of table specified in query sql
+  SArray       *tagColList;                        // SArray<SColumn*>, involved tag columns
 } STableMetaInfo;
 
 /* the structure for sql function in select clause */
@@ -136,7 +102,7 @@ typedef struct SSqlExpr {
   int16_t   numOfParams;    // argument value of each function
   tVariant  param[3];       // parameters are not more than 3
   int32_t   offset;         // sub result column value of arithmetic expression.
-  int16_t   resColId;          // result column id
+  int16_t   resColId;       // result column id
 } SSqlExpr;
 
 typedef struct SColumnIndex {
@@ -204,22 +170,17 @@ typedef struct SParamInfo {
 } SParamInfo;
 
 typedef struct STableDataBlocks {
-  char     tableId[TSDB_TABLE_FNAME_LEN];
-  int8_t   tsSource;     // where does the UNIX timestamp come from, server or client
-  bool     ordered;      // if current rows are ordered or not
-  int64_t  vgId;         // virtual group id
-  int64_t  prevTS;       // previous timestamp, recorded to decide if the records array is ts ascending
-  int32_t  numOfTables;  // number of tables in current submit block
-  int32_t  rowSize;      // row size for current table
-  uint32_t nAllocSize;
-  uint32_t headerSize;   // header for table info (uid, tid, submit metadata)
-  uint32_t size;
-
-  /*
-   * the table meta of table, the table meta will be used during submit, keep a ref
-   * to avoid it to be removed from cache
-   */
-  STableMeta *pTableMeta;
+  char        tableId[TSDB_TABLE_FNAME_LEN];
+  int8_t      tsSource;     // where does the UNIX timestamp come from, server or client
+  bool        ordered;      // if current rows are ordered or not
+  int64_t     vgId;         // virtual group id
+  int64_t     prevTS;       // previous timestamp, recorded to decide if the records array is ts ascending
+  int32_t     numOfTables;  // number of tables in current submit block
+  int32_t     rowSize;      // row size for current table
+  uint32_t    nAllocSize;
+  uint32_t    headerSize;   // header for table info (uid, tid, submit metadata)
+  uint32_t    size;
+  STableMeta *pTableMeta;   // the tableMeta of current table, the table meta will be used during submit, keep a ref to avoid to be removed from cache
   char       *pData;
 
   // for parameter ('?') binding
@@ -246,11 +207,14 @@ typedef struct SQueryInfo {
   int16_t          fillType;      // final result fill type
   int16_t          numOfTables;
   STableMetaInfo **pTableMetaInfo;
-  struct STSBuf *  tsBuf;
+  struct STSBuf   *tsBuf;
   int64_t *        fillVal;       // default value for fill
   char *           msg;           // pointer to the pCmd->payload to keep error message temporarily
   int64_t          clauseLimit;   // limit for current sub clause
+
   int64_t          prjOffset;     // offset value in the original sql expression, only applied at client side
+  int64_t          vgroupLimit;    // table limit in case of super table projection query + global order + limit
+
   int32_t          udColumnId;    // current user-defined constant output field column id, monotonically decreases from TSDB_UD_COLUMN_INDEX
   int16_t          resColumnId;   // result column id
 } SQueryInfo;
@@ -281,10 +245,14 @@ typedef struct {
   int32_t      numOfParams;
 
   int8_t       dataSourceType;     // load data from file or not
-  int8_t       submitSchema; // submit block is built with table schema
-  STagData     tagData;
-  SHashObj    *pTableList;   // referred table involved in sql
-  SArray      *pDataBlocks;  // SArray<STableDataBlocks*> submit data blocks after parsing sql
+  int8_t       submitSchema;   // submit block is built with table schema
+  STagData     tagData;        // NOTE: pTagData->data is used as a variant length array
+
+  STableMeta **pTableMetaList; // all involved tableMeta list of current insert sql statement.
+  int32_t      numOfTables;
+
+  SHashObj    *pTableBlockHashList;     // data block for each table
+  SArray      *pDataBlocks;    // SArray<STableDataBlocks*>. Merged submit block for each vgroup
 } SSqlCmd;
 
 typedef struct SResRec {
@@ -293,32 +261,31 @@ typedef struct SResRec {
 } SResRec;
 
 typedef struct {
-  int64_t               numOfRows;                  // num of results in current retrieved
-  int64_t               numOfRowsGroup;             // num of results of current group
-  int64_t               numOfTotal;                 // num of total results
-  int64_t               numOfClauseTotal;           // num of total result in current subclause
-  char *                pRsp;
-  int32_t               rspType;
-  int32_t               rspLen;
-  uint64_t              qhandle;
-  int64_t               uid;
-  int64_t               useconds;
-  int64_t               offset;  // offset value from vnode during projection query of stable
-  int32_t               row;
-  int16_t               numOfCols;
-  int16_t               precision;
-  bool                  completed;
-  int32_t               code;
-  int32_t               numOfGroups;
-  SResRec *             pGroupRec;
-  char *                data;
-  TAOS_ROW              tsrow;
-  TAOS_ROW              urow;
-  int32_t*              length;  // length for each field for current row
-  char **               buffer;  // Buffer used to put multibytes encoded using unicode (wchar_t)
-  SColumnIndex *        pColumnIndex;
-  SArithmeticSupport*   pArithSup;   // support the arithmetic expression calculation on agg functions
-  
+  int32_t        numOfRows;                  // num of results in current retrieval
+  int64_t        numOfRowsGroup;             // num of results of current group
+  int64_t        numOfTotal;                 // num of total results
+  int64_t        numOfClauseTotal;           // num of total result in current subclause
+  char *         pRsp;
+  int32_t        rspType;
+  int32_t        rspLen;
+  uint64_t       qhandle;
+  int64_t        useconds;
+  int64_t        offset;  // offset value from vnode during projection query of stable
+  int32_t        row;
+  int16_t        numOfCols;
+  int16_t        precision;
+  bool           completed;
+  int32_t        code;
+  int32_t        numOfGroups;
+  SResRec *      pGroupRec;
+  char *         data;
+  TAOS_ROW       tsrow;
+  TAOS_ROW       urow;
+  int32_t*       length;  // length for each field for current row
+  char **        buffer;  // Buffer used to put multibytes encoded using unicode (wchar_t)
+  SColumnIndex*  pColumnIndex;
+
+  SArithmeticSupport   *pArithSup;   // support the arithmetic expression calculation on agg functions
   struct SLocalReducer *pLocalReducer;
 } SSqlRes;
 
@@ -334,9 +301,10 @@ typedef struct STscObj {
   char               superAuth : 1;
   uint32_t           connId;
   uint64_t           rid;      // ref ID returned by taosAddRef
-  struct SSqlObj *   pHb;
+  int64_t            hbrid;
   struct SSqlObj *   sqlList;
   struct SSqlStream *streamList;
+  SRpcCorEpSet       *tscCorMgmtEpSet;
   void*              pDnodeConn;
   pthread_mutex_t    mutex;
   T_REF_DECLARE()
@@ -374,11 +342,12 @@ typedef struct SSqlObj {
   struct SSqlObj **pSubs;
 
   struct SSqlObj  *prev, *next;
-  struct SSqlObj **self;
+  int64_t          self;
 } SSqlObj;
 
 typedef struct SSqlStream {
   SSqlObj *pSql;
+  const char* dstTable;
   uint32_t streamId;
   char     listed;
   bool     isProject;
@@ -404,6 +373,8 @@ typedef struct SSqlStream {
   void (*callback)(void *);  // Callback function when stream is stopped from client level
   struct SSqlStream *prev, *next;
 } SSqlStream;
+
+void tscSetStreamDestTable(SSqlStream* pStream, const char* dstTable);
 
 int32_t tscInitRpc(const char *user, const char *secret, void** pDnodeConn);
 void    tscInitMsgsFp();
@@ -508,7 +479,7 @@ static FORCE_INLINE void tscGetResultColumnChr(SSqlRes* pRes, SFieldInfo* pField
 }
 
 extern SCacheObj*    tscMetaCache;
-extern SCacheObj*    tscObjCache;
+extern int           tscObjRef;
 extern void *    tscTmr;
 extern void *    tscQhandle;
 extern int       tscKeepConn[];
@@ -516,7 +487,6 @@ extern int       tsInsertHeadSize;
 extern int       tscNumOfThreads;
 extern int       tscRefId;
   
-extern SRpcCorEpSet tscMgmtEpSet;
 
 extern int (*tscBuildMsg[TSDB_SQL_MAX])(SSqlObj *pSql, SSqlInfo *pInfo);
 

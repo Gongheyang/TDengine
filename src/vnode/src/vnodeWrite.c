@@ -17,19 +17,15 @@
 #include "os.h"
 #include "taosmsg.h"
 #include "taoserror.h"
+#include "tglobal.h"
 #include "tqueue.h"
-#include "trpc.h"
-#include "tsdb.h"
-#include "twal.h"
-#include "tsync.h"
-#include "tdataformat.h"
-#include "vnode.h"
-#include "vnodeInt.h"
-#include "syncInt.h"
-#include "tcq.h"
+#include "ttimer.h"
+#include "dnode.h"
+#include "vnodeStatus.h"
 
 #define MAX_QUEUED_MSG_NUM 10000
 
+extern void *  tsDnodeTmr;
 static int32_t (*vnodeProcessWriteMsgFp[TSDB_MSG_TYPE_MAX])(SVnodeObj *, void *pCont, SRspRet *);
 static int32_t vnodeProcessSubmitMsg(SVnodeObj *pVnode, void *pCont, SRspRet *);
 static int32_t vnodeProcessCreateTableMsg(SVnodeObj *pVnode, void *pCont, SRspRet *);
@@ -37,21 +33,26 @@ static int32_t vnodeProcessDropTableMsg(SVnodeObj *pVnode, void *pCont, SRspRet 
 static int32_t vnodeProcessAlterTableMsg(SVnodeObj *pVnode, void *pCont, SRspRet *);
 static int32_t vnodeProcessDropStableMsg(SVnodeObj *pVnode, void *pCont, SRspRet *);
 static int32_t vnodeProcessUpdateTagValMsg(SVnodeObj *pVnode, void *pCont, SRspRet *);
+static int32_t vnodePerformFlowCtrl(SVWriteMsg *pWrite);
 
-void vnodeInitWriteFp(void) {
+int32_t vnodeInitWrite(void) {
   vnodeProcessWriteMsgFp[TSDB_MSG_TYPE_SUBMIT]          = vnodeProcessSubmitMsg;
   vnodeProcessWriteMsgFp[TSDB_MSG_TYPE_MD_CREATE_TABLE] = vnodeProcessCreateTableMsg;
   vnodeProcessWriteMsgFp[TSDB_MSG_TYPE_MD_DROP_TABLE]   = vnodeProcessDropTableMsg;
   vnodeProcessWriteMsgFp[TSDB_MSG_TYPE_MD_ALTER_TABLE]  = vnodeProcessAlterTableMsg;
   vnodeProcessWriteMsgFp[TSDB_MSG_TYPE_MD_DROP_STABLE]  = vnodeProcessDropStableMsg;
   vnodeProcessWriteMsgFp[TSDB_MSG_TYPE_UPDATE_TAG_VAL]  = vnodeProcessUpdateTagValMsg;
+
+  return 0;
 }
 
+void vnodeCleanupWrite() {}
+
 int32_t vnodeProcessWrite(void *vparam, void *wparam, int32_t qtype, void *rparam) {
-  int32_t     code = 0;
-  SVnodeObj * pVnode = vparam;
-  SWalHead *  pHead = wparam;
-  SRspRet *   pRspRet = rparam;
+  int32_t    code = 0;
+  SVnodeObj *pVnode = vparam;
+  SWalHead * pHead = wparam;
+  SRspRet *  pRspRet = rparam;
 
   if (vnodeProcessWriteMsgFp[pHead->msgType] == NULL) {
     vError("vgId:%d, msg:%s not processed since no handle, qtype:%s hver:%" PRIu64, pVnode->vgId,
@@ -63,7 +64,7 @@ int32_t vnodeProcessWrite(void *vparam, void *wparam, int32_t qtype, void *rpara
          taosMsg[pHead->msgType], qtypeStr[qtype], pHead->version, pVnode->version);
 
   if (pHead->version == 0) {  // from client or CQ
-    if (pVnode->status != TAOS_VN_STATUS_READY) {
+    if (!vnodeInReadyStatus(pVnode)) {
       vDebug("vgId:%d, msg:%s not processed since vstatus:%d, qtype:%s hver:%" PRIu64, pVnode->vgId,
              taosMsg[pHead->msgType], pVnode->status, qtypeStr[qtype], pHead->version);
       return TSDB_CODE_APP_NOT_READY;  // it may be in deleting or closing state
@@ -77,8 +78,6 @@ int32_t vnodeProcessWrite(void *vparam, void *wparam, int32_t qtype, void *rpara
 
     // assign version
     pHead->version = pVnode->version + 1;
-    if (pVnode->delayMs) taosMsleep(pVnode->delayMs);
-
   } else {  // from wal or forward
     // for data from WAL or forward, version may be smaller
     if (pHead->version <= pVnode->version) return 0;
@@ -115,7 +114,7 @@ static int32_t vnodeCheckWrite(void *vparam) {
     return TSDB_CODE_APP_NOT_READY;
   }
 
-  if (pVnode->status == TAOS_VN_STATUS_CLOSING) {
+  if (vnodeInClosingStatus(pVnode)) {
     vDebug("vgId:%d, vnode status is %s, refCount:%d pVnode:%p", pVnode->vgId, vnodeStatus[pVnode->status],
            pVnode->refCount, pVnode);
     return TSDB_CODE_APP_NOT_READY;
@@ -127,11 +126,6 @@ static int32_t vnodeCheckWrite(void *vparam) {
   }
 
   return TSDB_CODE_SUCCESS;
-}
-
-void vnodeConfirmForward(void *vparam, uint64_t version, int32_t code) {
-  SVnodeObj *pVnode = vparam;
-  syncConfirmForward(pVnode->sync, version, code);
 }
 
 static int32_t vnodeProcessSubmitMsg(SVnodeObj *pVnode, void *pCont, SRspRet *pRet) {
@@ -218,9 +212,10 @@ static int32_t vnodeProcessUpdateTagValMsg(SVnodeObj *pVnode, void *pCont, SRspR
 int32_t vnodeWriteToWQueue(void *vparam, void *wparam, int32_t qtype, void *rparam) {
   SVnodeObj *pVnode = vparam;
   SWalHead * pHead = wparam;
+  int32_t    code = 0;
 
   if (qtype == TAOS_QTYPE_RPC) {
-    int32_t code = vnodeCheckWrite(pVnode);
+    code = vnodeCheckWrite(pVnode);
     if (code != TSDB_CODE_SUCCESS) return code;
   }
 
@@ -237,19 +232,25 @@ int32_t vnodeWriteToWQueue(void *vparam, void *wparam, int32_t qtype, void *rpar
 
   if (rparam != NULL) {
     SRpcMsg *pRpcMsg = rparam;
-    pWrite->rpcHandle = pRpcMsg->handle;
-    pWrite->rpcAhandle = pRpcMsg->ahandle;
+    pWrite->rpcMsg = *pRpcMsg;
   }
 
   memcpy(pWrite->pHead, pHead, sizeof(SWalHead) + pHead->len);
+  pWrite->pVnode = pVnode;
+  pWrite->qtype = qtype;
 
   atomic_add_fetch_32(&pVnode->refCount, 1);
 
   int32_t queued = atomic_add_fetch_32(&pVnode->queuedWMsg, 1);
   if (queued > MAX_QUEUED_MSG_NUM) {
-    vDebug("vgId:%d, too many msg:%d in vwqueue, flow control", pVnode->vgId, queued);
-    taosMsleep(1);
+    int32_t ms = (queued / MAX_QUEUED_MSG_NUM) * 10 + 3;
+    if (ms > 100) ms = 100;
+    vDebug("vgId:%d, too many msg:%d in vwqueue, flow control %dms", pVnode->vgId, queued, ms);
+    taosMsleep(ms);
   }
+
+  code = vnodePerformFlowCtrl(pWrite);
+  if (code != 0) return 0;
 
   vTrace("vgId:%d, write into vwqueue, refCount:%d queued:%d", pVnode->vgId, pVnode->refCount, pVnode->queuedWMsg);
 
@@ -260,9 +261,54 @@ int32_t vnodeWriteToWQueue(void *vparam, void *wparam, int32_t qtype, void *rpar
 void vnodeFreeFromWQueue(void *vparam, SVWriteMsg *pWrite) {
   SVnodeObj *pVnode = vparam;
 
-  atomic_sub_fetch_32(&pVnode->queuedWMsg, 1);
-  vTrace("vgId:%d, free from vwqueue, refCount:%d queued:%d", pVnode->vgId, pVnode->refCount, pVnode->queuedWMsg);
+  int32_t queued = atomic_sub_fetch_32(&pVnode->queuedWMsg, 1);
+  vTrace("vgId:%d, msg:%p, app:%p, free from vwqueue, queued:%d", pVnode->vgId, pWrite, pWrite->rpcMsg.ahandle, queued);
 
   taosFreeQitem(pWrite);
   vnodeRelease(pVnode);
+}
+
+static void vnodeFlowCtrlMsgToWQueue(void *param, void *tmrId) {
+  SVWriteMsg *pWrite = param;
+  SVnodeObj * pVnode = pWrite->pVnode;
+  int32_t     code = TSDB_CODE_VND_SYNCING;
+
+  if (pVnode->flowctrlLevel <= 0) code = TSDB_CODE_VND_IS_FLOWCTRL;
+
+  pWrite->processedCount++;
+  if (pWrite->processedCount > 100) {
+    vError("vgId:%d, msg:%p, failed to process since %s, retry:%d", pVnode->vgId, pWrite, tstrerror(code),
+           pWrite->processedCount);
+    pWrite->processedCount = 1;
+    dnodeSendRpcVWriteRsp(pWrite->pVnode, pWrite, code);
+  } else {
+    code = vnodePerformFlowCtrl(pWrite);
+    if (code == 0) {
+      vDebug("vgId:%d, msg:%p, write into vwqueue after flowctrl, retry:%d", pVnode->vgId, pWrite,
+             pWrite->processedCount);
+      pWrite->processedCount = 0;
+      taosWriteQitem(pVnode->wqueue, pWrite->qtype, pWrite);
+    }
+  }
+}
+
+static int32_t vnodePerformFlowCtrl(SVWriteMsg *pWrite) {
+  SVnodeObj *pVnode = pWrite->pVnode;
+  if (pWrite->qtype != TAOS_QTYPE_RPC) return 0;
+  if (pVnode->queuedWMsg < MAX_QUEUED_MSG_NUM && pVnode->flowctrlLevel <= 0) return 0;
+
+  if (tsFlowCtrl == 0) {
+    int32_t ms = pow(2, pVnode->flowctrlLevel + 2);
+    if (ms > 100) ms = 100;
+    vTrace("vgId:%d, msg:%p, app:%p, perform flowctrl for %d ms", pVnode->vgId, pWrite, pWrite->rpcMsg.ahandle, ms);
+    taosMsleep(ms);
+    return 0;
+  } else {
+    void *unUsed = NULL;
+    taosTmrReset(vnodeFlowCtrlMsgToWQueue, 100, pWrite, tsDnodeTmr, &unUsed);
+
+    vTrace("vgId:%d, msg:%p, app:%p, perform flowctrl, retry:%d", pVnode->vgId, pWrite, pWrite->rpcMsg.ahandle,
+           pWrite->processedCount);
+    return TSDB_CODE_VND_ACTION_IN_PROGRESS;
+  }
 }

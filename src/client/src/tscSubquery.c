@@ -594,7 +594,7 @@ void tscBuildVgroupTableInfo(SSqlObj* pSql, STableMetaInfo* pTableMetaInfo, SArr
 
       if (taosArrayGetSize(result) > 0) {
         SVgroupTableInfo* prevGroup = taosArrayGet(result, taosArrayGetSize(result) - 1);
-        tscDebug("%p vgId:%d, tables:%"PRId64, pSql, prevGroup->vgInfo.vgId, taosArrayGetSize(prevGroup->itemList));
+        tscDebug("%p vgId:%d, tables:%"PRIzu, pSql, prevGroup->vgInfo.vgId, taosArrayGetSize(prevGroup->itemList));
       }
 
       taosArrayPush(result, &info);
@@ -612,7 +612,7 @@ void tscBuildVgroupTableInfo(SSqlObj* pSql, STableMetaInfo* pTableMetaInfo, SArr
 
   if (taosArrayGetSize(result) > 0) {
     SVgroupTableInfo* g = taosArrayGet(result, taosArrayGetSize(result) - 1);
-    tscDebug("%p vgId:%d, tables:%"PRId64, pSql, g->vgInfo.vgId, taosArrayGetSize(g->itemList));
+    tscDebug("%p vgId:%d, tables:%"PRIzu, pSql, g->vgInfo.vgId, taosArrayGetSize(g->itemList));
   }
 }
 
@@ -753,7 +753,7 @@ static int32_t getIntersectionOfTableTuple(SQueryInfo* pQueryInfo, SSqlObj* pPar
   }
 #endif
 
-  tscDebug("%p tags match complete, result: %"PRId64", %"PRId64, pParentSql, t1, t2);
+  tscDebug("%p tags match complete, result: %"PRIzu", %"PRIzu, pParentSql, t1, t2);
   return TSDB_CODE_SUCCESS;
 }
 
@@ -948,7 +948,7 @@ static void tsCompRetrieveCallback(void* param, TAOS_RES* tres, int32_t numOfRow
     if (!pRes->completed) {
       taosGetTmpfilePath("ts-join", pSupporter->path);
       pSupporter->f = fopen(pSupporter->path, "w");
-      pRes->row = (int32_t)pRes->numOfRows;
+      pRes->row = pRes->numOfRows;
 
       taos_fetch_rows_a(tres, tsCompRetrieveCallback, param);
       return;
@@ -974,7 +974,7 @@ static void tsCompRetrieveCallback(void* param, TAOS_RES* tres, int32_t numOfRow
     
     // TODO check for failure
     pSupporter->f = fopen(pSupporter->path, "w");
-    pRes->row = (int32_t)pRes->numOfRows;
+    pRes->row = pRes->numOfRows;
 
     // set the callback function
     pSql->fp = tscJoinQueryCallback;
@@ -1085,7 +1085,7 @@ static void joinRetrieveFinalResCallback(void* param, TAOS_RES* tres, int numOfR
     SSqlRes* pRes1 = &pParentSql->pSubs[i]->res;
 
     if (pRes1->row > 0 && pRes1->numOfRows > 0) {
-      tscDebug("%p sub:%p index:%d numOfRows:%"PRId64" total:%"PRId64 " (not retrieve)", pParentSql, pParentSql->pSubs[i], i,
+      tscDebug("%p sub:%p index:%d numOfRows:%d total:%"PRId64 " (not retrieve)", pParentSql, pParentSql->pSubs[i], i,
                pRes1->numOfRows, pRes1->numOfTotal);
       assert(pRes1->row < pRes1->numOfRows);
     } else {
@@ -1093,7 +1093,7 @@ static void joinRetrieveFinalResCallback(void* param, TAOS_RES* tres, int numOfR
         pRes1->numOfClauseTotal += pRes1->numOfRows;
       }
 
-      tscDebug("%p sub:%p index:%d numOfRows:%"PRId64" total:%"PRId64, pParentSql, pParentSql->pSubs[i], i,
+      tscDebug("%p sub:%p index:%d numOfRows:%d total:%"PRId64, pParentSql, pParentSql->pSubs[i], i,
                pRes1->numOfRows, pRes1->numOfTotal);
     }
   }
@@ -2032,7 +2032,7 @@ static void tscRetrieveFromDnodeCallBack(void *param, TAOS_RES *tres, int numOfR
     assert(pRes->numOfRows == numOfRows);
     int64_t num = atomic_add_fetch_64(&pState->numOfRetrievedRows, numOfRows);
     
-    tscDebug("%p sub:%p retrieve numOfRows:%" PRId64 " totalNumOfRows:%" PRIu64 " from ep:%s, orderOfSub:%d", pParentSql, pSql,
+    tscDebug("%p sub:%p retrieve numOfRows:%d totalNumOfRows:%" PRIu64 " from ep:%s, orderOfSub:%d", pParentSql, pSql,
              pRes->numOfRows, pState->numOfRetrievedRows, pSql->epSet.fqdn[pSql->epSet.inUse], idx);
 
     if (num > tsMaxNumOfOrderedResults && tscIsProjectionQueryOnSTable(pQueryInfo, 0)) {
@@ -2059,7 +2059,7 @@ static void tscRetrieveFromDnodeCallBack(void *param, TAOS_RES *tres, int numOfR
     }
     
     int32_t ret = saveToBuffer(trsupport->pExtMemBuffer[idx], pDesc, trsupport->localBuffer, pRes->data,
-                               (int32_t)pRes->numOfRows, pQueryInfo->groupbyExpr.orderType);
+                               pRes->numOfRows, pQueryInfo->groupbyExpr.orderType);
     if (ret != 0) { // set no disk space error info, and abort retry
       tscAbortFurtherRetryRetrieval(trsupport, tres, TSDB_CODE_TSC_NO_DISKSPACE);
     } else if (pRes->completed) {
@@ -2149,6 +2149,38 @@ void tscRetrieveDataRes(void *param, TAOS_RES *tres, int code) {
   }
 }
 
+static bool needRetryInsert(SSqlObj* pParentObj, int32_t numOfSub) {
+  if (pParentObj->retry > pParentObj->maxRetry) {
+    tscError("%p max retry reached, abort the retry effort", pParentObj)
+    return false;
+  }
+
+  for (int32_t i = 0; i < numOfSub; ++i) {
+    int32_t code = pParentObj->pSubs[i]->res.code;
+    if (code == TSDB_CODE_SUCCESS) {
+      continue;
+    }
+
+    if (code != TSDB_CODE_TDB_TABLE_RECONFIGURE && code != TSDB_CODE_TDB_INVALID_TABLE_ID &&
+        code != TSDB_CODE_VND_INVALID_VGROUP_ID && code != TSDB_CODE_RPC_NETWORK_UNAVAIL &&
+        code != TSDB_CODE_APP_NOT_READY) {
+      pParentObj->res.code = code;
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static void doFreeInsertSupporter(SSqlObj* pSqlObj) {
+  assert(pSqlObj != NULL && pSqlObj->subState.numOfSub > 0);
+
+  for(int32_t i = 0; i < pSqlObj->subState.numOfSub; ++i) {
+    SSqlObj* pSql = pSqlObj->pSubs[i];
+    tfree(pSql->param);
+  }
+}
+
 static void multiVnodeInsertFinalize(void* param, TAOS_RES* tres, int numOfRows) {
   SInsertSupporter *pSupporter = (SInsertSupporter *)param;
   SSqlObj* pParentObj = pSupporter->pSql;
@@ -2163,23 +2195,79 @@ static void multiVnodeInsertFinalize(void* param, TAOS_RES* tres, int numOfRows)
     assert(pSql != NULL && pSql->res.code == numOfRows);
     
     pParentObj->res.code = pSql->res.code;
-  }
 
-  tfree(pSupporter);
+    // set the flag in the parent sqlObj
+    if (pSql->cmd.submitSchema) {
+      pParentObj->cmd.submitSchema = 1;
+    }
+  }
 
   if (atomic_sub_fetch_32(&pParentObj->subState.numOfRemain, 1) > 0) {
     return;
   }
-  
-  tscDebug("%p Async insertion completed, total inserted:%" PRId64, pParentObj, pParentObj->res.numOfRows);
 
   // restore user defined fp
   pParentObj->fp = pParentObj->fetchFp;
+  int32_t numOfSub = pParentObj->subState.numOfSub;
+  doFreeInsertSupporter(pParentObj);
 
-  // todo remove this parameter in async callback function definition.
-  // all data has been sent to vnode, call user function
-  int32_t v = (pParentObj->res.code != TSDB_CODE_SUCCESS) ? pParentObj->res.code : (int32_t)pParentObj->res.numOfRows;
-  (*pParentObj->fp)(pParentObj->param, pParentObj, v);
+  if (pParentObj->res.code == TSDB_CODE_SUCCESS) {
+    tscDebug("%p Async insertion completed, total inserted:%d", pParentObj, pParentObj->res.numOfRows);
+
+    // todo remove this parameter in async callback function definition.
+    // all data has been sent to vnode, call user function
+    int32_t v = (pParentObj->res.code != TSDB_CODE_SUCCESS) ? pParentObj->res.code : (int32_t)pParentObj->res.numOfRows;
+    (*pParentObj->fp)(pParentObj->param, pParentObj, v);
+  } else {
+    if (!needRetryInsert(pParentObj, numOfSub)) {
+      tscQueueAsyncRes(pParentObj);
+      return;
+    }
+
+    int32_t numOfFailed = 0;
+    for(int32_t i = 0; i < numOfSub; ++i) {
+      SSqlObj* pSql = pParentObj->pSubs[i];
+      if (pSql->res.code != TSDB_CODE_SUCCESS) {
+        numOfFailed += 1;
+
+        // clean up tableMeta in cache
+        tscFreeQueryInfo(&pSql->cmd, true);
+        SQueryInfo* pQueryInfo = tscGetQueryInfoDetailSafely(&pSql->cmd, 0);
+        STableMetaInfo* pMasterTableMetaInfo = tscGetTableMetaInfoFromCmd(&pParentObj->cmd, pSql->cmd.clauseIndex, 0);
+        tscAddTableMetaInfo(pQueryInfo, pMasterTableMetaInfo->name, NULL, NULL, NULL, NULL);
+
+        tscDebug("%p, failed sub:%d, %p", pParentObj, i, pSql);
+      }
+    }
+
+    tscError("%p Async insertion completed, total inserted:%d rows, numOfFailed:%d, numOfTotal:%d", pParentObj,
+             pParentObj->res.numOfRows, numOfFailed, numOfSub);
+
+    tscDebug("%p cleanup %d tableMeta in cache", pParentObj, pParentObj->cmd.numOfTables);
+    for(int32_t i = 0; i < pParentObj->cmd.numOfTables; ++i) {
+      taosCacheRelease(tscMetaCache, (void**)&(pParentObj->cmd.pTableMetaList[i]), true);
+    }
+
+    pParentObj->cmd.parseFinished = false;
+    pParentObj->subState.numOfRemain = numOfFailed;
+
+    tscResetSqlCmdObj(&pParentObj->cmd, false);
+
+    // in case of insert, redo parsing the sql string and build new submit data block for two reasons:
+    // 1. the table Id(tid & uid) may have been update, the submit block needs to be updated accordingly.
+    // 2. vnode may need the schema information along with submit block to update its local table schema.
+    tscDebug("%p re-parse sql to generate submit data, retry:%d", pParentObj, pParentObj->retry++);
+    int32_t code = tsParseSql(pParentObj, true);
+    if (code == TSDB_CODE_TSC_ACTION_IN_PROGRESS) return;
+
+    if (code != TSDB_CODE_SUCCESS) {
+      pParentObj->res.code = code;
+      tscQueueAsyncRes(pParentObj);
+      return;
+    }
+
+    tscDoQuery(pParentObj);
+  }
 }
 
 /**
@@ -2187,15 +2275,14 @@ static void multiVnodeInsertFinalize(void* param, TAOS_RES* tres, int numOfRows)
  * @param pSql
  * @return
  */
-int32_t tscHandleInsertRetry(SSqlObj* pSql) {
+int32_t tscHandleInsertRetry(SSqlObj* pParent, SSqlObj* pSql) {
   assert(pSql != NULL && pSql->param != NULL);
-  SSqlCmd* pCmd = &pSql->cmd;
   SSqlRes* pRes = &pSql->res;
 
   SInsertSupporter* pSupporter = (SInsertSupporter*) pSql->param;
   assert(pSupporter->index < pSupporter->pSql->subState.numOfSub);
 
-  STableDataBlocks* pTableDataBlock = taosArrayGetP(pCmd->pDataBlocks, pSupporter->index);
+  STableDataBlocks* pTableDataBlock = taosArrayGetP(pParent->cmd.pDataBlocks, pSupporter->index);
   int32_t code = tscCopyDataBlockToPayload(pSql, pTableDataBlock);
 
   if ((pRes->code = code)!= TSDB_CODE_SUCCESS) {
@@ -2209,6 +2296,24 @@ int32_t tscHandleInsertRetry(SSqlObj* pSql) {
 int32_t tscHandleMultivnodeInsert(SSqlObj *pSql) {
   SSqlCmd *pCmd = &pSql->cmd;
   SSqlRes *pRes = &pSql->res;
+
+  // it is the failure retry insert
+  if (pSql->pSubs != NULL) {
+    for(int32_t i = 0; i < pSql->subState.numOfSub; ++i) {
+      SSqlObj* pSub = pSql->pSubs[i];
+      SInsertSupporter* pSup = calloc(1, sizeof(SInsertSupporter));
+      pSup->index = i;
+      pSup->pSql = pSql;
+
+      pSub->param = pSup;
+      tscDebug("%p sub:%p launch sub insert, orderOfSub:%d", pSql, pSub, i);
+      if (pSub->res.code != TSDB_CODE_SUCCESS) {
+        tscHandleInsertRetry(pSql, pSub);
+      }
+    }
+
+    return TSDB_CODE_SUCCESS;
+  }
 
   pSql->subState.numOfSub = (uint16_t)taosArrayGetSize(pCmd->pDataBlocks);
   assert(pSql->subState.numOfSub > 0);

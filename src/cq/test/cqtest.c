@@ -24,7 +24,7 @@
 int64_t  ver = 0;
 void    *pCq = NULL;
 
-int writeToQueue(void *pVnode, void *data, int type, void *pMsg) { 
+int writeToQueue(int32_t vgId, void *data, int type, void *pMsg) { 
   return 0;
 }
 
@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
   tdDestroyTSchemaBuilder(&schemaBuilder);
 
   for (int sid =1; sid<10; ++sid) {
-    cqCreate(pCq, sid, sid, "select avg(speed) from demo.t1 sliding(1s) interval(5s)", pSchema);
+    cqCreate(pCq, sid, sid, NULL, "select avg(speed) from demo.t1 sliding(1s) interval(5s)", pSchema);
   }
 
   tdFreeSchema(pSchema);

@@ -35,6 +35,7 @@ extern int32_t  tsNumOfMnodes;
 extern int32_t  tsEnableVnodeBak;
 extern int32_t  tsEnableTelemetryReporting;
 extern char     tsEmail[];
+extern char     tsArbitrator[];
 
 // common
 extern int      tsRpcTimer;
@@ -45,7 +46,7 @@ extern int32_t  tsShellActivityTimer;
 extern uint32_t tsMaxTmrCtrl;
 extern float    tsNumOfThreadsPerCore;
 extern int32_t  tsNumOfCommitThreads;
-extern float    tsRatioOfQueryThreads;  // todo remove it
+extern float    tsRatioOfQueryCores;
 extern int8_t   tsDaylight;
 extern char     tsTimezone[];
 extern char     tsLocale[];
@@ -56,6 +57,9 @@ extern char     tsTempDir[];
 
 //query buffer management
 extern int32_t  tsQueryBufferSize;      // maximum allowed usage buffer for each data node during query processing
+extern int32_t  tsRetrieveBlockingModel;// retrieve threads will be blocked
+
+extern int32_t  tsKeepOriginalColumnName;
 
 // client
 extern int32_t tsTableMetaKeepTimer;
@@ -97,6 +101,7 @@ extern int32_t tsAlternativeRole;
 extern int32_t tsBalanceInterval;
 extern int32_t tsOfflineThreshold;
 extern int32_t tsMnodeEqualVnodeNum;
+extern int32_t tsFlowCtrl;
 
 // restful
 extern int32_t  tsEnableHttpModule;
@@ -123,6 +128,9 @@ extern int32_t tsEnableMonitorModule;
 extern char    tsMonitorDbName[];
 extern char    tsInternalPass[];
 extern int32_t tsMonitorInterval;
+
+// stream
+extern int32_t tsEnableStream;
 
 // internal
 extern int32_t tsPrintAuth;
@@ -175,7 +183,7 @@ extern int32_t tmrDebugFlag;
 extern int32_t sdbDebugFlag;
 extern int32_t httpDebugFlag;
 extern int32_t mqttDebugFlag;
-extern int32_t monitorDebugFlag;
+extern int32_t monDebugFlag;
 extern int32_t uDebugFlag;
 extern int32_t rpcDebugFlag;
 extern int32_t odbcDebugFlag;

@@ -171,7 +171,9 @@ void tVariantAssign(tVariant *pDst, const tVariant *pSrc) {
     }
   }
 
-  pDst->nLen = tDataTypeDesc[pDst->nType].nSize;
+  if (pDst->nType != TSDB_DATA_TYPE_ARRAY) {
+    pDst->nLen = tDataTypeDesc[pDst->nType].nSize;
+  }
 }
 
 int32_t tVariantCompare(const tVariant* p1, const tVariant* p2) {
@@ -703,7 +705,7 @@ int32_t tVariantDump(tVariant *pVariant, char *payload, int16_t type, bool inclu
           *((int32_t *)payload) = TSDB_DATA_FLOAT_NULL;
           return 0;
         } else {
-          double  value;
+          double  value = -1;
           int32_t ret;
           ret = convertToDouble(pVariant->pz, pVariant->nLen, &value);
           if ((errno == ERANGE && (float)value == -1) || (ret != 0)) {

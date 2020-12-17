@@ -38,16 +38,17 @@ void    mnodeDropMnodeLocal(int32_t dnodeId);
 void *  mnodeGetMnode(int32_t mnodeId);
 int32_t mnodeGetMnodesNum();
 void *  mnodeGetNextMnode(void *pIter, struct SMnodeObj **pMnode);
+void    mnodeCancelGetNextMnode(void *pIter);
 void    mnodeIncMnodeRef(struct SMnodeObj *pMnode);
 void    mnodeDecMnodeRef(struct SMnodeObj *pMnode);
 
 char *  mnodeGetMnodeRoleStr();
-void    mnodeGetMnodeEpSetForPeer(SRpcEpSet *epSet);
-void    mnodeGetMnodeEpSetForShell(SRpcEpSet *epSet);
+void    mnodeGetMnodeEpSetForPeer(SRpcEpSet *epSet, bool redirect);
+void    mnodeGetMnodeEpSetForShell(SRpcEpSet *epSet, bool redirect);
 char*   mnodeGetMnodeMasterEp();
 
 void    mnodeGetMnodeInfos(void *mnodes);
-void    mnodeUpdateMnodeEpSet();
+void    mnodeUpdateMnodeEpSet(SMInfos *pMnodes);
 
 #ifdef __cplusplus
 }

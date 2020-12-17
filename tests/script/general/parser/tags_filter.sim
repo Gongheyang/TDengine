@@ -3,7 +3,7 @@ system sh/stop_dnodes.sh
 system sh/deploy.sh -n dnode1 -i 1
 system sh/cfg.sh -n dnode1 -c walLevel -v 0
 system sh/exec.sh -n dnode1 -s start
-sleep 1000
+sleep 500
 sql connect
 
 $db = tf_db
@@ -146,6 +146,59 @@ endi
 
 sql select sum(v2) from st2 group by farm,period,line;
 if $rows != 2 then
+  return -1
+endi
+
+print ==================>td-2424
+sql create table t1(ts timestamp, k float)
+sql insert into t1 values(now, 8.001)
+sql select * from t1 where k=8.001
+if $rows != 1 then
+  return -1
+endi
+
+sql select * from t1 where k<8.001
+if $rows != 0 then
+  return -1
+endi
+
+sql select * from t1 where k<=8.001
+if $rows != 1 then
+  return -1
+endi
+
+sql select * from t1 where k>8.001
+if $rows != 0 then
+  return -1
+endi
+
+sql select * from t1 where k>=8.001
+if $rows != 1 then
+  return -1
+endi
+
+sql select * from t1 where k<>8.001
+if $rows != 0 then
+  return -1
+endi
+
+sql select * from t1 where k>=8.001 and k<=8.001
+if $rows != 1 then
+  return -1
+endi
+
+sql select * from t1 where k>=8.0009999 and k<=8.001
+if $rows != 1 then
+  return -1
+endi
+
+sql select * from t1 where k>8.001 and k<=8.001
+if $rows != 0 then
+  return -1
+endi
+
+sql select * from t1 where k>=8.001 and k<8.001
+if $rows != 0 then
   return -1
 endi
 

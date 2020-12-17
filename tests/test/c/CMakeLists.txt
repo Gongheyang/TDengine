@@ -45,5 +45,8 @@ IF (TD_LINUX)
 
   #add_executable(invalidTableId invalidTableId.c)
   #target_link_libraries(invalidTableId taos_static tutil common pthread)
+
+  #add_executable(hashIterator hashIterator.c)
+  #target_link_libraries(hashIterator taos_static tutil common pthread)
 ENDIF()
 

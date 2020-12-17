@@ -15,8 +15,9 @@
 
 #include "os.h"
 #include "taosmsg.h"
-#include "tcache.h"
+#include "tref.h"
 #include "trpc.h"
+#include "tnote.h"
 #include "tsystem.h"
 #include "ttimer.h"
 #include "tutil.h"
@@ -31,7 +32,7 @@
 
 // global, not configurable
 SCacheObj*  tscMetaCache;
-SCacheObj*  tscObjCache;
+int     tscObjRef = -1;
 void *  tscTmr;
 void *  tscQhandle;
 void *  tscCheckDiskUsageTmr;
@@ -41,7 +42,6 @@ int     tscRefId = -1;
 int tscNumOfThreads;
 
 static pthread_once_t tscinit = PTHREAD_ONCE_INIT;
-void taosInitNote(int numOfNoteLines, int maxNotes, char* lable);
 //void tscUpdateEpSet(void *ahandle, SRpcEpSet *pEpSet);
 
 void tscCheckDiskUsage(void *UNUSED_PARAM(para), void* UNUSED_PARAM(param)) {
@@ -78,7 +78,6 @@ int32_t tscInitRpc(const char *user, const char *secretEncrypt, void **pDnodeCon
   return 0;
 }
 
-
 void taos_init_imp(void) {
   char temp[128]  = {0};
   
@@ -104,6 +103,7 @@ void taos_init_imp(void) {
 
     taosReadGlobalCfg();
     taosCheckGlobalCfg();
+    taosInitNotes();
 
     rpcInit();
     tscDebug("starting to initialize TAOS client ...");
@@ -111,16 +111,6 @@ void taos_init_imp(void) {
   }
 
   taosSetCoreDump();
-
-  if (tsTscEnableRecordSql != 0) {
-    taosInitNote(tsNumOfLogLines / 10, 1, (char*)"tsc_note");
-  }
-
-  if (tscSetMgmtEpSetFromCfg(tsFirst, tsSecond) < 0) {
-    tscError("failed to init mnode EP list");
-    return;
-  } 
-
   tscInitMsgsFp();
   int queueSize = tsMaxConnections*2;
 
@@ -144,7 +134,7 @@ void taos_init_imp(void) {
   int64_t refreshTime = 10; // 10 seconds by default
   if (tscMetaCache == NULL) {
     tscMetaCache = taosCacheInit(TSDB_DATA_TYPE_BINARY, refreshTime, false, tscFreeTableMetaHelper, "tableMeta");
-    tscObjCache = taosCacheInit(TSDB_CACHE_PTR_KEY, refreshTime / 2, false, tscFreeRegisteredSqlObj, "sqlObj");
+    tscObjRef = taosOpenRef(40960, tscFreeRegisteredSqlObj);
   }
 
   tscRefId = taosOpenRef(200, tscCloseTscObj);
@@ -167,9 +157,9 @@ void taos_cleanup(void) {
     taosCacheCleanup(m);
   }
 
-  m = tscObjCache;
-  if (m != NULL && atomic_val_compare_exchange_ptr(&tscObjCache, m, 0) == m) {
-    taosCacheCleanup(m);
+  int refId = atomic_exchange_32(&tscObjRef, -1);
+  if (refId != -1) {
+    taosCloseRef(refId);
   }
 
   m = tscQhandle;
