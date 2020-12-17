@@ -127,7 +127,10 @@ static FORCE_INLINE STrashElem* doRemoveElemInTrashcan(SCacheObj* pCacheObj, STr
   }
 
   if (pCacheObj->numOfElemsInTrash == 0) {
-    assert(pCacheObj->pTrash == NULL);
+    if (pCacheObj->pTrash != NULL) {  //TODO fix me
+      pCacheObj->pTrash = NULL;
+    }
+//    assert(pCacheObj->pTrash == NULL);
   }
 
   return next;
