@@ -38,8 +38,8 @@ void *  tscQhandle;
 void *  tscCheckDiskUsageTmr;
 int     tscRefId = -1;
 static SHashObj *tscRpcHash = NULL;
-
-int tscNumOfThreads;
+static pthread_mutex_t rpcObjMutex;
+int tscNumOfThreads = 1;
 
 static pthread_once_t tscinit = PTHREAD_ONCE_INIT;
 //void tscUpdateEpSet(void *ahandle, SRpcEpSet *pEpSet);
@@ -73,18 +73,22 @@ void tscReleaseRpc(void *param)  {
     tscDebug("dnodeConn:%p ref: %d", rpcIns->pNodeConn, ref);
     // do nothing     
   } else {
-    tscDebug("dnodeConn:%p is desctory", rpcIns->pNodeConn);
+    tscDebug("dnodeConn:%p is destroy", rpcIns->pNodeConn);
     rpcClose(rpcIns->pNodeConn);                
     rpcIns->pNodeConn = NULL; 
+    pthread_mutex_lock(&rpcObjMutex); 
     taosHashRemove(tscRpcHash, rpcIns->key, strlen(rpcIns->key));
+    pthread_mutex_unlock(&rpcObjMutex);
     tfree(rpcIns); 
   }
 } 
 int32_t tscGetRpcIns(const char *insKey, const char *user, const char *secretEncrypt, void **ppRpcIns, void **pNodeConn) {
+  pthread_mutex_lock(&rpcObjMutex); 
   SRpcIns *pRpcIns = (SRpcIns *)tscAcquireRpc(insKey); 
   if (pRpcIns != NULL) {
     *ppRpcIns = pRpcIns;   
     *pNodeConn = pRpcIns->pNodeConn; 
+    pthread_mutex_unlock(&rpcObjMutex);
     return 0;
   } 
 
@@ -109,6 +113,7 @@ int32_t tscGetRpcIns(const char *insKey, const char *user, const char *secretEnc
   if (pRpcIns->pNodeConn == NULL) {
     tscError("failed to init connection to TDengine");
     tfree(pRpcIns);
+    pthread_mutex_unlock(&rpcObjMutex);
     return -1;
   } else {
     *ppRpcIns = pRpcIns;
@@ -117,16 +122,15 @@ int32_t tscGetRpcIns(const char *insKey, const char *user, const char *secretEnc
 
   // handle concurrent problem, multi threads open rpc concurrently
   if (0 != taosHashPut(tscRpcHash, insKey, strlen(insKey), &pRpcIns, sizeof(SRpcIns *))) {
-    tscReleaseRpc(pRpcIns);    
-    pRpcIns = (SRpcIns *)tscAcquireRpc(insKey);
-    *ppRpcIns = pRpcIns;
-    if (pRpcIns == NULL) {
-        return -1;
-    }
+    rpcClose(pRpcIns->pNodeConn);
+    tfree(pRpcIns);
+    pthread_mutex_unlock(&rpcObjMutex);
+    return -1;
   }
   if (pRpcIns != NULL) {
     *pNodeConn = pRpcIns->pNodeConn; 
   }
+  pthread_mutex_unlock(&rpcObjMutex);
   
   return 0;
 }
@@ -189,6 +193,7 @@ void taos_init_imp(void) {
     tscMetaCache = taosCacheInit(TSDB_DATA_TYPE_BINARY, refreshTime, false, tscFreeTableMetaHelper, "tableMeta");
     tscObjRef = taosOpenRef(40960, tscFreeRegisteredSqlObj);
   }
+  pthread_mutex_init(&rpcObjMutex, NULL); 
 
   tscRefId = taosOpenRef(200, tscCloseTscObj);
   
@@ -231,7 +236,14 @@ void taos_cleanup(void) {
   if (m != NULL && atomic_val_compare_exchange_ptr(&tscTmr, m, 0) == m) {
     taosTmrCleanUp(m);
   }
-  taosHashCleanup(tscRpcHash);
+  m = tscRpcHash;
+  if (m != NULL && atomic_val_compare_exchange_ptr(&tscRpcHash, m, 0) == m) {
+    pthread_mutex_lock(&rpcObjMutex); 
+    taosHashCleanup(tscRpcHash);
+    tscRpcHash = NULL;
+    pthread_mutex_unlock(&rpcObjMutex);
+    pthread_mutex_destroy(&rpcObjMutex);
+  }
   tscRpcHash = NULL;
 }
 
