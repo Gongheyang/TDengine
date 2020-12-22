@@ -83,16 +83,15 @@ typedef struct SResultRec {
   int32_t threshold;  // result size threshold in rows.
 } SResultRec;
 
-typedef struct SWindowResInfo {
-  SResultRow**   pResult;    // result list
-  int16_t        type:8;     // data type for hash key
-  int32_t        size:24;    // number of result set
-  int32_t        threshold;  // threshold to halt query and return the generated results.
-  int32_t        capacity;   // max capacity
-  int32_t        curIndex;   // current start active index
-  int64_t        startTime;  // start time of the first time window for sliding query
-  int64_t        prevSKey;   // previous (not completed) sliding window start key
-} SWindowResInfo;
+typedef struct SResultRowInfo {
+  SResultRow** pResult;    // result list
+  int16_t      type:8;     // data type for hash key
+  int32_t      size:24;    // number of result set
+  int32_t      capacity;   // max capacity
+  int32_t      curIndex;   // current start active index
+  int64_t      startTime;  // start time of the first time window for sliding query
+  int64_t      prevSKey;   // previous (not completed) sliding window start key
+} SResultRowInfo;
 
 typedef struct SColumnFilterElem {
   int16_t           bytes;  // column length
@@ -115,7 +114,7 @@ typedef struct STableQueryInfo {
   STimeWindow win;
   STSCursor   cur;
   void*       pTable;         // for retrieve the page id list
-  SWindowResInfo windowResInfo;
+  SResultRowInfo windowResInfo;
 } STableQueryInfo;
 
 typedef struct SQueryCostInfo {
@@ -140,6 +139,11 @@ typedef struct SQueryCostInfo {
   uint64_t hashSize;
   uint64_t numOfTimeWindows;
 } SQueryCostInfo;
+
+typedef struct {
+  int64_t vgroupLimit;
+  int64_t ts;
+} SOrderedPrjQueryInfo;
 
 typedef struct SQuery {
   int16_t          numOfCols;
@@ -168,6 +172,7 @@ typedef struct SQuery {
   tFilePage**      sdata;
   STableQueryInfo* current;
 
+  SOrderedPrjQueryInfo prjInfo;  // limit value for each vgroup, only available in global order projection query.
   SSingleColumnFilterInfo* pFilterInfo;
 } SQuery;
 
@@ -179,17 +184,18 @@ typedef struct SQueryRuntimeEnv {
   uint16_t*            offset;
   uint16_t             scanFlag;         // denotes reversed scan of data or not
   SFillInfo*           pFillInfo;
-  SWindowResInfo       windowResInfo;
-  STSBuf*              pTSBuf;
+  SResultRowInfo       windowResInfo;
+  STSBuf*              pTsBuf;
   STSCursor            cur;
   SQueryCostInfo       summary;
   void*                pQueryHandle;
   void*                pSecQueryHandle;  // another thread for
   bool                 stableQuery;      // super table query or not
-  bool                 topBotQuery;      // false
+  bool                 topBotQuery;      // TODO used bitwise flag
   bool                 groupbyNormalCol; // denote if this is a groupby normal column query
   bool                 hasTagResults;    // if there are tag values in final result or not
   bool                 timeWindowInterpo;// if the time window start/end required interpolation
+  bool                 queryWindowIdentical; // all query time windows are identical for all tables in one group
   int32_t              interBufSize;     // intermediate buffer sizse
   int32_t              prevGroupId;      // previous executed group id
   SDiskbasedResultBuf* pResultBuf;       // query result buffer based on blocked-wised disk file
@@ -210,14 +216,14 @@ enum {
 typedef struct SQInfo {
   void*            signature;
   int32_t          code;   // error code to returned to client
-  int64_t          owner; // if it is in execution
+  int64_t          owner;  // if it is in execution
   void*            tsdb;
   SMemRef          memRef; 
   int32_t          vgId;
   STableGroupInfo  tableGroupInfo;       // table <tid, last_key> list  SArray<STableKeyInfo>
   STableGroupInfo  tableqinfoGroupInfo;  // this is a group array list, including SArray<STableQueryInfo*> structure
   SQueryRuntimeEnv runtimeEnv;
-  SArray*          arrTableIdInfo;
+  SHashObj*        arrTableIdInfo;
   int32_t          groupIndex;
 
   /*
@@ -232,6 +238,7 @@ typedef struct SQInfo {
   tsem_t           ready;
   int32_t          dataReady;   // denote if query result is ready or not
   void*            rspContext;  // response context
+  int64_t          startExecTs; // start to exec timestamp
 } SQInfo;
 
 #endif  // TDENGINE_QUERYEXECUTOR_H

@@ -19,7 +19,7 @@
 #include "tsched.h"
 #include "tutil.h"
 #include "tgrant.h"
-#include "tbalance.h"
+#include "tbn.h"
 #include "tglobal.h"
 #include "mnode.h"
 #include "dnode.h"
@@ -53,7 +53,7 @@ int32_t mnodeProcessPeerReq(SMnodeMsg *pMsg) {
   if (!sdbIsMaster()) {
     SMnodeRsp *rpcRsp = &pMsg->rpcRsp;
     SRpcEpSet *epSet = rpcMallocCont(sizeof(SRpcEpSet));
-    mnodeGetMnodeEpSetForPeer(epSet);
+    mnodeGetMnodeEpSetForPeer(epSet, true);
     rpcRsp->rsp = epSet;
     rpcRsp->len = sizeof(SRpcEpSet);
 

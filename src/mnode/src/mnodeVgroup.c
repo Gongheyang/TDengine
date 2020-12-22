@@ -20,7 +20,7 @@
 #include "tsocket.h"
 #include "tidpool.h"
 #include "tsync.h"
-#include "tbalance.h"
+#include "tbn.h"
 #include "tglobal.h"
 #include "tdataformat.h"
 #include "dnode.h"
@@ -315,7 +315,8 @@ void mnodeUpdateVgroupStatus(SVgObj *pVgroup, SDnodeObj *pDnode, SVnodeLoad *pVl
   for (int32_t i = 0; i < pVgroup->numOfVnodes; ++i) {
     SVnodeGid *pVgid = &pVgroup->vnodeGid[i];
     if (pVgid->pDnode == pDnode) {
-      mTrace("dnode:%d, receive status from dnode, vgId:%d status is %d:%s", pDnode->dnodeId, pVgroup->vgId, pVgid->role, syncRole[pVgid->role]);
+      mTrace("dnode:%d, receive status from dnode, vgId:%d status:%s last:%s", pDnode->dnodeId, pVgroup->vgId,
+             syncRole[pVload->role], syncRole[pVgid->role]);
       pVgid->role = pVload->role;
       if (pVload->role == TAOS_SYNC_ROLE_MASTER) {
         pVgroup->inUse = i;
@@ -563,7 +564,7 @@ int32_t mnodeCreateVgroup(SMnodeMsg *pMsg) {
   pVgroup->numOfVnodes = pDb->cfg.replications;
   pVgroup->createdTime = taosGetTimestampMs();
   pVgroup->accessState = TSDB_VN_ALL_ACCCESS;
-  int32_t code = balanceAllocVnodes(pVgroup);
+  int32_t code = bnAllocVnodes(pVgroup);
   if (code != TSDB_CODE_SUCCESS) {
     mError("db:%s, no enough dnode to alloc %d vnodes to vgroup, reason:%s", pDb->name, pVgroup->numOfVnodes,
            tstrerror(code));

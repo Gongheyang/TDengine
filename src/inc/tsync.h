@@ -86,7 +86,7 @@ typedef void     (*FNotifyFlowCtrl)(int32_t vgId, int32_t level);
 typedef int32_t  (*FNotifyFileSynced)(int32_t vgId, uint64_t fversion);
 
 // get file version
-typedef int32_t  (*FGetFileVersion)(int32_t vgId, uint64_t *fver);
+typedef int32_t  (*FGetVersion)(int32_t vgId, uint64_t *fver, uint64_t *vver);
 
 typedef struct {
   int32_t  vgId;       // vgroup ID
@@ -100,7 +100,7 @@ typedef struct {
   FNotifyRole       notifyRole;
   FNotifyFlowCtrl   notifyFlowCtrl;
   FNotifyFileSynced notifyFileSynced;
-  FGetFileVersion   getFileVersion;
+  FGetVersion       getVersion;
 } SSyncInfo;
 
 typedef void *tsync_h;
@@ -119,11 +119,6 @@ int32_t syncGetNodesRole(int64_t rid, SNodesRole *);
 extern char *syncRole[];
 
 //global configurable parameters
-extern int32_t  tsMaxSyncNum;
-extern int32_t  tsSyncTcpThreads;
-extern int32_t  tsMaxWatchFiles;
-extern int32_t  tsSyncTimer;
-extern int32_t  tsMaxFwdInfo;
 extern int32_t  sDebugFlag;
 extern char     tsArbitrator[];
 extern uint16_t tsSyncPort;

@@ -19,7 +19,7 @@
 #include "hash.h"
 #include "tutil.h"
 #include "tref.h"
-#include "tbalance.h"
+#include "tbn.h"
 #include "tqueue.h"
 #include "twal.h"
 #include "tsync.h"
@@ -183,18 +183,23 @@ static int32_t sdbInitWal() {
     return -1;
   }
 
-  sdbInfo("vgId:1, open wal for restore");
+  sdbInfo("vgId:1, open sdb wal for restore");
   int32_t code = walRestore(tsSdbMgmt.wal, NULL, sdbProcessWrite);
   if (code != TSDB_CODE_SUCCESS) {
     sdbError("vgId:1, failed to open wal for restore since %s", tstrerror(code));
     return -1;
   }
+
+  sdbInfo("vgId:1, sdb wal load success");
   return 0;
 }
 
 static void sdbRestoreTables() {
   int32_t totalRows = 0;
   int32_t numOfTables = 0;
+
+  sdbInfo("vgId:1, sdb start to check for integrity");
+
   for (int32_t tableId = 0; tableId < SDB_TABLE_MAX; ++tableId) {
     SSdbTable *pTable = sdbGetTableFromId(tableId);
     if (pTable == NULL) continue;
@@ -204,7 +209,7 @@ static void sdbRestoreTables() {
 
     totalRows += pTable->numOfRows;
     numOfTables++;
-    sdbDebug("vgId:1, sdb:%s is restored, rows:%" PRId64, pTable->name, pTable->numOfRows);
+    sdbInfo("vgId:1, sdb:%s is checked, rows:%" PRId64, pTable->name, pTable->numOfRows);
   }
 
   sdbInfo("vgId:1, sdb is restored, mver:%" PRIu64 " rows:%d tables:%d", tsSdbMgmt.version, totalRows, numOfTables);
@@ -224,11 +229,13 @@ void sdbUpdateMnodeRoles() {
       sdbInfo("vgId:1, mnode:%d, role:%s", pMnode->mnodeId, syncRole[pMnode->role]);
       if (pMnode->mnodeId == dnodeGetDnodeId()) tsSdbMgmt.role = pMnode->role;
       mnodeDecMnodeRef(pMnode);
+    } else {
+      sdbDebug("vgId:1, mnode:%d not found", roles.nodeId[i]);
     }
   }
 
   mnodeUpdateClusterId();
-  mnodeUpdateMnodeEpSet();
+  mnodeUpdateMnodeEpSet(NULL);
 }
 
 static uint32_t sdbGetFileInfo(int32_t vgId, char *name, uint32_t *index, uint32_t eindex, int64_t *size, uint64_t *fversion) {
@@ -244,11 +251,21 @@ static void sdbNotifyRole(int32_t vgId, int8_t role) {
   sdbInfo("vgId:1, mnode role changed from %s to %s", syncRole[tsSdbMgmt.role], syncRole[role]);
 
   if (role == TAOS_SYNC_ROLE_MASTER && tsSdbMgmt.role != TAOS_SYNC_ROLE_MASTER) {
-    balanceReset();
+    bnReset();
   }
   tsSdbMgmt.role = role;
 
   sdbUpdateMnodeRoles();
+}
+
+static int32_t sdbNotifyFileSynced(int32_t vgId, uint64_t fversion) { return 0; }
+
+static void sdbNotifyFlowCtrl(int32_t vgId, int32_t level) {}
+
+static int32_t sdbGetSyncVersion(int32_t vgId, uint64_t *fver, uint64_t *vver) {
+  *fver = 0;
+  *vver = 0;
+  return 0;
 }
 
 // failed to forward, need revert insert
@@ -298,18 +315,20 @@ void sdbUpdateAsync() {
 }
 
 void sdbUpdateSync(void *pMnodes) {
-  SMnodeInfos *mnodes = pMnodes;
+  SMInfos *pMinfos = pMnodes;
   if (!mnodeIsRunning()) {
     mDebug("vgId:1, mnode not start yet, update sync config later");
     return;
   }
 
-  mDebug("vgId:1, update sync config in sync module, mnodes:%p", pMnodes);
+  mDebug("vgId:1, update sync config, pMnodes:%p", pMnodes);
 
   SSyncCfg syncCfg = {0};
   int32_t  index = 0;
 
-  if (mnodes == NULL) {
+  if (pMinfos == NULL) {
+    mDebug("vgId:1, mInfos not input, use mInfos in sdb, numOfMnodes:%d", syncCfg.replica);
+
     void *pIter = NULL;
     while (1) {
       SMnodeObj *pMnode = NULL;
@@ -329,16 +348,17 @@ void sdbUpdateSync(void *pMnodes) {
       mnodeDecMnodeRef(pMnode);
     }
     syncCfg.replica = index;
-    mDebug("vgId:1, mnodes info not input, use infos in sdb, numOfMnodes:%d", syncCfg.replica);
   } else {
-    for (index = 0; index < mnodes->mnodeNum; ++index) {
-      SMnodeInfo *node = &mnodes->mnodeInfos[index];
+    mDebug("vgId:1, mInfos input, numOfMnodes:%d", pMinfos->mnodeNum);
+
+    for (index = 0; index < pMinfos->mnodeNum; ++index) {
+      SMInfo *node = &pMinfos->mnodeInfos[index];
       syncCfg.nodeInfo[index].nodeId = node->mnodeId;
       taosGetFqdnPortFromEp(node->mnodeEp, syncCfg.nodeInfo[index].nodeFqdn, &syncCfg.nodeInfo[index].nodePort);
       syncCfg.nodeInfo[index].nodePort += TSDB_PORT_SYNC;
     }
     syncCfg.replica = index;
-    mDebug("vgId:1, mnodes info input, numOfMnodes:%d", syncCfg.replica);
+    mnodeUpdateMnodeEpSet(pMnodes);
   }
 
   syncCfg.quorum = (syncCfg.replica == 1) ? 1 : 2;
@@ -372,11 +392,14 @@ void sdbUpdateSync(void *pMnodes) {
   syncInfo.version = sdbGetVersion();
   syncInfo.syncCfg = syncCfg;
   sprintf(syncInfo.path, "%s", tsMnodeDir);
-  syncInfo.getWalInfo = sdbGetWalInfo;
   syncInfo.getFileInfo = sdbGetFileInfo;
+  syncInfo.getWalInfo = sdbGetWalInfo;
   syncInfo.writeToCache = sdbWriteFwdToQueue;
   syncInfo.confirmForward = sdbConfirmForward;
   syncInfo.notifyRole = sdbNotifyRole;
+  syncInfo.notifyFileSynced = sdbNotifyFileSynced;
+  syncInfo.notifyFlowCtrl = sdbNotifyFlowCtrl;
+  syncInfo.getVersion = sdbGetSyncVersion;
   tsSdbMgmt.cfg = syncCfg;
 
   if (tsSdbMgmt.sync) {
@@ -609,6 +632,12 @@ static int32_t sdbProcessWrite(void *wparam, void *hparam, int32_t qtype, void *
 
   SSdbTable *pTable = sdbGetTableFromId(tableId);
   assert(pTable != NULL);
+
+  if (!mnodeIsRunning() && tsSdbMgmt.version % 100000 == 0) {
+    char stepDesc[TSDB_STEP_DESC_LEN] = {0};
+    snprintf(stepDesc, TSDB_STEP_DESC_LEN, "%" PRIu64 " rows have been restored", tsSdbMgmt.version);
+    dnodeReportStep("mnode-sdb", stepDesc, 0);
+  }
 
   if (qtype == TAOS_QTYPE_QUERY) return sdbPerformDeleteAction(pHead, pTable);
 
@@ -1089,4 +1118,8 @@ static void *sdbWorkerFp(void *pWorker) {
   }
 
   return NULL;
+}
+
+int32_t sdbGetReplicaNum() {
+  return tsSdbMgmt.cfg.replica;
 }

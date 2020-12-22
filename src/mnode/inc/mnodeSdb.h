@@ -59,7 +59,7 @@ typedef struct SSdbRow {
   SMnodeMsg *pMsg;
   int32_t  (*fpReq)(SMnodeMsg *pMsg);
   int32_t  (*fpRsp)(SMnodeMsg *pMsg, int32_t code);
-  char       reserveForSync[16];
+  char       reserveForSync[24];
   SWalHead   pHead[];
 } SSdbRow;
 
@@ -89,6 +89,7 @@ void*   sdbGetTableByRid(int64_t rid);
 bool    sdbIsMaster();
 bool    sdbIsServing();
 void    sdbUpdateMnodeRoles();
+int32_t sdbGetReplicaNum();
 
 int32_t sdbInsertRow(SSdbRow *pRow);
 int32_t sdbDeleteRow(SSdbRow *pRow);

@@ -57,6 +57,7 @@ typedef struct SCqObj {
   uint64_t       uid;
   int32_t        tid;      // table ID
   int32_t        rowSize;  // bytes of a row
+  char *         dstTable;
   char *         sqlStr;   // SQL string
   STSchema *     pSchema;  // pointer to schema array
   void *         pStream;
@@ -69,6 +70,9 @@ static void cqProcessStreamRes(void *param, TAOS_RES *tres, TAOS_ROW row);
 static void cqCreateStream(SCqContext *pContext, SCqObj *pObj);
 
 void *cqOpen(void *ahandle, const SCqCfg *pCfg) {
+  if (tsEnableStream == 0) {
+    return NULL;
+  }
   SCqContext *pContext = calloc(sizeof(SCqContext), 1);
   if (pContext == NULL) {
     terrno = TAOS_SYSTEM_ERROR(errno);
@@ -93,12 +97,15 @@ void *cqOpen(void *ahandle, const SCqCfg *pCfg) {
 
   pthread_mutex_init(&pContext->mutex, NULL);
 
-  cInfo("vgId:%d, CQ is opened", pContext->vgId);
+  cDebug("vgId:%d, CQ is opened", pContext->vgId);
 
   return pContext;
 }
 
 void cqClose(void *handle) {
+  if (tsEnableStream == 0) {
+    return;
+  }
   SCqContext *pContext = handle;
   if (handle == NULL) return;
 
@@ -124,15 +131,18 @@ void cqClose(void *handle) {
   taosTmrCleanUp(pContext->tmrCtrl);
   pContext->tmrCtrl = NULL;
 
-  cInfo("vgId:%d, CQ is closed", pContext->vgId);
+  cDebug("vgId:%d, CQ is closed", pContext->vgId);
   free(pContext);
 }
 
 void cqStart(void *handle) {
+  if (tsEnableStream == 0) {
+    return;
+  }
   SCqContext *pContext = handle;
   if (pContext->dbConn || pContext->master) return;
 
-  cInfo("vgId:%d, start all CQs", pContext->vgId);
+  cDebug("vgId:%d, start all CQs", pContext->vgId);
   pthread_mutex_lock(&pContext->mutex);
 
   pContext->master = 1;
@@ -147,8 +157,11 @@ void cqStart(void *handle) {
 }
 
 void cqStop(void *handle) {
+  if (tsEnableStream == 0) {
+    return;
+  }
   SCqContext *pContext = handle;
-  cInfo("vgId:%d, stop all CQs", pContext->vgId);
+  cDebug("vgId:%d, stop all CQs", pContext->vgId);
   if (pContext->dbConn == NULL || pContext->master == 0) return;
 
   pthread_mutex_lock(&pContext->mutex);
@@ -173,16 +186,21 @@ void cqStop(void *handle) {
   pthread_mutex_unlock(&pContext->mutex);
 }
 
-void *cqCreate(void *handle, uint64_t uid, int32_t tid, char *sqlStr, STSchema *pSchema) {
+void *cqCreate(void *handle, uint64_t uid, int32_t sid, const char* dstTable, char *sqlStr, STSchema *pSchema) {
+  if (tsEnableStream == 0) {
+    return NULL;
+  }
   SCqContext *pContext = handle;
 
   SCqObj *pObj = calloc(sizeof(SCqObj), 1);
   if (pObj == NULL) return NULL;
 
   pObj->uid = uid;
-  pObj->tid = tid;
-  pObj->sqlStr = malloc(strlen(sqlStr)+1);
-  strcpy(pObj->sqlStr, sqlStr);
+  pObj->tid = sid;
+  if (dstTable != NULL) {
+    pObj->dstTable = strdup(dstTable);
+  }
+  pObj->sqlStr = strdup(sqlStr);
 
   pObj->pSchema = tdDupSchema(pSchema);
   pObj->rowSize = schemaTLen(pSchema);
@@ -203,6 +221,9 @@ void *cqCreate(void *handle, uint64_t uid, int32_t tid, char *sqlStr, STSchema *
 }
 
 void cqDrop(void *handle) {
+  if (tsEnableStream == 0) {
+    return;
+  }
   SCqObj *pObj = handle;
   SCqContext *pContext = pObj->pContext;
 
@@ -229,6 +250,7 @@ void cqDrop(void *handle) {
 
   cInfo("vgId:%d, id:%d CQ:%s is dropped", pContext->vgId, pObj->tid, pObj->sqlStr); 
   tdFreeSchema(pObj->pSchema);
+  free(pObj->dstTable);
   free(pObj->sqlStr);
   free(pObj);
 
@@ -274,8 +296,9 @@ static void cqCreateStream(SCqContext *pContext, SCqObj *pObj) {
   if (pObj->pStream == NULL) {
     pObj->pStream = taos_open_stream(pContext->dbConn, pObj->sqlStr, cqProcessStreamRes, 0, pObj, NULL);
     if (pObj->pStream) {
+      tscSetStreamDestTable(pObj->pStream, pObj->dstTable);
       pContext->num++;
-      cInfo("vgId:%d, id:%d CQ:%s is openned", pContext->vgId, pObj->tid, pObj->sqlStr);
+      cDebug("vgId:%d, id:%d CQ:%s is opened", pContext->vgId, pObj->tid, pObj->sqlStr);
     } else {
       cError("vgId:%d, id:%d CQ:%s, failed to open", pContext->vgId, pObj->tid, pObj->sqlStr);
     }

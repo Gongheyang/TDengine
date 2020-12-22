@@ -185,7 +185,6 @@ SFileGroup *tsdbCreateFGroup(STsdbRepo *pRepo, int fid, int level) {
   ASSERT(pfg != NULL);
   return pfg;
 }
-
 void tsdbRemoveFileGroup(STsdbRepo *pRepo, SFileGroup *pFGroup) {
   ASSERT(pFGroup != NULL);
   STsdbFileH *pFileH = pRepo->tsdbFileH;
@@ -195,9 +194,6 @@ void tsdbRemoveFileGroup(STsdbRepo *pRepo, SFileGroup *pFGroup) {
   int nFilesLeft = pFileH->nFGroups - (int)(POINTER_DISTANCE(pFGroup, pFileH->pFGroup) / sizeof(SFileGroup) + 1);
   if (nFilesLeft > 0) {
     memmove((void *)pFGroup, POINTER_SHIFT(pFGroup, sizeof(SFileGroup)), sizeof(SFileGroup) * nFilesLeft);
-  }
-
-  pFileH->nFGroups--;
   ASSERT(pFileH->nFGroups >= 0);
 
   for (int type = 0; type < TSDB_FILE_TYPE_MAX; type++) {

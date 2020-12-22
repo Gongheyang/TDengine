@@ -17,7 +17,7 @@
 #include "os.h"
 #include "taosdef.h"
 #include "tsched.h"
-#include "tbalance.h"
+#include "tbn.h"
 #include "tgrant.h"
 #include "ttimer.h"
 #include "tglobal.h"
@@ -50,7 +50,7 @@ int32_t mnodeProcessRead(SMnodeMsg *pMsg) {
   if (!sdbIsMaster()) {
     SMnodeRsp *rpcRsp = &pMsg->rpcRsp;
     SRpcEpSet *epSet = rpcMallocCont(sizeof(SRpcEpSet));
-    mnodeGetMnodeEpSetForShell(epSet);
+    mnodeGetMnodeEpSetForShell(epSet, true);
     rpcRsp->rsp = epSet;
     rpcRsp->len = sizeof(SRpcEpSet);
 
