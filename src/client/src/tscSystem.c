@@ -41,7 +41,7 @@ int     tscNumOfObj = 0;       // number of sqlObj in current process.
 
 static pthread_once_t tscinit = PTHREAD_ONCE_INIT;
 
-void tscCheckDiskUsage(void *UNUSED_PARAM(para), void *UNUSED_PARAM(param)) {
+void tscCheckDiskUsage(void *UNUSED_PARAM(para), void* UNUSED_PARAM(param)) {
   taosGetDisk();
   taosTmrReset(tscCheckDiskUsage, 1000, NULL, tscTmr, &tscCheckDiskUsageTmr);
 }
@@ -124,11 +124,11 @@ void taos_init_imp(void) {
   }
 
   tscTmr = taosTmrInit(tsMaxConnections * 2, 200, 60000, "TSC");
-  if (0 == tscEmbedded) {
-    taosTmrReset(tscCheckDiskUsage, 10, NULL, tscTmr, &tscCheckDiskUsageTmr);
+  if(0 == tscEmbedded){
+    taosTmrReset(tscCheckDiskUsage, 10, NULL, tscTmr, &tscCheckDiskUsageTmr);      
   }
 
-  int64_t refreshTime = 10;  // 10 seconds by default
+  int64_t refreshTime = 10; // 10 seconds by default
   if (tscMetaCache == NULL) {
     tscMetaCache = taosCacheInit(TSDB_DATA_TYPE_BINARY, refreshTime, false, tscFreeTableMetaHelper, "tableMeta");
     tscObjRef  = taosOpenRef(40960, tscFreeRegisteredSqlObj);
