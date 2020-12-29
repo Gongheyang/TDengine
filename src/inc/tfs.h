@@ -56,15 +56,17 @@ typedef struct {
 #define TFILE_ID(pf) ((pf)->id)
 #define TFILE_NAME(pf) ((pf)->aname)
 
-void tfsInitFile(TFILE *pf, int level, int id, const char *bname);
-void tfsSetLevel(TFILE *pf, int level);
-void tfsSetID(TFILE *pf, int id);
-int  tfsopen(TFILE *pf, int flags);
-int  tfsclose(int fd);
-int  tfsremove(TFILE *pf);
-int  tfscopy(TFILE *sf, TFILE *df);
-void tfsbasename(const TFILE *pf, char *dest);
-void tfsdirname(const TFILE *pf, char *dest);
+void  tfsInitFile(TFILE *pf, int level, int id, const char *bname);
+void  tfsSetLevel(TFILE *pf, int level);
+void  tfsSetID(TFILE *pf, int id);
+int   tfsopen(TFILE *pf, int flags);
+int   tfsclose(int fd);
+int   tfsremove(TFILE *pf);
+int   tfscopy(TFILE *sf, TFILE *df);
+void  tfsbasename(const TFILE *pf, char *dest);
+void  tfsdirname(const TFILE *pf, char *dest);
+int   tfsEncodeFile(void **buf, TFILE *pf);
+void *tfsDecodeFile(void *buf, TFILE *pf);
 
 // DIR APIs ====================================
 int tfsMkdir(const char *rname);

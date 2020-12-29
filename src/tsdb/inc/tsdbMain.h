@@ -32,19 +32,8 @@
 extern "C" {
 #endif
 
-extern int32_t tsdbDebugFlag;
+#include "tsdbLog.h"
 
-#define tsdbFatal(...) do { if (tsdbDebugFlag & DEBUG_FATAL) { taosPrintLog("TDB FATAL ", 255, __VA_ARGS__); }}     while(0)
-#define tsdbError(...) do { if (tsdbDebugFlag & DEBUG_ERROR) { taosPrintLog("TDB ERROR ", 255, __VA_ARGS__); }}     while(0)
-#define tsdbWarn(...)  do { if (tsdbDebugFlag & DEBUG_WARN)  { taosPrintLog("TDB WARN ", 255, __VA_ARGS__); }}      while(0)
-#define tsdbInfo(...)  do { if (tsdbDebugFlag & DEBUG_INFO)  { taosPrintLog("TDB ", 255, __VA_ARGS__); }}           while(0)
-#define tsdbDebug(...) do { if (tsdbDebugFlag & DEBUG_DEBUG) { taosPrintLog("TDB ", tsdbDebugFlag, __VA_ARGS__); }} while(0)
-#define tsdbTrace(...) do { if (tsdbDebugFlag & DEBUG_TRACE) { taosPrintLog("TDB ", tsdbDebugFlag, __VA_ARGS__); }} while(0)
-
-#define TSDB_MAX_TABLE_SCHEMAS 16
-#define TSDB_FILE_HEAD_SIZE    512
-#define TSDB_FILE_DELIMITER    0xF00AFA0F
-#define TSDB_FILE_INIT_MAGIC   0xFFFFFFFF
 
 #define TAOS_IN_RANGE(key, keyMin, keyLast) (((key) >= (keyMin)) && ((key) <= (keyMax)))
 
@@ -54,104 +43,9 @@ extern int32_t tsdbDebugFlag;
 
 // Definitions
 // ------------------ tsdbMeta.c
-typedef struct STable {
-  STableId       tableId;
-  ETableType     type;
-  tstr*          name;  // NOTE: there a flexible string here
-  uint64_t       suid;
-  struct STable* pSuper;  // super table pointer
-  uint8_t        numOfSchemas;
-  STSchema*      schema[TSDB_MAX_TABLE_SCHEMAS];
-  STSchema*      tagSchema;
-  SKVRow         tagVal;
-  SSkipList*     pIndex;         // For TSDB_SUPER_TABLE, it is the skiplist index
-  void*          eventHandler;   // TODO
-  void*          streamHandler;  // TODO
-  TSKEY          lastKey;
-  SDataRow       lastRow;
-  char*          sql;
-  void*          cqhandle;
-  SRWLatch       latch;  // TODO: implementa latch functions
-  T_REF_DECLARE()
-} STable;
-
-typedef struct {
-  pthread_rwlock_t rwLock;
-
-  int32_t   nTables;
-  int32_t   maxTables;
-  STable**  tables;
-  SList*    superList;
-  SHashObj* uidMap;
-  SKVStore* pStore;
-  int       maxRowBytes;
-  int       maxCols;
-} STsdbMeta;
-
+#include "tsdbMeta.h"
 // ------------------ tsdbBuffer.c
-typedef struct {
-  int64_t blockId;
-  int     offset;
-  int     remain;
-  char    data[];
-} STsdbBufBlock;
-
-typedef struct {
-  pthread_cond_t poolNotEmpty;
-  int            bufBlockSize;
-  int            tBufBlocks;
-  int            nBufBlocks;
-  int64_t        index;
-  SList*         bufBlockList;
-} STsdbBufPool;
-
-// ------------------ tsdbMemTable.c
-typedef struct {
-  STable *           pTable;
-  SSkipListIterator *pIter;
-} SCommitIter;
-
-typedef struct {
-  uint64_t   uid;
-  TSKEY      keyFirst;
-  TSKEY      keyLast;
-  int64_t    numOfRows;
-  SSkipList* pData;
-} STableData;
-
-typedef struct {
-  T_REF_DECLARE()
-  SRWLatch     latch;
-  TSKEY        keyFirst;
-  TSKEY        keyLast;
-  int64_t      numOfRows;
-  int32_t      maxTables;
-  STableData** tData;
-  SList*       actList;
-  SList*       extraBuffList;
-  SList*       bufBlockList;
-} SMemTable;
-
-enum { TSDB_UPDATE_META, TSDB_DROP_META };
-
-#ifdef WINDOWS
-#pragma pack(push ,1) 
-typedef struct {
-#else
-typedef struct __attribute__((packed)){
-#endif
-  char     act;
-  uint64_t uid;
-} SActObj;
-#ifdef WINDOWS
-#pragma pack(pop) 
-#endif
-
-typedef struct {
-  int  len;
-  char cont[];
-} SActCont;
-
+#include "tsdbBuffer.h"
 // ------------------ tsdbFile.c
 extern const char* tsdbFileSuffix[];
 
@@ -242,64 +136,19 @@ typedef struct {
   STsdbBufPool*   pPool;
   SMemTable*      mem;
   SMemTable*      imem;
-  STsdbFileH*     tsdbFileH;
+  STsdbFS*        tsdbFS;
   sem_t           readyToCommit;
   pthread_mutex_t mutex;
   bool            repoLocked;
   int32_t         code; // Commit code
 } STsdbRepo;
 
+#define TSDB_CFG(r) (&((r)->config))
+
+// ------------------ tsdbFS.c
+#include "tsdbFS.h"
 // ------------------ tsdbRWHelper.c
-typedef struct {
-  int32_t  tid;
-  uint32_t len;
-  uint32_t offset;
-  uint32_t hasLast : 2;
-  uint32_t numOfBlocks : 30;
-  uint64_t uid;
-  TSKEY    maxKey;
-} SBlockIdx;
-
-typedef struct {
-  int64_t last : 1;
-  int64_t offset : 63;
-  int32_t algorithm : 8;
-  int32_t numOfRows : 24;
-  int32_t len;
-  int32_t keyLen;     // key column length, keyOffset = offset+sizeof(SBlockData)+sizeof(SBlockCol)*numOfCols
-  int16_t numOfSubBlocks;
-  int16_t numOfCols; // not including timestamp column
-  TSKEY   keyFirst;
-  TSKEY   keyLast;
-} SBlock;
-
-typedef struct {
-  int32_t    delimiter;  // For recovery usage
-  int32_t    tid;
-  uint64_t   uid;
-  SBlock blocks[];
-} SBlockInfo;
-
-typedef struct {
-  int16_t colId;
-  int32_t len;
-  int32_t type : 8;
-  int32_t offset : 24;
-  int64_t sum;
-  int64_t max;
-  int64_t min;
-  int16_t maxIndex;
-  int16_t minIndex;
-  int16_t numOfNull;
-  char    padding[2];
-} SBlockCol;
-
-typedef struct {
-  int32_t  delimiter;  // For recovery usage
-  int32_t  numOfCols;  // For recovery usage
-  uint64_t uid;        // For recovery usage
-  SBlockCol cols[];
-} SBlockData;
+#include "tsdbReadImpl.h"
 
 typedef enum { TSDB_WRITE_HELPER, TSDB_READ_HELPER } tsdb_rw_helper_t;
 
@@ -364,149 +213,11 @@ typedef struct {
 
 // Operations
 // ------------------ tsdbMeta.c
-#define TSDB_INIT_NTABLES 1024
-#define TABLE_TYPE(t) (t)->type
-#define TABLE_NAME(t) (t)->name
-#define TABLE_CHAR_NAME(t) TABLE_NAME(t)->data
-#define TABLE_UID(t) (t)->tableId.uid
-#define TABLE_TID(t) (t)->tableId.tid
-#define TABLE_SUID(t) (t)->suid
-#define TSDB_META_FILE_MAGIC(m) KVSTORE_MAGIC((m)->pStore)
-#define TSDB_RLOCK_TABLE(t) taosRLockLatch(&((t)->latch))
-#define TSDB_RUNLOCK_TABLE(t) taosRUnLockLatch(&((t)->latch))
-#define TSDB_WLOCK_TABLE(t) taosWLockLatch(&((t)->latch))
-#define TSDB_WUNLOCK_TABLE(t) taosWUnLockLatch(&((t)->latch))
-
-STsdbMeta* tsdbNewMeta(STsdbCfg* pCfg);
-void       tsdbFreeMeta(STsdbMeta* pMeta);
-int        tsdbOpenMeta(STsdbRepo* pRepo);
-int        tsdbCloseMeta(STsdbRepo* pRepo);
-STable*    tsdbGetTableByUid(STsdbMeta* pMeta, uint64_t uid);
-STSchema*  tsdbGetTableSchemaByVersion(STable* pTable, int16_t version);
-int        tsdbWLockRepoMeta(STsdbRepo* pRepo);
-int        tsdbRLockRepoMeta(STsdbRepo* pRepo);
-int        tsdbUnlockRepoMeta(STsdbRepo* pRepo);
-void       tsdbRefTable(STable* pTable);
-void       tsdbUnRefTable(STable* pTable);
-void       tsdbUpdateTableSchema(STsdbRepo* pRepo, STable* pTable, STSchema* pSchema, bool insertAct);
-
-static FORCE_INLINE int tsdbCompareSchemaVersion(const void *key1, const void *key2) {
-  if (*(int16_t *)key1 < schemaVersion(*(STSchema **)key2)) {
-    return -1;
-  } else if (*(int16_t *)key1 > schemaVersion(*(STSchema **)key2)) {
-    return 1;
-  } else {
-    return 0;
-  }
-}
-
-static FORCE_INLINE STSchema* tsdbGetTableSchemaImpl(STable* pTable, bool lock, bool copy, int16_t version) {
-  STable*   pDTable = (TABLE_TYPE(pTable) == TSDB_CHILD_TABLE) ? pTable->pSuper : pTable;
-  STSchema* pSchema = NULL;
-  STSchema* pTSchema = NULL;
-
-  if (lock) TSDB_RLOCK_TABLE(pDTable);
-  if (version < 0) {  // get the latest version of schema
-    pTSchema = pDTable->schema[pDTable->numOfSchemas - 1];
-  } else {  // get the schema with version
-    void* ptr = taosbsearch(&version, pDTable->schema, pDTable->numOfSchemas, sizeof(STSchema*),
-                            tsdbCompareSchemaVersion, TD_EQ);
-    if (ptr == NULL) {
-      terrno = TSDB_CODE_TDB_IVD_TB_SCHEMA_VERSION;
-      goto _exit;
-    }
-    pTSchema = *(STSchema**)ptr;
-  }
-
-  ASSERT(pTSchema != NULL);
-
-  if (copy) {
-    if ((pSchema = tdDupSchema(pTSchema)) == NULL) terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
-  } else {
-    pSchema = pTSchema;
-  }
-
-_exit:
-  if (lock) TSDB_RUNLOCK_TABLE(pDTable);
-  return pSchema;
-}
-
-static FORCE_INLINE STSchema* tsdbGetTableSchema(STable* pTable) {
-  return tsdbGetTableSchemaImpl(pTable, false, false, -1);
-}
-
-static FORCE_INLINE STSchema *tsdbGetTableTagSchema(STable *pTable) {
-  if (pTable->type == TSDB_CHILD_TABLE) {  // check child table first
-    STable *pSuper = pTable->pSuper;
-    if (pSuper == NULL) return NULL;
-    return pSuper->tagSchema;
-  } else if (pTable->type == TSDB_SUPER_TABLE) {
-    return pTable->tagSchema;
-  } else {
-    return NULL;
-  }
-}
-
-static FORCE_INLINE TSKEY tsdbGetTableLastKeyImpl(STable* pTable) {
-  ASSERT(pTable->lastRow == NULL || pTable->lastKey == dataRowKey(pTable->lastRow));
-  return pTable->lastKey;
-}
-
+#include "tsdbMeta.h"
 // ------------------ tsdbBuffer.c
-#define TSDB_BUFFER_RESERVE 1024  // Reseve 1K as commit threshold
-
-STsdbBufPool* tsdbNewBufPool();
-void          tsdbFreeBufPool(STsdbBufPool* pBufPool);
-int           tsdbOpenBufPool(STsdbRepo* pRepo);
-void          tsdbCloseBufPool(STsdbRepo* pRepo);
-SListNode*    tsdbAllocBufBlockFromPool(STsdbRepo* pRepo);
-
+#include "tsdbBuffer.h"
 // ------------------ tsdbMemTable.c
-int   tsdbRefMemTable(STsdbRepo* pRepo, SMemTable* pMemTable);
-int   tsdbUnRefMemTable(STsdbRepo* pRepo, SMemTable* pMemTable);
-int   tsdbTakeMemSnapshot(STsdbRepo* pRepo, SMemTable** pMem, SMemTable** pIMem);
-void  tsdbUnTakeMemSnapShot(STsdbRepo* pRepo, SMemTable* pMem, SMemTable* pIMem);
-void* tsdbAllocBytes(STsdbRepo* pRepo, int bytes);
-int   tsdbAsyncCommit(STsdbRepo* pRepo);
-int   tsdbLoadDataFromCache(STable* pTable, SSkipListIterator* pIter, TSKEY maxKey, int maxRowsToRead, SDataCols* pCols,
-                            TKEY* filterKeys, int nFilterKeys, bool keepDup, SMergeInfo* pMergeInfo);
-void* tsdbCommitData(STsdbRepo* pRepo);
-
-static FORCE_INLINE SDataRow tsdbNextIterRow(SSkipListIterator* pIter) {
-  if (pIter == NULL) return NULL;
-
-  SSkipListNode* node = tSkipListIterGet(pIter);
-  if (node == NULL) return NULL;
-
-  return (SDataRow)SL_GET_NODE_DATA(node);
-}
-
-static FORCE_INLINE TSKEY tsdbNextIterKey(SSkipListIterator* pIter) {
-  SDataRow row = tsdbNextIterRow(pIter);
-  if (row == NULL) return TSDB_DATA_TIMESTAMP_NULL;
-
-  return dataRowKey(row);
-}
-
-static FORCE_INLINE TKEY tsdbNextIterTKey(SSkipListIterator* pIter) {
-  SDataRow row = tsdbNextIterRow(pIter);
-  if (row == NULL) return TKEY_NULL;
-
-  return dataRowTKey(row);
-}
-
-static FORCE_INLINE STsdbBufBlock* tsdbGetCurrBufBlock(STsdbRepo* pRepo) {
-  ASSERT(pRepo != NULL);
-  if (pRepo->mem == NULL) return NULL;
-
-  SListNode* pNode = listTail(pRepo->mem->bufBlockList);
-  if (pNode == NULL) return NULL;
-
-  STsdbBufBlock* pBufBlock = NULL;
-  tdListNodeGetData(pRepo->mem->bufBlockList, pNode, (void*)(&pBufBlock));
-
-  return pBufBlock;
-}
+#include "tsdbMemTable.h"
 
 // ------------------ tsdbFile.c
 #define TSDB_KEY_FILEID(key, daysPerFile, precision) ((key) / tsMsPerDay[(precision)] / (daysPerFile))
@@ -623,7 +334,11 @@ int              tsdbCloseScanFile(STsdbScanHandle* pScanHandle);
 void             tsdbFreeScanHandle(STsdbScanHandle* pScanHandle);
 
 // ------------------ tsdbCommitQueue.c
-int tsdbScheduleCommit(STsdbRepo *pRepo);
+#include "tsdbCommitQueue.h"
+
+#include "tsdbFS.h"
+
+#include "tsdbCommit.h"
 
 #ifdef __cplusplus
 }

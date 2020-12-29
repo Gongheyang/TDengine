@@ -179,32 +179,6 @@ int tdKVStoreStartCommit(SKVStore *pStore) {
     goto _err;
   }
 
-  pStore->sfd = open(pStore->fsnap, O_WRONLY | O_CREAT, 0755);
-  if (pStore->sfd < 0) {
-    uError("failed to open file %s since %s", pStore->fsnap, strerror(errno));
-    terrno = TAOS_SYSTEM_ERROR(errno);
-    goto _err;
-  }
-
-  if (taosSendFile(pStore->sfd, pStore->fd, NULL, TD_KVSTORE_HEADER_SIZE) < TD_KVSTORE_HEADER_SIZE) {
-    uError("failed to send file %d bytes since %s", TD_KVSTORE_HEADER_SIZE, strerror(errno));
-    terrno = TAOS_SYSTEM_ERROR(errno);
-    goto _err;
-  }
-
-  if (fsync(pStore->sfd) < 0) {
-    uError("failed to fsync file %s since %s", pStore->fsnap, strerror(errno));
-    terrno = TAOS_SYSTEM_ERROR(errno);
-    goto _err;
-  }
-
-  if (close(pStore->sfd) < 0) {
-    uError("failed to close file %s since %s", pStore->fsnap, strerror(errno));
-    terrno = TAOS_SYSTEM_ERROR(errno);
-    goto _err;
-  }
-  pStore->sfd = -1;
-
   if (lseek(pStore->fd, 0, SEEK_END) < 0) {
     uError("failed to lseek file %s since %s", pStore->fname, strerror(errno));
     terrno = TAOS_SYSTEM_ERROR(errno);
@@ -216,11 +190,6 @@ int tdKVStoreStartCommit(SKVStore *pStore) {
   return 0;
 
 _err:
-  if (pStore->sfd > 0) {
-    close(pStore->sfd);
-    pStore->sfd = -1;
-    (void)remove(pStore->fsnap);
-  }
   if (pStore->fd > 0) {
     close(pStore->fd);
     pStore->fd = -1;
@@ -328,7 +297,6 @@ int tdKVStoreEndCommit(SKVStore *pStore) {
   }
   pStore->fd = -1;
 
-  (void)remove(pStore->fsnap);
   return 0;
 }
 

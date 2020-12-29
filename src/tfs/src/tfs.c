@@ -20,6 +20,7 @@
 #include "taoserror.h"
 #include "tfs.h"
 #include "tfsint.h"
+#include "tcoding.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-truncation"
@@ -277,6 +278,25 @@ void tfsdirname(const TFILE *pf, char *dest) {
 
   strncpy(tname, pf->aname, TSDB_FILENAME_LEN);
   strncpy(dest, dirname(tname), TSDB_FILENAME_LEN);
+}
+
+int tfsEncodeFile(void **buf, TFILE *pf) {
+  int tlen = 0;
+
+  tlen += taosEncodeVariantI32(buf, pf->level);
+  tlen += taosEncodeVariantI32(buf, pf->id);
+  tlen += taosEncodeString(buf, pf->rname);
+
+  return tlen;
+}
+
+void *tfsDecodeFile(void *buf, TFILE *pf) {
+  buf = taosDecodeVariantI32(buf, &(pf->level));
+  buf = taosDecodeVariantI32(buf, &(pf->id));
+  buf = taosDecodeString(buf, &(pf->rname));
+  tfsSetFileAname(pf);
+
+  return buf;
 }
 
 // DIR APIs ====================================
