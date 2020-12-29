@@ -38,6 +38,11 @@ TSKEY tscGetSubscriptionProgress(void* sub, int64_t uid, TSKEY dflt);
 void tscUpdateSubscriptionProgress(void* sub, int64_t uid, TSKEY ts);
 void tscSaveSubscriptionProgress(void* sub);
 
+static void tscCheckpSql(SSqlObj* pSql) {
+  SSqlObj* parent = pSql->param;
+  assert(parent->metaSubPtr == pSql && parent->self == pSql->parentRid && parent->metaSubRid == pSql->self);
+}
+
 static int32_t minMsgSize() { return tsRpcHeadSize + 100; }
 static int32_t getWaitingTimeInterval(int32_t count) {
   int32_t initial = 100; // 100 ms by default
@@ -1765,6 +1770,8 @@ int tscBuildHeartBeatMsg(SSqlObj *pSql, SSqlInfo *pInfo) {
 int tscProcessTableMetaRsp(SSqlObj *pSql) {
   STableMetaMsg *pMetaMsg = (STableMetaMsg *)pSql->res.pRsp;
 
+  tscCheckpSql(pSql);
+
   pMetaMsg->tid = htonl(pMetaMsg->tid);
   pMetaMsg->sversion = htons(pMetaMsg->sversion);
   pMetaMsg->tversion = htons(pMetaMsg->tversion);
@@ -1943,6 +1950,8 @@ int tscProcessMultiMeterMetaRsp(SSqlObj *pSql) {
 int tscProcessSTableVgroupRsp(SSqlObj *pSql) {
   SSqlRes* pRes = &pSql->res;
   
+  tscCheckpSql(pSql);
+
   // NOTE: the order of several table must be preserved.
   SSTableVgroupRspMsg *pStableVgroup = (SSTableVgroupRspMsg *)pRes->pRsp;
   pStableVgroup->numOfTables = htonl(pStableVgroup->numOfTables);
@@ -2313,7 +2322,12 @@ static int32_t getTableMetaFromMnode(SSqlObj *pSql, STableMetaInfo *pTableMetaIn
   pNew->fp = tscTableMetaCallBack;
   pNew->param = pSql;
 
+
   registerSqlObj(pNew);
+
+  pNew->parentRid = pSql->self;
+  pSql->metaSubRid = pNew->self;
+  pSql->metaSubPtr = pNew;
 
   int32_t code = tscProcessSql(pNew);
   if (code == TSDB_CODE_SUCCESS) {
@@ -2423,6 +2437,9 @@ int tscGetSTableVgroupInfo(SSqlObj *pSql, int32_t clauseIndex) {
 
   pNew->fp = tscTableMetaCallBack;
   pNew->param = pSql;
+  pNew->parentRid = pSql->self;
+  pSql->metaSubPtr = pNew;
+  pSql->metaSubRid = pNew->self;
   code = tscProcessSql(pNew);
   if (code == TSDB_CODE_SUCCESS) {
     code = TSDB_CODE_TSC_ACTION_IN_PROGRESS;
