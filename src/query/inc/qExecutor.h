@@ -172,6 +172,7 @@ typedef struct SQuery {
 
   SOrderedPrjQueryInfo prjInfo;  // limit value for each vgroup, only available in global order projection query.
   SSingleColumnFilterInfo* pFilterInfo;
+  char             sqlstr[256];
 } SQuery;
 
 typedef struct SQueryRuntimeEnv {
