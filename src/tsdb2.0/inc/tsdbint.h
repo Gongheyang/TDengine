@@ -25,17 +25,22 @@
 extern "C" {
 #endif
 
-typedef struct STsdbBufPool  STsdbBufPool;
+typedef struct STsdbBufPool STsdbBufPool;
+typedef struct SMemTable    SMemTable;
 
 typedef struct {
   STsdbCfg        config;
-  STsdbBufPool*   pPool;
+  SMemTable *     mem;
+  SMemTable *     imem;
+  STsdbBufPool *  pPool;
   bool            repoLocked;
   pthread_mutex_t mutex;
 } STsdbRepo;
 
 #define REPO_CFG(r) (&((r)->config))
 #define REPO_ID(r) ((r)->config.tsdbId)
+#define REPO_MEM(r) ((r)->mem)
+#define REPO_IMEM(r) ((r)->imem)
 #define REPO_POOL(r) ((r)->pPool)
 #define IS_REPO_LOCKED(r) ((r)->repoLocked)
 

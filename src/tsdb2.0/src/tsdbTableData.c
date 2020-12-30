@@ -14,3 +14,40 @@
  */
 
 #include "tsdbMain.h"
+
+#define TSDB_DATA_SKIPLIST_MAX_LEVEL 5
+
+STableData *tsdbNewTableData(uint64_t uid, bool update) {
+  STableData *pTableData = (STableData *)malloc(1, sizeof(*pTableData));
+  if (pTableData == NULL) {
+    terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
+    return NULL;
+  }
+
+  pTableData->uid = uid;
+  pTableData->keyFirst = INT64_MAX;
+  pTableData->keyLast = INT64_MIN;
+  pTableData->numOfRows = 0;
+
+  pTableData->pData =
+      tSkipListCreate(TSDB_DATA_SKIPLIST_MAX_LEVEL, TSDB_DATA_TYPE_TIMESTAMP, TYPE_BYTES[TSDB_DATA_TYPE_TIMESTAMP],
+                      tkeyComparFn, update ? SL_UPDATE_DUP_KEY : SL_DISCARD_DUP_KEY, tsdbGetTsTupleKey);
+  if (pTableData->pData == NULL) {
+    terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
+    tsdbFreeTableData(pTableData);
+    return NULL;
+  }
+
+  return pTableData;
+}
+
+STableData *tsdbFreeTableData(STableData *pTableData) {
+  if (pTableData) {
+    tSkipListDestroy(pTableData->pData);
+    tfree(pTableData);
+  }
+
+  return NULL
+}
+
+static char *tsdbGetTsTupleKey(const void *data) { return dataRowTuple((SDataRow)data); }
