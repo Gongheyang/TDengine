@@ -28,14 +28,14 @@ extern "C" {
 typedef struct STsdbBufPool STsdbBufPool;
 typedef struct SMemTable    SMemTable;
 
-typedef struct {
+struct STsdbRepo {
   STsdbCfg        config;
   SMemTable *     mem;
   SMemTable *     imem;
   STsdbBufPool *  pPool;
   bool            repoLocked;
   pthread_mutex_t mutex;
-} STsdbRepo;
+};
 
 #define REPO_CFG(r) (&((r)->config))
 #define REPO_ID(r) ((r)->config.tsdbId)
@@ -79,6 +79,8 @@ static FORCE_INLINE int tsdbUnlockRepo(STsdbRepo *pRepo) {
 }
 #endif
 
+#include "tsdbCommitQueue.h"
+#include "tsdbReadImpl.h"
 #include "tsdbBuffer.h"
 
 #endif

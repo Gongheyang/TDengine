@@ -77,6 +77,7 @@ typedef struct {
 } STsdbStat;
 
 typedef void TSDB_REPO_T;  // use void to hide implementation details from outside
+typedef struct STsdbRepo STsdbRepo;
 
 STsdbCfg *tsdbGetCfg(const TSDB_REPO_T *repo);
 
