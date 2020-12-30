@@ -378,6 +378,7 @@ typedef struct SSqlStream {
 
 typedef struct {
   char    key[512]; 
+  int32_t refCount;
   void    *pDnodeConn; 
 } SRpcObj;
 

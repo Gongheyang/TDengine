@@ -37,7 +37,7 @@ int     tscObjRef = -1;
 void *  tscTmr;
 void *  tscQhandle;
 void *  tscCheckDiskUsageTmr;
-void *  tscRpcCache;
+void *  tscRpcHash;
 int     tscRefId = -1;
 int     tscNumOfObj = 0;       // number of sqlObj in current process.
 int     tscNumOfThreads = 1;
@@ -55,21 +55,46 @@ void tscCheckDiskUsage(void *UNUSED_PARAM(para), void* UNUSED_PARAM(param)) {
 void tscFreeRpcObj(void *param) {
   assert(param);
   SRpcObj *pRpcObj = (SRpcObj *)(param);
+  tscDebug("pRpcObj is destroy: %p", pRpcObj->pDnodeConn); 
   rpcClose(pRpcObj->pDnodeConn);
 }
+
+static void rpcIncRef(void *param) {
+  assert(param != NULL);
+
+  SRpcObj **ppRpcObj = (SRpcObj **)param;
+  assert(*ppRpcObj);
+
+  SRpcObj *pRpcObj = *ppRpcObj;
+  atomic_add_fetch_32(&pRpcObj->refCount, 1);
+}
 void *tscAcquireRpc(const char *insKey) {
-  SRpcObj *pRpcObj = taosCacheAcquireByKey(tscRpcCache, insKey, strlen(insKey)); 
-  if (pRpcObj == NULL) {
-    return NULL;
+  SRpcObj **ppRpcObj = taosHashGetClone(tscRpcHash, insKey, strlen(insKey), rpcIncRef, NULL, sizeof(void *));
+  if (ppRpcObj == NULL || *ppRpcObj == NULL) {
+      return NULL;
   }
-  return pRpcObj; 
+  return *ppRpcObj;
 }
 
 void tscReleaseRpc(void *param)  {
   if (param == NULL) {
     return;
   }
-  taosCacheRelease(tscRpcCache, (void *)&param, false); 
+  SRpcObj *pRpcObj = param;
+  if (param == NULL) return;
+
+  int32_t refCount = atomic_sub_fetch_32(&pRpcObj->refCount, 1);
+  if (refCount > 0) {
+    tscDebug("not free rpc, ref: %d", refCount);    
+  } else if (refCount == 0) {
+    tscDebug("pRpcObj is destroy: %p", pRpcObj->pDnodeConn); 
+    rpcClose(pRpcObj->pDnodeConn);
+    pthread_mutex_lock(&rpcObjMutex);
+    taosHashRemove(tscRpcHash, pRpcObj->key, strlen(pRpcObj->key)); 
+    pthread_mutex_unlock(&rpcObjMutex);
+    tfree(pRpcObj);
+  }  
+  
 } 
 
 int32_t tscInitRpc(const char *insKey, const char *user, const char *secretEncrypt, void **ppRpcObj, void **pDnodeConn) {
@@ -97,18 +122,19 @@ int32_t tscInitRpc(const char *insKey, const char *user, const char *secretEncry
   rpcInit.spi = 1; 
   rpcInit.secret = (char *)secretEncrypt;
 
-  SRpcObj rpcObj;
-  memset(&rpcObj, 0, sizeof(rpcObj));
-  strncpy(rpcObj.key, insKey, strlen(insKey));
-  rpcObj.pDnodeConn = rpcOpen(&rpcInit);
-  if (rpcObj.pDnodeConn == NULL) {
+  pRpcObj = calloc(1, sizeof(SRpcObj));
+  pRpcObj->refCount = 1;
+  strncpy(pRpcObj->key, insKey, strlen(insKey));
+  pRpcObj->pDnodeConn = rpcOpen(&rpcInit);
+  if (pRpcObj->pDnodeConn == NULL) {
     pthread_mutex_unlock(&rpcObjMutex);
+    tfree(pRpcObj);
     tscError("failed to init connection to TDengine");
     return -1;
   } 
-  pRpcObj = taosCachePut(tscRpcCache, rpcObj.key, strlen(rpcObj.key), &rpcObj, sizeof(rpcObj), 1000*10);   
-  if (pRpcObj == NULL) {
-    rpcClose(rpcObj.pDnodeConn);
+  if (0 != taosHashPut(tscRpcHash, pRpcObj->key, strlen(pRpcObj->key), &pRpcObj, POINTER_BYTES)) {
+    rpcClose(pRpcObj->pDnodeConn);
+    tfree(pRpcObj);
     pthread_mutex_unlock(&rpcObjMutex);
     return -1;
   } 
@@ -180,7 +206,8 @@ void taos_init_imp(void) {
     tscHashMap = taosHashInit(1024, taosGetDefaultHashFunction(TSDB_DATA_TYPE_INT), true, HASH_ENTRY_LOCK);
   }
 
-  tscRpcCache = taosCacheInit(TSDB_DATA_TYPE_BINARY, refreshTime, true, tscFreeRpcObj, "rpcObj");
+  tscRpcHash = taosHashInit(1024, taosGetDefaultHashFunction(TSDB_DATA_TYPE_BINARY), false, HASH_ENTRY_LOCK);
+  //tscRpcHash = taosCacheInit(TSDB_DATA_TYPE_BINARY, refreshTime, true, tscFreeRpcObj, "rpcObj");
   pthread_mutex_init(&rpcObjMutex, NULL);
 
   tscRefId = taosOpenRef(200, tscCloseTscObj);
@@ -217,11 +244,11 @@ void taos_cleanup(void) {
   taosCleanupKeywordsTable();
   taosCloseLog();
 
-  m = tscRpcCache; 
-  if (m != NULL && atomic_val_compare_exchange_ptr(&tscRpcCache, m, 0) == m) {
+  m = tscRpcHash; 
+  if (m != NULL && atomic_val_compare_exchange_ptr(&tscRpcHash, m, 0) == m) {
     pthread_mutex_lock(&rpcObjMutex);
-    taosCacheCleanup(tscRpcCache); 
-    tscRpcCache = NULL;
+    taosHashCleanup(tscRpcHash); 
+    tscRpcHash = NULL;
     pthread_mutex_unlock(&rpcObjMutex);
     pthread_mutex_destroy(&rpcObjMutex);
   }
