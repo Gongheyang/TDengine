@@ -33,6 +33,7 @@ extern "C" {
 #endif
 
 #include "tsdbLog.h"
+#include "tsdb.h"
 
 
 #define TAOS_IN_RANGE(key, keyMin, keyLast) (((key) >= (keyMin)) && ((key) <= (keyMax)))
@@ -50,11 +51,6 @@ extern "C" {
 extern const char* tsdbFileSuffix[];
 
 // minFid <= midFid <= maxFid
-typedef struct {
-  int minFid;  // >= minFid && < midFid, at level 2
-  int midFid;  // >= midFid && < maxFid, at level 1
-  int maxFid;  // >= maxFid, at level 0
-} SFidGroup;
 
 typedef enum {
   TSDB_FILE_TYPE_HEAD = 0,
@@ -113,18 +109,6 @@ typedef struct {
 #define TSDB_FILE_NAME(pFile) ((pFile)->file.aname)
 
 // ------------------ tsdbMain.c
-typedef struct {
-  int32_t  totalLen;
-  int32_t  len;
-  SDataRow row;
-} SSubmitBlkIter;
-
-typedef struct {
-  int32_t totalLen;
-  int32_t len;
-  void *  pMsg;
-} SSubmitMsgIter;
-
 typedef struct {
   int8_t state;
 

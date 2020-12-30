@@ -13,8 +13,19 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "tsdb.h"
 #include "tsdbMain.h"
+
+typedef struct {
+  int32_t  totalLen;
+  int32_t  len;
+  SDataRow row;
+} SSubmitBlkIter;
+
+typedef struct {
+  int32_t totalLen;
+  int32_t len;
+  void *  pMsg;
+} SSubmitMsgIter;
 
 #define TSDB_DATA_SKIPLIST_LEVEL 5
 #define TSDB_MAX_INSERT_BATCH 512

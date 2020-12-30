@@ -40,6 +40,11 @@ void *tsdbCommitData(STsdbRepo *pRepo) {
 
   pRepo->code = TSDB_CODE_SUCCESS;
 
+  if (tsdbStartCommit(pRepo) < 0) {
+    tsdbError("vgId:%d failed to start commit since %s", REPO_ID(pRepo), tstrerror(terrno));
+    goto _err;
+  }
+
   // Commit to update meta file
   if (tsdbCommitMeta(pRepo) < 0) {
     tsdbError("vgId:%d error occurs while committing META data since %s", REPO_ID(pRepo), tstrerror(terrno));
@@ -70,12 +75,12 @@ static int tsdbCommitTSData(STsdbRepo *pRepo) {
   SMemTable *pMem = pRepo->imem;
   SCommitH   ch = {0};
   STsdbCfg * pCfg = &(pRepo->config);
-  // SFidGroup  fidGroup = {0};
   TSKEY      minKey = 0;
   TSKEY      maxKey = 0;
 
   if (pMem->numOfRows <= 0) return 0;
 
+  // Apply retention
   tsdbGetFidGroup(pCfg, &(ch.fidg));
   tsdbGetFidKeyRange(pCfg->daysPerFile, pCfg->precision, ch.fidg.minFid, &minKey, &maxKey);
   tsdbRemoveFilesBeyondRetention(pRepo, &(ch.fidg));
@@ -158,6 +163,11 @@ static int tsdbCommitMeta(STsdbRepo *pRepo) {
 
 _err:
   return -1;
+}
+
+static int tsdbStartCommit(STsdbRepo *pRepo) {
+  // TODO
+  return 0;
 }
 
 static void tsdbEndCommit(STsdbRepo *pRepo, int eno) {

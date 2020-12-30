@@ -18,7 +18,7 @@
 
 #include "tsdbMain.h"
 
-#define REPO_FS(r) (&((r)->tsdbFS))
+#define REPO_FS(r) ((r)->tsdbFS)
 #define TSDB_MAX_DFILES(keep, days) ((keep) / (days) + 3)
 
 int tsdbOpenFS(STsdbRepo *pRepo) {
@@ -88,22 +88,22 @@ int tsdbUpdateMFile(STsdbRepo *pRepo, SMFile *pMFile) {
 }
 
 int tsdbUpdateDFileSet(STsdbRepo *pRepo, SDFileSet *pSet) {
-  SArray *dfArray = REPO_FS(pRepo)->new->df;
+  SFSSnapshot *pSnapshot = REPO_FS(pRepo)->new;
+  SDFileSet *  pOldSet;
 
-  void *ptr = taosArraySearch(dfArray, (void *)(&(pSet->id)), tsdbCompFSetId, TD_GE);
-  if (ptr == NULL) {
-    if (taosArrayPush(dfArray, pSet) == NULL) {
+  pOldSet = tsdbSearchDFileSet(pSnapshot, pSet->id, TD_GE);
+  if (pOldSet == NULL) {
+    if (taosArrayPush(pSnapshot->df, pSet) == NULL) {
       terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
       return -1;
     }
   } else {
-    SDFileSet *pOldSet = (SDFileSet *)ptr;
-    int        index = TARRAY_ELEM_IDX(dfArray, ptr);
+    int index = TARRAY_ELEM_IDX(dfArray, ptr);
 
     if (pOldSet->id == pSet->id) {
-      taosArraySet(dfArray, index, pSet);
+      taosArraySet(pSnapshot->df, index, pSet);
     } else if (pOldSet->id > pSet->id) {
-      if (taosArrayInsert(dfArray, index, pSet) == NULL) {
+      if (taosArrayInsert(pSnapshot->df, index, pSet) == NULL) {
         terrno = TSDB_CODE_TDB_OUT_OF_MEMORY;
         return -1;
       }
@@ -113,6 +113,16 @@ int tsdbUpdateDFileSet(STsdbRepo *pRepo, SDFileSet *pSet) {
   }
 
   return 0;
+}
+
+void tsdbRemoveExpiredDFileSet(STsdbRepo *pRepo, int mfid) {
+  SFSSnapshot *pSnapshot = REPO_FS(pRepo)->new;
+  while (taosArrayGetSize(pSnapshot->df) > 0) {
+    SDFileSet *pSet = (SDFileSet *)taosArrayGet(pSnapshot->df, 0);
+    if (pSet->id < mfid) {
+      taosArrayRemove(pSnapshot->df, 0);
+    }
+  }
 }
 
 static int tsdbSaveFSSnapshot(int fd, SFSSnapshot *pSnapshot) {
@@ -363,4 +373,9 @@ static int tsdbCompFSetId(const void *key1, const void *key2) {
   } else {
     return 1;
   }
+}
+
+static SDFileSet *tsdbSearchDFileSet(SFSSnapshot *pSnapshot, int fid, int flags) {
+  void *ptr = taosArraySearch(pSnapshot->df, (void *)(&fid), tsdbCompFSetId, flags);
+  return (ptr == NULL) ? NULL : ((SDFileSet *)ptr);
 }

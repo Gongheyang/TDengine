@@ -90,6 +90,34 @@ int  tsdbFSNewTxn(STsdbRepo *pRepo);
 int  tsdbFSEndTxn(STsdbRepo *pRepo, bool hasError);
 int  tsdbUpdateMFile(STsdbRepo *pRepo, SMFile *pMFile);
 int  tsdbUpdateDFileSet(STsdbRepo *pRepo, SDFileSet *pSet);
+void tsdbRemoveExpiredDFileSet(STsdbRepo *pRepo, int mfid);
+
+static FORCE_INLINE int tsdbRLockFS(STsdbFS *pFs) {
+  int code = pthread_rwlock_rdlock(&(pFs->lock));
+  if (code != 0) {
+    terrno = TAOS_SYSTEM_ERROR(code);
+    return -1;
+  }
+  return 0;
+}
+
+static FORCE_INLINE int tsdbWLockFS(STsdbFS *pFs) {
+  int code = pthread_rwlock_wrlock(&(pFs->lock));
+  if (code != 0) {
+    terrno = TAOS_SYSTEM_ERROR(code);
+    return -1;
+  }
+  return 0;
+}
+
+static FORCE_INLINE int tsdbUnLockFS(STsdbFS *pFs) {
+  int code = pthread_rwlock_unlock(&(pFs->lock));
+  if (code != 0) {
+    terrno = TAOS_SYSTEM_ERROR(code);
+    return -1;
+  }
+  return 0;
+}
 
 #ifdef __cplusplus
 }
