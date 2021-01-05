@@ -42,9 +42,7 @@ static void tscCheckpSql(SSqlObj* pSql) {
   assert(parent->metaSubPtr == pSql && parent->self == pSql->parentRid && parent->metaSubRid == pSql->self);
 }
 
-static void tscCheckpSql2(SSqlObj* pSql, SSqlObj* parent) {
-  assert(parent->metaSubPtr == pSql && parent->self == pSql->parentRid && parent->metaSubRid == pSql->self);
-}
+
 
 
 static int32_t minMsgSize() { return tsRpcHeadSize + 100; }

@@ -44,6 +44,11 @@ static int32_t tsCompare(int32_t order, int64_t left, int64_t right) {
   }
 }
 
+
+static void tscCheckpSql2(SSqlObj* pSql, SSqlObj* parent) {
+  assert(parent->metaSubPtr == pSql && parent->self == pSql->parentRid && parent->metaSubRid == pSql->self);
+}
+
 static void skipRemainValue(STSBuf* pTSBuf, tVariant* tag1) {
   while (tsBufNextPos(pTSBuf)) {
     STSElem el1 = tsBufGetElem(pTSBuf);
