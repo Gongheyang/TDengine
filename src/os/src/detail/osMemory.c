@@ -530,14 +530,12 @@ typedef struct{
 	uint64_t tdmrn;
 }tdmstat;
 
-tdmstat tdm_stat;
+tdmstat tdm_stat= {0};
 
 void tdminit(){
-	tdm_ps = sysconf(_SC_PAGE_SIZE);
-	
 	srand(time(NULL));
 
-    memset(&tdm_stat, 0, sizeof(tdm_stat));
+	tdm_ps = sysconf(_SC_PAGE_SIZE);
 }
 
 void *tdmrealloc(void *p, int s){
@@ -564,6 +562,7 @@ void *tdmrealloc(void *p, int s){
 
 void *tdmalloc(char *f, unsigned line, int s,int set){
     void *p;
+	assert(tdm_ps);
     int tdmn = atomic_load_32(&tdm_num);
     if(tdmn >= TDM_MAX_NUM || rand()%10!=0){
 		atomic_add_fetch_64(&tdm_stat.normalmn, 1);
@@ -614,7 +613,7 @@ void *tdmalloc(char *f, unsigned line, int s,int set){
 }
 
 void tdmfree(void *p){
-
+	assert(tdm_ps);
     if(p && TDMALLOCED(p)){
 		atomic_add_fetch_64(&tdm_stat.tdmfn, 1);
         void * fp = (void *)((0xfffffffffffff000 | tdm_ps) & ((long)p-24));

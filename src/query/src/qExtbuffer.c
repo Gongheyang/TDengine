@@ -28,7 +28,7 @@
  * SColumnModel is deeply copy
  */
 tExtMemBuffer* createExtMemBuffer(int32_t inMemSize, int32_t elemSize, int32_t pagesize, SColumnModel *pModel) {
-  tExtMemBuffer* pMemBuffer = (tExtMemBuffer *)calloc(1, sizeof(tExtMemBuffer));
+  tExtMemBuffer* pMemBuffer = (tExtMemBuffer *)TDMCALLOC(1, sizeof(tExtMemBuffer));
 
   pMemBuffer->pageSize = pagesize;
   pMemBuffer->inMemCapacity = ALIGN8(inMemSize) / pMemBuffer->pageSize;
@@ -48,7 +48,7 @@ tExtMemBuffer* createExtMemBuffer(int32_t inMemSize, int32_t elemSize, int32_t p
 
   pFMeta->flushoutData.nAllocSize = 4;
   pFMeta->flushoutData.nLength = 0;
-  pFMeta->flushoutData.pFlushoutInfo = (tFlushoutInfo *)calloc(4, sizeof(tFlushoutInfo));
+  pFMeta->flushoutData.pFlushoutInfo = (tFlushoutInfo *)TDMCALLOC(4, sizeof(tFlushoutInfo));
 
   pMemBuffer->pColumnModel = cloneColumnModel(pModel);
   pMemBuffer->pColumnModel->capacity = pMemBuffer->numOfElemsPerPage;
@@ -99,7 +99,7 @@ void* destoryExtMemBuffer(tExtMemBuffer *pMemBuffer) {
 static bool allocFlushoutInfoEntries(SExtFileInfo *pFileMeta) {
   pFileMeta->flushoutData.nAllocSize = pFileMeta->flushoutData.nAllocSize << 1;
 
-  tFlushoutInfo *tmp = (tFlushoutInfo *)realloc(pFileMeta->flushoutData.pFlushoutInfo,
+  tFlushoutInfo *tmp = (tFlushoutInfo *)TDMREALLOC(pFileMeta->flushoutData.pFlushoutInfo,
                                                 sizeof(tFlushoutInfo) * pFileMeta->flushoutData.nAllocSize);
   if (tmp == NULL) {
     uError("out of memory!\n");
@@ -128,7 +128,7 @@ static bool tExtMemBufferAlloc(tExtMemBuffer *pMemBuffer) {
    * The memory buffer pages may be recycle in order to avoid unnecessary memory
    * allocation later.
    */
-  tFilePagesItem *item = (tFilePagesItem *)calloc(1, pMemBuffer->pageSize + sizeof(tFilePagesItem));
+  tFilePagesItem *item = (tFilePagesItem *)TDMCALLOC(1, pMemBuffer->pageSize + sizeof(tFilePagesItem));
   if (item == NULL) {
     return false;
   }
@@ -742,7 +742,7 @@ void tColDataQSort(tOrderDescriptor *pDescriptor, int32_t numOfRows, int32_t sta
     }
   }
 
-  char* buf = malloc(width);
+  char* buf = TDMALLOC(width);
   assert(width > 0 && buf != NULL);
 
   if (end - start + 1 <= 8) {
@@ -758,7 +758,7 @@ void tColDataQSort(tOrderDescriptor *pDescriptor, int32_t numOfRows, int32_t sta
  * deep copy of sschema
  */
 SColumnModel *createColumnModel(SSchema *fields, int32_t numOfCols, int32_t blockCapacity) {
-  SColumnModel *pColumnModel = (SColumnModel *)calloc(1, sizeof(SColumnModel) + numOfCols * sizeof(SSchemaEx));
+  SColumnModel *pColumnModel = (SColumnModel *)TDMCALLOC(1, sizeof(SColumnModel) + numOfCols * sizeof(SSchemaEx));
   if (pColumnModel == NULL) {
     return NULL;
   }
@@ -784,7 +784,7 @@ SColumnModel *cloneColumnModel(SColumnModel *pSrc) {
     return NULL;
   }
   
-  SColumnModel *pColumnModel = (SColumnModel *)calloc(1, sizeof(SColumnModel) + pSrc->numOfCols * sizeof(SSchemaEx));
+  SColumnModel *pColumnModel = (SColumnModel *)TDMCALLOC(1, sizeof(SColumnModel) + pSrc->numOfCols * sizeof(SSchemaEx));
   if (pColumnModel == NULL) {
     return NULL;
   }
@@ -1065,7 +1065,7 @@ void tColModelAppend(SColumnModel *dstModel, tFilePage *dstPage, void *srcData, 
 
 tOrderDescriptor *tOrderDesCreate(const int32_t *orderColIdx, int32_t numOfOrderCols, SColumnModel *pModel,
                                   int32_t tsOrderType) {
-  tOrderDescriptor *desc = (tOrderDescriptor *)calloc(1, sizeof(tOrderDescriptor) + sizeof(int32_t) * numOfOrderCols);
+  tOrderDescriptor *desc = (tOrderDescriptor *)TDMCALLOC(1, sizeof(tOrderDescriptor) + sizeof(int32_t) * numOfOrderCols);
   if (desc == NULL) {
     return NULL;
   }

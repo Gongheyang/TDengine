@@ -2030,7 +2030,7 @@ static void copyTopBotRes(SQLFunctionCtx *pCtx, int32_t type) {
   
   // set the corresponding tag data for each record
   // todo check malloc failure
-  char **pData = calloc(pCtx->tagInfo.numOfTagCols, POINTER_BYTES);
+  char **pData = TDMCALLOC(pCtx->tagInfo.numOfTagCols, POINTER_BYTES);
   for (int32_t i = 0; i < pCtx->tagInfo.numOfTagCols; ++i) {
     pData[i] = pCtx->tagInfo.pTagCtxList[i]->aOutputBuf;
   }

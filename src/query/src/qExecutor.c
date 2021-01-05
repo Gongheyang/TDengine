@@ -501,7 +501,7 @@ static SResultRow *doPrepareResultRowFromKey(SQueryRuntimeEnv *pRuntimeEnv, SRes
         newCapacity = (int64_t)(pResultRowInfo->capacity * 1.5);
       }
 
-      char *t = realloc(pResultRowInfo->pResult, (size_t)(newCapacity * POINTER_BYTES));
+      char *t = TDMREALLOC(pResultRowInfo->pResult, (size_t)(newCapacity * POINTER_BYTES));
       if (t == NULL) {
         longjmp(pRuntimeEnv->env, TSDB_CODE_QRY_OUT_OF_MEMORY);
       }
@@ -1289,7 +1289,7 @@ static int32_t setGroupResultOutputBuf(SQueryRuntimeEnv *pRuntimeEnv, char *pDat
   GET_TYPED_DATA(v, int64_t, type, pData);
   if (type == TSDB_DATA_TYPE_BINARY || type == TSDB_DATA_TYPE_NCHAR) {
     if (pResultRow->key == NULL) {
-      pResultRow->key = malloc(varDataTLen(pData));
+      pResultRow->key = TDMALLOC(varDataTLen(pData));
       varDataCopy(pResultRow->key, pData);
     } else {
       assert(memcmp(pResultRow->key, pData, varDataTLen(pData)) == 0);
@@ -1837,7 +1837,7 @@ static int32_t setCtxTagColumnInfo(SQueryRuntimeEnv *pRuntimeEnv, SQLFunctionCtx
     int16_t tagLen = 0;
 
     SQLFunctionCtx *p = NULL;
-    SQLFunctionCtx **pTagCtx = calloc(pQuery->numOfOutput, POINTER_BYTES);
+    SQLFunctionCtx **pTagCtx = TDMCALLOC(pQuery->numOfOutput, POINTER_BYTES);
     if (pTagCtx == NULL) {
       return TSDB_CODE_QRY_OUT_OF_MEMORY;
     }
@@ -1874,10 +1874,10 @@ static int32_t setupQueryRuntimeEnv(SQueryRuntimeEnv *pRuntimeEnv, int16_t order
   qDebug("QInfo:%p setup runtime env", GET_QINFO_ADDR(pRuntimeEnv));
   SQuery *pQuery = pRuntimeEnv->pQuery;
 
-  pRuntimeEnv->pCtx = (SQLFunctionCtx *)calloc(pQuery->numOfOutput, sizeof(SQLFunctionCtx));
-  pRuntimeEnv->offset = calloc(pQuery->numOfOutput, sizeof(int16_t));
-  pRuntimeEnv->rowCellInfoOffset = calloc(pQuery->numOfOutput, sizeof(int32_t));
-  pRuntimeEnv->sasArray = calloc(pQuery->numOfOutput, sizeof(SArithmeticSupport));
+  pRuntimeEnv->pCtx = (SQLFunctionCtx *)TDMCALLOC(pQuery->numOfOutput, sizeof(SQLFunctionCtx));
+  pRuntimeEnv->offset = TDMCALLOC(pQuery->numOfOutput, sizeof(int16_t));
+  pRuntimeEnv->rowCellInfoOffset = TDMCALLOC(pQuery->numOfOutput, sizeof(int32_t));
+  pRuntimeEnv->sasArray = TDMCALLOC(pQuery->numOfOutput, sizeof(SArithmeticSupport));
 
   if (pRuntimeEnv->offset == NULL || pRuntimeEnv->pCtx == NULL || pRuntimeEnv->rowCellInfoOffset == NULL || pRuntimeEnv->sasArray == NULL) {
     goto _clean;
@@ -1956,7 +1956,7 @@ static int32_t setupQueryRuntimeEnv(SQueryRuntimeEnv *pRuntimeEnv, int16_t order
     }
 
     if (functionId == TSDB_FUNC_ARITHM) {
-      pRuntimeEnv->sasArray[i].data = calloc(pQuery->numOfCols, POINTER_BYTES);
+      pRuntimeEnv->sasArray[i].data = TDMCALLOC(pQuery->numOfCols, POINTER_BYTES);
       if (pRuntimeEnv->sasArray[i].data == NULL) {
         goto _clean;
       }
@@ -2711,7 +2711,7 @@ static void ensureOutputBufferSimple(SQueryRuntimeEnv* pRuntimeEnv, int32_t capa
     int32_t bytes = pQuery->pExpr1[i].bytes;
     assert(bytes > 0 && capacity > 0);
 
-    char *tmp = realloc(pQuery->sdata[i], bytes * capacity + sizeof(tFilePage));
+    char *tmp = TDMREALLOC(pQuery->sdata[i], bytes * capacity + sizeof(tFilePage));
     if (tmp == NULL) {
       longjmp(pRuntimeEnv->env, TSDB_CODE_QRY_OUT_OF_MEMORY);
     } else {
@@ -2743,7 +2743,7 @@ static void ensureOutputBuffer(SQueryRuntimeEnv* pRuntimeEnv, SDataBlockInfo* pB
         int32_t bytes = pQuery->pExpr1[i].bytes;
         assert(bytes > 0 && newSize > 0);
 
-        char *tmp = realloc(pQuery->sdata[i], bytes * newSize + sizeof(tFilePage));
+        char *tmp = TDMREALLOC(pQuery->sdata[i], bytes * newSize + sizeof(tFilePage));
         if (tmp == NULL) {
           longjmp(pRuntimeEnv->env, TSDB_CODE_QRY_OUT_OF_MEMORY);
         } else {
@@ -3208,8 +3208,8 @@ int32_t mergeIntoGroupResultImpl(SGroupResInfo* pGroupResInfo, SArray *pTableLis
     pGroupResInfo->pRows = taosArrayInit(100, POINTER_BYTES);
   }
 
-  posList = calloc(size, sizeof(int32_t));
-  pTableQueryInfoList = malloc(POINTER_BYTES * size);
+  posList = TDMCALLOC(size, sizeof(int32_t));
+  pTableQueryInfoList = TDMALLOC(POINTER_BYTES * size);
 
   if (pTableQueryInfoList == NULL || posList == NULL || pGroupResInfo->pRows == NULL) {
     qError("QInfo:%p failed alloc memory", pQInfo);
@@ -4623,7 +4623,7 @@ static SFillColInfo* createFillColInfo(SQuery* pQuery) {
   int32_t numOfCols = getNumOfFinalResCol(pQuery);
   int32_t offset = 0;
 
-  SFillColInfo* pFillCol = calloc(numOfCols, sizeof(SFillColInfo));
+  SFillColInfo* pFillCol = TDMCALLOC(numOfCols, sizeof(SFillColInfo));
   if (pFillCol == NULL) {
     return NULL;
   }
@@ -5564,16 +5564,16 @@ static void doSecondaryArithmeticProcess(SQuery* pQuery) {
   }
 
   SArithmeticSupport arithSup = {0};
-  tFilePage **data = calloc(pQuery->numOfExpr2, POINTER_BYTES);
+  tFilePage **data = TDMCALLOC(pQuery->numOfExpr2, POINTER_BYTES);
   for (int32_t i = 0; i < pQuery->numOfExpr2; ++i) {
     int32_t bytes = pQuery->pExpr2[i].bytes;
-    data[i] = (tFilePage *)malloc((size_t)(bytes * pQuery->rec.rows) + sizeof(tFilePage));
+    data[i] = (tFilePage *)TDMALLOC((size_t)(bytes * pQuery->rec.rows) + sizeof(tFilePage));
   }
 
   arithSup.offset = 0;
   arithSup.numOfCols = (int32_t)pQuery->numOfOutput;
   arithSup.exprList  = pQuery->pExpr1;
-  arithSup.data      = calloc(arithSup.numOfCols, POINTER_BYTES);
+  arithSup.data      = TDMCALLOC(arithSup.numOfCols, POINTER_BYTES);
 
   for (int32_t k = 0; k < arithSup.numOfCols; ++k) {
     arithSup.data[k] = pQuery->sdata[k]->data;
@@ -6013,7 +6013,7 @@ static int32_t convertQueryMsg(SQueryTableMsg *pQueryMsg, SArray **pTableIdList,
 
     int32_t numOfFilters = pColInfo->numOfFilters;
     if (numOfFilters > 0) {
-      pColInfo->filters = calloc(numOfFilters, sizeof(SColumnFilterInfo));
+      pColInfo->filters = TDMCALLOC(numOfFilters, sizeof(SColumnFilterInfo));
       if (pColInfo->filters == NULL) {
         code = TSDB_CODE_QRY_OUT_OF_MEMORY;
         goto _cleanup;
@@ -6031,7 +6031,7 @@ static int32_t convertQueryMsg(SQueryTableMsg *pQueryMsg, SArray **pTableIdList,
       if (pColFilter->filterstr) {
         pColFilter->len = htobe64(pFilterMsg->len);
 
-        pColFilter->pz = (int64_t)calloc(1, (size_t)(pColFilter->len + 1 * TSDB_NCHAR_SIZE)); // note: null-terminator
+        pColFilter->pz = (int64_t)TDMCALLOC(1, (size_t)(pColFilter->len + 1 * TSDB_NCHAR_SIZE)); // note: null-terminator
         if (pColFilter->pz == 0) {
           code = TSDB_CODE_QRY_OUT_OF_MEMORY;
           goto _cleanup;
@@ -6049,7 +6049,7 @@ static int32_t convertQueryMsg(SQueryTableMsg *pQueryMsg, SArray **pTableIdList,
     }
   }
 
-  *pExpr = calloc(pQueryMsg->numOfOutput, POINTER_BYTES);
+  *pExpr = TDMCALLOC(pQueryMsg->numOfOutput, POINTER_BYTES);
   if (*pExpr == NULL) {
     code = TSDB_CODE_QRY_OUT_OF_MEMORY;
     goto _cleanup;
@@ -6094,7 +6094,7 @@ static int32_t convertQueryMsg(SQueryTableMsg *pQueryMsg, SArray **pTableIdList,
 
   if (pQueryMsg->secondStageOutput) {
     pExprMsg = (SSqlFuncMsg *)pMsg;
-    *pSecStageExpr = calloc(pQueryMsg->secondStageOutput, POINTER_BYTES);
+    *pSecStageExpr = TDMCALLOC(pQueryMsg->secondStageOutput, POINTER_BYTES);
     
     for (int32_t i = 0; i < pQueryMsg->secondStageOutput; ++i) {
       (*pSecStageExpr)[i] = pExprMsg;
@@ -6134,7 +6134,7 @@ static int32_t convertQueryMsg(SQueryTableMsg *pQueryMsg, SArray **pTableIdList,
   pMsg = createTableIdList(pQueryMsg, pMsg, pTableIdList);
 
   if (pQueryMsg->numOfGroupCols > 0) {  // group by tag columns
-    *groupbyCols = malloc(pQueryMsg->numOfGroupCols * sizeof(SColIndex));
+    *groupbyCols = TDMALLOC(pQueryMsg->numOfGroupCols * sizeof(SColIndex));
     if (*groupbyCols == NULL) {
       code = TSDB_CODE_QRY_OUT_OF_MEMORY;
       goto _cleanup;
@@ -6171,7 +6171,7 @@ static int32_t convertQueryMsg(SQueryTableMsg *pQueryMsg, SArray **pTableIdList,
   }
 
   if (pQueryMsg->numOfTags > 0) {
-    (*tagCols) = calloc(1, sizeof(SColumnInfo) * pQueryMsg->numOfTags);
+    (*tagCols) = TDMCALLOC(1, sizeof(SColumnInfo) * pQueryMsg->numOfTags);
     if (*tagCols == NULL) {
       code = TSDB_CODE_QRY_OUT_OF_MEMORY;
       goto _cleanup;
@@ -6192,7 +6192,7 @@ static int32_t convertQueryMsg(SQueryTableMsg *pQueryMsg, SArray **pTableIdList,
 
   // the tag query condition expression string is located at the end of query msg
   if (pQueryMsg->tagCondLen > 0) {
-    *tagCond = calloc(1, pQueryMsg->tagCondLen);
+    *tagCond = TDMCALLOC(1, pQueryMsg->tagCondLen);
 
     if (*tagCond == NULL) {
       code = TSDB_CODE_QRY_OUT_OF_MEMORY;
@@ -6204,7 +6204,7 @@ static int32_t convertQueryMsg(SQueryTableMsg *pQueryMsg, SArray **pTableIdList,
   }
 
   if (pQueryMsg->tbnameCondLen > 0) {
-    *tbnameCond = calloc(1, pQueryMsg->tbnameCondLen + 1);
+    *tbnameCond = TDMCALLOC(1, pQueryMsg->tbnameCondLen + 1);
     if (*tbnameCond == NULL) {
       code = TSDB_CODE_QRY_OUT_OF_MEMORY;
       goto _cleanup;
@@ -6269,7 +6269,7 @@ static int32_t createQueryFuncExprFromMsg(SQueryTableMsg *pQueryMsg, int32_t num
   *pExprInfo = NULL;
   int32_t code = TSDB_CODE_SUCCESS;
 
-  SExprInfo *pExprs = (SExprInfo *)calloc(pQueryMsg->numOfOutput, sizeof(SExprInfo));
+  SExprInfo *pExprs = (SExprInfo *)TDMCALLOC(pQueryMsg->numOfOutput, sizeof(SExprInfo));
   if (pExprs == NULL) {
     return TSDB_CODE_QRY_OUT_OF_MEMORY;
   }
@@ -6376,7 +6376,7 @@ static SSqlGroupbyExpr *createGroupbyExprFromMsg(SQueryTableMsg *pQueryMsg, SCol
   }
 
   // using group by tag columns
-  SSqlGroupbyExpr *pGroupbyExpr = (SSqlGroupbyExpr *)calloc(1, sizeof(SSqlGroupbyExpr));
+  SSqlGroupbyExpr *pGroupbyExpr = (SSqlGroupbyExpr *)TDMCALLOC(1, sizeof(SSqlGroupbyExpr));
   if (pGroupbyExpr == NULL) {
     *code = TSDB_CODE_QRY_OUT_OF_MEMORY;
     return NULL;
@@ -6405,7 +6405,7 @@ static int32_t createFilterInfo(void *pQInfo, SQuery *pQuery) {
     return TSDB_CODE_SUCCESS;
   }
 
-  pQuery->pFilterInfo = calloc(1, sizeof(SSingleColumnFilterInfo) * pQuery->numOfFilterCols);
+  pQuery->pFilterInfo = TDMCALLOC(1, sizeof(SSingleColumnFilterInfo) * pQuery->numOfFilterCols);
   if (pQuery->pFilterInfo == NULL) {
     return TSDB_CODE_QRY_OUT_OF_MEMORY;
   }
@@ -6418,7 +6418,7 @@ static int32_t createFilterInfo(void *pQInfo, SQuery *pQuery) {
       pFilterInfo->info = pQuery->colList[i];
 
       pFilterInfo->numOfFilters = pQuery->colList[i].numOfFilters;
-      pFilterInfo->pFilters = calloc(pFilterInfo->numOfFilters, sizeof(SColumnFilterElem));
+      pFilterInfo->pFilters = TDMCALLOC(pFilterInfo->numOfFilters, sizeof(SColumnFilterElem));
       if (pFilterInfo->pFilters == NULL) {
         return TSDB_CODE_QRY_OUT_OF_MEMORY;
       }
@@ -6550,7 +6550,7 @@ static SQInfo *createQInfoImpl(SQueryTableMsg *pQueryMsg, SSqlGroupbyExpr *pGrou
   int16_t numOfCols = pQueryMsg->numOfCols;
   int16_t numOfOutput = pQueryMsg->numOfOutput;
 
-  SQInfo *pQInfo = (SQInfo *)calloc(1, sizeof(SQInfo));
+  SQInfo *pQInfo = (SQInfo *)TDMCALLOC(1, sizeof(SQInfo));
   if (pQInfo == NULL) {
     goto _cleanup_qinfo;
   }
@@ -6559,7 +6559,7 @@ static SQInfo *createQInfoImpl(SQueryTableMsg *pQueryMsg, SSqlGroupbyExpr *pGrou
   pQInfo->signature = pQInfo;
   pQInfo->tableGroupInfo = *pTableGroupInfo;
 
-  SQuery *pQuery = calloc(1, sizeof(SQuery));
+  SQuery *pQuery = TDMCALLOC(1, sizeof(SQuery));
   if (pQuery == NULL) {
     goto _cleanup_query;
   }
@@ -6583,7 +6583,7 @@ static SQInfo *createQInfoImpl(SQueryTableMsg *pQueryMsg, SSqlGroupbyExpr *pGrou
   pQuery->prjInfo.vgroupLimit = pQueryMsg->vgroupLimit;
   pQuery->prjInfo.ts      = (pQueryMsg->order == TSDB_ORDER_ASC)? INT64_MIN:INT64_MAX;
 
-  pQuery->colList = calloc(numOfCols, sizeof(SSingleColumnFilterInfo));
+  pQuery->colList = TDMCALLOC(numOfCols, sizeof(SSingleColumnFilterInfo));
   if (pQuery->colList == NULL) {
     goto _cleanup;
   }
@@ -6609,7 +6609,7 @@ static SQInfo *createQInfoImpl(SQueryTableMsg *pQueryMsg, SSqlGroupbyExpr *pGrou
   }
 
   // prepare the result buffer
-  pQuery->sdata = (tFilePage **)calloc(pQuery->numOfOutput, POINTER_BYTES);
+  pQuery->sdata = (tFilePage **)TDMCALLOC(pQuery->numOfOutput, POINTER_BYTES);
   if (pQuery->sdata == NULL) {
     goto _cleanup;
   }
@@ -6627,14 +6627,14 @@ static SQInfo *createQInfoImpl(SQueryTableMsg *pQueryMsg, SSqlGroupbyExpr *pGrou
     }
 
     size_t size = (size_t)((pQuery->rec.capacity + 1) * bytes + pExprs[col].interBytes + sizeof(tFilePage));
-    pQuery->sdata[col] = (tFilePage *)calloc(1, size);
+    pQuery->sdata[col] = (tFilePage *)TDMCALLOC(1, size);
     if (pQuery->sdata[col] == NULL) {
       goto _cleanup;
     }
   }
 
   if (pQuery->fillType != TSDB_FILL_NONE) {
-    pQuery->fillVal = malloc(sizeof(int64_t) * pQuery->numOfOutput);
+    pQuery->fillVal = TDMALLOC(sizeof(int64_t) * pQuery->numOfOutput);
     if (pQuery->fillVal == NULL) {
       goto _cleanup;
     }
@@ -6657,9 +6657,9 @@ static SQInfo *createQInfoImpl(SQueryTableMsg *pQueryMsg, SSqlGroupbyExpr *pGrou
   pQInfo->runtimeEnv.summary.tableInfoSize += (pTableGroupInfo->numOfTables * sizeof(STableQueryInfo));
 
   pQInfo->runtimeEnv.pResultRowHashTable = taosHashInit(pTableGroupInfo->numOfTables, taosGetDefaultHashFunction(TSDB_DATA_TYPE_BINARY), true, HASH_NO_LOCK);
-  pQInfo->runtimeEnv.keyBuf = malloc(TSDB_MAX_BYTES_PER_ROW);
+  pQInfo->runtimeEnv.keyBuf = TDMALLOC(TSDB_MAX_BYTES_PER_ROW);
   pQInfo->runtimeEnv.pool = initResultRowPool(getResultRowSize(&pQInfo->runtimeEnv));
-  pQInfo->runtimeEnv.prevRow = malloc(POINTER_BYTES * pQuery->numOfCols + srcSize);
+  pQInfo->runtimeEnv.prevRow = TDMALLOC(POINTER_BYTES * pQuery->numOfCols + srcSize);
 
   char* start = POINTER_BYTES * pQuery->numOfCols + (char*) pQInfo->runtimeEnv.prevRow;
   pQInfo->runtimeEnv.prevRow[0] = start;
@@ -6668,7 +6668,7 @@ static SQInfo *createQInfoImpl(SQueryTableMsg *pQueryMsg, SSqlGroupbyExpr *pGrou
     pQInfo->runtimeEnv.prevRow[i] = pQInfo->runtimeEnv.prevRow[i - 1] + pQuery->colList[i-1].bytes;
   }
 
-  pQInfo->pBuf = calloc(pTableGroupInfo->numOfTables, sizeof(STableQueryInfo));
+  pQInfo->pBuf = TDMCALLOC(pTableGroupInfo->numOfTables, sizeof(STableQueryInfo));
   if (pQInfo->pBuf == NULL) {
     goto _cleanup;
   }
@@ -7601,7 +7601,7 @@ void* qOpenQueryMgmt(int32_t vgId) {
   char cacheName[128] = {0};
   sprintf(cacheName, "qhandle_%d", vgId);
 
-  SQueryMgmt* pQueryMgmt = calloc(1, sizeof(SQueryMgmt));
+  SQueryMgmt* pQueryMgmt = TDMCALLOC(1, sizeof(SQueryMgmt));
   if (pQueryMgmt == NULL) {
     terrno = TSDB_CODE_QRY_OUT_OF_MEMORY;
     return NULL;

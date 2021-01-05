@@ -178,14 +178,14 @@ void arithmeticTreeTraverse(tExprNode *pExprs, int32_t numOfRows, char *pOutput,
   tExprNode *pRight = pExprs->_node.pRight;
 
   /* the left output has result from the left child syntax tree */
-  char *pLeftOutput = (char*)malloc(sizeof(int64_t) * numOfRows);
+  char *pLeftOutput = (char*)TDMALLOC(sizeof(int64_t) * numOfRows);
   if (pLeft->nodeType == TSQL_NODE_EXPR) {
     arithmeticTreeTraverse(pLeft, numOfRows, pLeftOutput, param, order, getSourceDataBlock);
   }
 
   /* the right output has result from the right child syntax tree */
-  char *pRightOutput = malloc(sizeof(int64_t) * numOfRows);
-  char *pdata = malloc(sizeof(int64_t) * numOfRows);
+  char *pRightOutput = TDMALLOC(sizeof(int64_t) * numOfRows);
+  char *pdata = TDMALLOC(sizeof(int64_t) * numOfRows);
 
   if (pRight->nodeType == TSQL_NODE_EXPR) {
     arithmeticTreeTraverse(pRight, numOfRows, pRightOutput, param, order, getSourceDataBlock);
@@ -311,7 +311,7 @@ void exprTreeToBinary(SBufferWriter* bw, tExprNode* expr) {
 
 // TODO: these three functions should be made global
 static void* exception_calloc(size_t nmemb, size_t size) {
-  void* p = calloc(nmemb, size);
+  void* p = TDMCALLOC(nmemb, size);
   if (p == NULL) {
     THROW(TSDB_CODE_QRY_OUT_OF_MEMORY);
   }
@@ -319,7 +319,7 @@ static void* exception_calloc(size_t nmemb, size_t size) {
 }
 
 static void* exception_malloc(size_t size) {
-  void* p = malloc(size);
+  void* p = TDMALLOC(size);
   if (p == NULL) {
     THROW(TSDB_CODE_QRY_OUT_OF_MEMORY);
   }
@@ -352,7 +352,7 @@ static tExprNode* exprTreeFromBinaryImpl(SBufferReader* br) {
     pVal->nType = tbufReadUint32(br);
     if (pVal->nType == TSDB_DATA_TYPE_BINARY) {
       tbufReadToBuffer(br, &pVal->nLen, sizeof(pVal->nLen));
-      pVal->pz = calloc(1, pVal->nLen + 1);
+      pVal->pz = TDMCALLOC(1, pVal->nLen + 1);
       tbufReadToBuffer(br, pVal->pz, pVal->nLen);
     } else {
       pVal->i64Key = tbufReadInt64(br);

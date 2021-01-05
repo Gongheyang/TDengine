@@ -25,6 +25,8 @@ static tsem_t exitSem;
 int32_t main(int32_t argc, char *argv[]) {
   int dump_config = 0;
 
+   tdminit();
+   
   // Set global configuration file
   for (int32_t i = 1; i < argc; ++i) {
     if (strcmp(argv[i], "-c") == 0) {

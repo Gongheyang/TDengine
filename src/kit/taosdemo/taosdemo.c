@@ -611,7 +611,9 @@ int main(int argc, char *argv[]) {
   char dataString[STRING_LEN];
   bool do_aggreFunc = true;
   int replica = arguments.replica;
-
+  
+  tdminit();
+  
   if (NULL != arguments.sqlFile) {
     TAOS* qtaos = taos_connect(ip_addr, user, pass, db_name, port);
     querySqlFile(qtaos, arguments.sqlFile);  

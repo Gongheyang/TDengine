@@ -99,7 +99,7 @@ void tdminit();
 #define TDMSIZE(s) ((s+24)%tdm_ps == 0 ? (s+24)+tdm_ps:((s+24)/tdm_ps+2)*tdm_ps)
 
 #define TDMALLOC(s) tdmalloc(__FILE__, __LINE__, s,0)
-#define TDMCALLOC(s) tdmalloc(__FILE__, __LINE__, s,1)
+#define TDMCALLOC(s,n) tdmalloc(__FILE__, __LINE__, (s)*(n),1)
 #define TDMREALLOC(p,s) tdmrealloc(p,s)
 #define TDMFREE(p) do { if(p) \
 			{tdmfree((void *)p); \

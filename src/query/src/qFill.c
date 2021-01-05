@@ -33,7 +33,7 @@ static int32_t setTagColumnInfo(SFillInfo* pFillInfo, int32_t numOfCols, int32_t
   int32_t k = 0;
   for (int32_t i = 0; i < numOfCols; ++i) {
     SFillColInfo* pColInfo = &pFillInfo->pFillCol[i];
-    pFillInfo->pData[i] = calloc(1, pColInfo->col.bytes * capacity);
+    pFillInfo->pData[i] = TDMCALLOC(1, pColInfo->col.bytes * capacity);
 
     if (TSDB_COL_IS_TAG(pColInfo->flag)) {
       bool exists = false;
@@ -52,7 +52,7 @@ static int32_t setTagColumnInfo(SFillInfo* pFillInfo, int32_t numOfCols, int32_t
         pSchema->type  = pColInfo->col.type;
         pSchema->bytes = pColInfo->col.bytes;
 
-        pFillInfo->pTags[k].tagVal = calloc(1, pColInfo->col.bytes);
+        pFillInfo->pTags[k].tagVal = TDMCALLOC(1, pColInfo->col.bytes);
         pColInfo->tagIndex = k;
 
         k += 1;
@@ -75,7 +75,7 @@ SFillInfo* taosInitFillInfo(int32_t order, TSKEY skey, int32_t numOfTags, int32_
     return NULL;
   }
 
-  SFillInfo* pFillInfo = calloc(1, sizeof(SFillInfo));
+  SFillInfo* pFillInfo = TDMCALLOC(1, sizeof(SFillInfo));
 
   taosResetFillInfo(pFillInfo, skey);
 
@@ -93,9 +93,9 @@ SFillInfo* taosInitFillInfo(int32_t order, TSKEY skey, int32_t numOfTags, int32_
   pFillInfo->interval.sliding = slidingTime;
   pFillInfo->interval.slidingUnit = slidingUnit;
 
-  pFillInfo->pData = malloc(POINTER_BYTES * numOfCols);
+  pFillInfo->pData = TDMALLOC(POINTER_BYTES * numOfCols);
   if (numOfTags > 0) {
-    pFillInfo->pTags = calloc(pFillInfo->numOfTags, sizeof(SFillTagColInfo));
+    pFillInfo->pTags = TDMCALLOC(pFillInfo->numOfTags, sizeof(SFillTagColInfo));
     for (int32_t i = 0; i < numOfTags; ++i) {
       pFillInfo->pTags[i].col.colId = -2;  // TODO
     }
@@ -152,7 +152,7 @@ void taosFillSetStartInfo(SFillInfo* pFillInfo, int32_t numOfRows, TSKEY endKey)
   // ensure the space
   if (pFillInfo->alloc < numOfRows) {
     for(int32_t i = 0; i < pFillInfo->numOfCols; ++i) {
-      char* tmp = realloc(pFillInfo->pData[i], numOfRows*pFillInfo->pFillCol[i].col.bytes);
+      char* tmp = TDMREALLOC(pFillInfo->pData[i], numOfRows*pFillInfo->pFillCol[i].col.bytes);
       assert(tmp != NULL); // todo handle error
       
       memset(tmp, 0, numOfRows*pFillInfo->pFillCol[i].col.bytes);
@@ -360,7 +360,7 @@ static void initBeforeAfterDataBuf(SFillInfo* pFillInfo, char** next) {
     return;
   }
   
-  *next = calloc(1, pFillInfo->rowSize);
+  *next = TDMCALLOC(1, pFillInfo->rowSize);
   for (int i = 1; i < pFillInfo->numOfCols; i++) {
     SFillColInfo* pCol = &pFillInfo->pFillCol[i];
     setNull(*next + pCol->col.offset, pCol->col.type, pCol->col.bytes);

@@ -73,12 +73,12 @@ abort_parse:
 
 tSQLExprList *tSqlExprListAppend(tSQLExprList *pList, tSQLExpr *pNode, SStrToken *pToken) {
   if (pList == NULL) {
-    pList = calloc(1, sizeof(tSQLExprList));
+    pList = TDMCALLOC(1, sizeof(tSQLExprList));
   }
 
   if (pList->nAlloc <= pList->nExpr) {
     pList->nAlloc = (pList->nAlloc << 1u) + 4;
-    pList->a = realloc(pList->a, pList->nAlloc * sizeof(pList->a[0]));
+    pList->a = TDMREALLOC(pList->a, pList->nAlloc * sizeof(pList->a[0]));
     if (pList->a == 0) {
       pList->nExpr = pList->nAlloc = 0;
       return pList;
@@ -91,7 +91,7 @@ tSQLExprList *tSqlExprListAppend(tSQLExprList *pList, tSQLExpr *pNode, SStrToken
     memset(pItem, 0, sizeof(*pItem));
     pItem->pNode = pNode;
     if (pToken) {  // set the as clause
-      pItem->aliasName = malloc(pToken->n + 1);
+      pItem->aliasName = TDMALLOC(pToken->n + 1);
       strncpy(pItem->aliasName, pToken->z, pToken->n);
       pItem->aliasName[pToken->n] = 0;
 
@@ -116,7 +116,7 @@ void tSqlExprListDestroy(tSQLExprList *pList) {
 }
 
 tSQLExpr *tSqlExprIdValueCreate(SStrToken *pToken, int32_t optrType) {
-  tSQLExpr *pSqlExpr = calloc(1, sizeof(tSQLExpr));
+  tSQLExpr *pSqlExpr = TDMCALLOC(1, sizeof(tSQLExpr));
 
   if (pToken != NULL) {
     pSqlExpr->token = *pToken;
@@ -159,7 +159,7 @@ tSQLExpr *tSqlExprIdValueCreate(SStrToken *pToken, int32_t optrType) {
 tSQLExpr *tSqlExprCreateFunction(tSQLExprList *pList, SStrToken *pFuncToken, SStrToken *endToken, int32_t optType) {
   if (pFuncToken == NULL) return NULL;
 
-  tSQLExpr *pExpr = calloc(1, sizeof(tSQLExpr));
+  tSQLExpr *pExpr = TDMCALLOC(1, sizeof(tSQLExpr));
   pExpr->nSQLOptr = optType;
   pExpr->pParam = pList;
 
@@ -178,7 +178,7 @@ tSQLExpr *tSqlExprCreateFunction(tSQLExprList *pList, SStrToken *pFuncToken, SSt
  * if the expr is arithmetic, calculate the result and set it to tSQLExpr Object
  */
 tSQLExpr *tSqlExprCreate(tSQLExpr *pLeft, tSQLExpr *pRight, int32_t optrType) {
-  tSQLExpr *pExpr = calloc(1, sizeof(tSQLExpr));
+  tSQLExpr *pExpr = TDMCALLOC(1, sizeof(tSQLExpr));
 
   if (pLeft != NULL && pRight != NULL && (optrType != TK_IN)) {
     char* endPos = pRight->token.z + pRight->token.n;
@@ -269,7 +269,7 @@ tSQLExpr *tSqlExprCreate(tSQLExpr *pLeft, tSQLExpr *pRight, int32_t optrType) {
     pExpr->nSQLOptr = optrType;
     pExpr->pLeft = pLeft;
 
-    tSQLExpr *pRSub = calloc(1, sizeof(tSQLExpr));
+    tSQLExpr *pRSub = TDMCALLOC(1, sizeof(tSQLExpr));
     pRSub->nSQLOptr = TK_SET;  // TODO refactor .....
     pRSub->pParam = (tSQLExprList *)pRight;
 
@@ -279,7 +279,7 @@ tSQLExpr *tSqlExprCreate(tSQLExpr *pLeft, tSQLExpr *pRight, int32_t optrType) {
     pExpr->pLeft = pLeft;
 
     if (pRight == NULL) {
-      pRight = calloc(1, sizeof(tSQLExpr));
+      pRight = TDMCALLOC(1, sizeof(tSQLExpr));
     }
 
     pExpr->pRight = pRight;
@@ -448,7 +448,7 @@ SQuerySQL *tSetQuerySqlElems(SStrToken *pSelectToken, tSQLExprList *pSelection, 
                              SStrToken *pSliding, SArray *pFill, SLimitVal *pLimit, SLimitVal *pGLimit) {
   assert(pSelection != NULL);
 
-  SQuerySQL *pQuery = calloc(1, sizeof(SQuerySQL));
+  SQuerySQL *pQuery = TDMCALLOC(1, sizeof(SQuerySQL));
   pQuery->selectToken = *pSelectToken;
   pQuery->selectToken.n = (uint32_t)strlen(pQuery->selectToken.z);  // all later sql string are belonged to the stream sql
 
@@ -532,7 +532,7 @@ void destroyAllSelectClause(SSubclauseInfo *pClause) {
 }
 
 SCreateTableSQL *tSetCreateSqlElems(SArray *pCols, SArray *pTags, SQuerySQL *pSelect, int32_t type) {
-  SCreateTableSQL *pCreate = calloc(1, sizeof(SCreateTableSQL));
+  SCreateTableSQL *pCreate = TDMCALLOC(1, sizeof(SCreateTableSQL));
 
   switch (type) {
     case TSQL_CREATE_TABLE: {
@@ -576,7 +576,7 @@ SCreatedTableInfo createNewChildTableInfo(SStrToken *pTableName, SArray *pTagVal
 }
 
 SAlterTableSQL *tAlterTableSqlElems(SStrToken *pTableName, SArray *pCols, SArray *pVals, int32_t type) {
-  SAlterTableSQL *pAlterTable = calloc(1, sizeof(SAlterTableSQL));
+  SAlterTableSQL *pAlterTable = TDMCALLOC(1, sizeof(SAlterTableSQL));
   
   pAlterTable->name = *pTableName;
   pAlterTable->type = type;
@@ -635,11 +635,11 @@ void SqlInfoDestroy(SSqlInfo *pInfo) {
 
 SSubclauseInfo* setSubclause(SSubclauseInfo* pSubclause, void *pSqlExprInfo) {
   if (pSubclause == NULL) {
-    pSubclause = calloc(1, sizeof(SSubclauseInfo));
+    pSubclause = TDMCALLOC(1, sizeof(SSubclauseInfo));
   }
   
   int32_t newSize = pSubclause->numOfClause + 1;
-  char* tmp = realloc(pSubclause->pClause, newSize * POINTER_BYTES);
+  char* tmp = TDMREALLOC(pSubclause->pClause, newSize * POINTER_BYTES);
   if (tmp == NULL) {
     return pSubclause;
   }
@@ -670,7 +670,7 @@ SSqlInfo*setSqlInfo(SSqlInfo *pInfo, void *pSqlExprInfo, SStrToken *pTableName, 
 }
 
 SSubclauseInfo* appendSelectClause(SSubclauseInfo *pQueryInfo, void *pSubclause) {
-  char* tmp = realloc(pQueryInfo->pClause, (pQueryInfo->numOfClause + 1) * POINTER_BYTES);
+  char* tmp = TDMREALLOC(pQueryInfo->pClause, (pQueryInfo->numOfClause + 1) * POINTER_BYTES);
   if (tmp == NULL) {  // out of memory
     return pQueryInfo;
   }
@@ -689,7 +689,7 @@ void setCreatedTableName(SSqlInfo *pInfo, SStrToken *pTableNameToken, SStrToken 
 void tTokenListBuyMoreSpace(tDCLSQL *pTokenList) {
   if (pTokenList->nAlloc <= pTokenList->nTokens) {  //
     pTokenList->nAlloc = (pTokenList->nAlloc << 1u) + 4;
-    pTokenList->a = realloc(pTokenList->a, pTokenList->nAlloc * sizeof(pTokenList->a[0]));
+    pTokenList->a = TDMREALLOC(pTokenList->a, pTokenList->nAlloc * sizeof(pTokenList->a[0]));
     if (pTokenList->a == 0) {
       pTokenList->nTokens = pTokenList->nAlloc = 0;
     }
@@ -699,7 +699,7 @@ void tTokenListBuyMoreSpace(tDCLSQL *pTokenList) {
 tDCLSQL *tTokenListAppend(tDCLSQL *pTokenList, SStrToken *pToken) {
   if (pToken == NULL) return NULL;
 
-  if (pTokenList == NULL) pTokenList = calloc(1, sizeof(tDCLSQL));
+  if (pTokenList == NULL) pTokenList = TDMCALLOC(1, sizeof(tDCLSQL));
 
   tTokenListBuyMoreSpace(pTokenList);
   pTokenList->a[pTokenList->nTokens++] = *pToken;
@@ -711,7 +711,7 @@ void setDCLSQLElems(SSqlInfo *pInfo, int32_t type, int32_t nParam, ...) {
   pInfo->type = type;
 
   if (nParam == 0) return;
-  if (pInfo->pDCLInfo == NULL) pInfo->pDCLInfo = (tDCLSQL *)calloc(1, sizeof(tDCLSQL));
+  if (pInfo->pDCLInfo == NULL) pInfo->pDCLInfo = (tDCLSQL *)TDMCALLOC(1, sizeof(tDCLSQL));
 
   va_list va;
   va_start(va, nParam);
@@ -731,7 +731,7 @@ void setDropDbTableInfo(SSqlInfo *pInfo, int32_t type, SStrToken* pToken, SStrTo
 
 void setShowOptions(SSqlInfo *pInfo, int32_t type, SStrToken* prefix, SStrToken* pPatterns) {
   if (pInfo->pDCLInfo == NULL) {
-    pInfo->pDCLInfo = calloc(1, sizeof(tDCLSQL));
+    pInfo->pDCLInfo = TDMCALLOC(1, sizeof(tDCLSQL));
   }
   
   pInfo->type = TSDB_SQL_SHOW;
@@ -755,7 +755,7 @@ void setShowOptions(SSqlInfo *pInfo, int32_t type, SStrToken* prefix, SStrToken*
 void setCreateDBSQL(SSqlInfo *pInfo, int32_t type, SStrToken *pToken, SCreateDBInfo *pDB, SStrToken *pIgExists) {
   pInfo->type = type;
   if (pInfo->pDCLInfo == NULL) {
-    pInfo->pDCLInfo = calloc(1, sizeof(tDCLSQL));
+    pInfo->pDCLInfo = TDMCALLOC(1, sizeof(tDCLSQL));
   }
 
   pInfo->pDCLInfo->dbOpt = *pDB;
@@ -766,7 +766,7 @@ void setCreateDBSQL(SSqlInfo *pInfo, int32_t type, SStrToken *pToken, SCreateDBI
 void setCreateAcctSql(SSqlInfo *pInfo, int32_t type, SStrToken *pName, SStrToken *pPwd, SCreateAcctSQL *pAcctInfo) {
   pInfo->type = type;
   if (pInfo->pDCLInfo == NULL) {
-    pInfo->pDCLInfo = calloc(1, sizeof(tDCLSQL));
+    pInfo->pDCLInfo = TDMCALLOC(1, sizeof(tDCLSQL));
   }
 
   pInfo->pDCLInfo->acctOpt = *pAcctInfo;
@@ -782,7 +782,7 @@ void setCreateAcctSql(SSqlInfo *pInfo, int32_t type, SStrToken *pName, SStrToken
 void setCreateUserSql(SSqlInfo *pInfo, SStrToken *pName, SStrToken *pPasswd) {
   pInfo->type = TSDB_SQL_CREATE_USER;
   if (pInfo->pDCLInfo == NULL) {
-    pInfo->pDCLInfo = calloc(1, sizeof(tDCLSQL));
+    pInfo->pDCLInfo = TDMCALLOC(1, sizeof(tDCLSQL));
   }
   
   assert(pName != NULL && pPasswd != NULL);
@@ -794,7 +794,7 @@ void setCreateUserSql(SSqlInfo *pInfo, SStrToken *pName, SStrToken *pPasswd) {
 void setAlterUserSql(SSqlInfo *pInfo, int16_t type, SStrToken *pName, SStrToken* pPwd, SStrToken *pPrivilege) {
   pInfo->type = TSDB_SQL_ALTER_USER;
   if (pInfo->pDCLInfo == NULL) {
-    pInfo->pDCLInfo = calloc(1, sizeof(tDCLSQL));
+    pInfo->pDCLInfo = TDMCALLOC(1, sizeof(tDCLSQL));
   }
   
   assert(pName != NULL);
@@ -819,7 +819,7 @@ void setAlterUserSql(SSqlInfo *pInfo, int16_t type, SStrToken *pName, SStrToken*
 void setKillSql(SSqlInfo *pInfo, int32_t type, SStrToken *ip) {
   pInfo->type = type;
   if (pInfo->pDCLInfo == NULL) {
-    pInfo->pDCLInfo = calloc(1, sizeof(tDCLSQL));
+    pInfo->pDCLInfo = TDMCALLOC(1, sizeof(tDCLSQL));
   }
   
   assert(ip != NULL);

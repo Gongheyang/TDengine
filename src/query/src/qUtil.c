@@ -39,7 +39,7 @@ int32_t initResultRowInfo(SResultRowInfo *pResultRowInfo, int32_t size, int16_t 
   pResultRowInfo->size     = 0;
   pResultRowInfo->prevSKey = TSKEY_INITIAL_VAL;
 
-  pResultRowInfo->pResult = calloc(pResultRowInfo->capacity, POINTER_BYTES);
+  pResultRowInfo->pResult = TDMCALLOC(pResultRowInfo->capacity, POINTER_BYTES);
   if (pResultRowInfo->pResult == NULL) {
     return TSDB_CODE_QRY_OUT_OF_MEMORY;
   }
@@ -159,7 +159,7 @@ size_t getResultRowSize(SQueryRuntimeEnv* pRuntimeEnv) {
 }
 
 SResultRowPool* initResultRowPool(size_t size) {
-  SResultRowPool* p = calloc(1, sizeof(SResultRowPool));
+  SResultRowPool* p = TDMCALLOC(1, sizeof(SResultRowPool));
   if (p == NULL) {
     return NULL;
   }
@@ -181,7 +181,7 @@ SResultRow* getNewResultRow(SResultRowPool* p) {
 
   void* ptr = NULL;
   if (p->position.pos == 0) {
-    ptr = calloc(1, p->blockSize);
+    ptr = TDMCALLOC(1, p->blockSize);
     taosArrayPush(p->pData, &ptr);
 
   } else {

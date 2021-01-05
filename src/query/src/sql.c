@@ -1278,10 +1278,10 @@ static int yyGrowStack(yyParser *p){
   newSize = p->yystksz*2 + 100;
   idx = p->yytos ? (int)(p->yytos - p->yystack) : 0;
   if( p->yystack==&p->yystk0 ){
-    pNew = malloc(newSize*sizeof(pNew[0]));
+    pNew = TDMALLOC(newSize*sizeof(pNew[0]));
     if( pNew ) pNew[0] = p->yystk0;
   }else{
-    pNew = realloc(p->yystack, newSize*sizeof(pNew[0]));
+    pNew = TDMREALLOC(p->yystack, newSize*sizeof(pNew[0]));
   }
   if( pNew ){
     p->yystack = pNew;
@@ -2388,7 +2388,7 @@ static void yy_reduce(
         break;
       case 120: /* create_table_list ::= create_from_stable */
 {
-  SCreateTableSQL* pCreateTable = calloc(1, sizeof(SCreateTableSQL));
+  SCreateTableSQL* pCreateTable = TDMCALLOC(1, sizeof(SCreateTableSQL));
   pCreateTable->childTableInfo = taosArrayInit(4, sizeof(SCreatedTableInfo));
 
   taosArrayPush(pCreateTable->childTableInfo, &yymsp[0].minor.yy84);

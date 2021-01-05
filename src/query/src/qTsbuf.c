@@ -15,7 +15,7 @@ static int32_t STSBufUpdateHeader(STSBuf* pTSBuf, STSBufFileHeader* pHeader);
  * @return
  */
 STSBuf* tsBufCreate(bool autoDelete, int32_t order) {
-  STSBuf* pTSBuf = calloc(1, sizeof(STSBuf));
+  STSBuf* pTSBuf = TDMCALLOC(1, sizeof(STSBuf));
   if (pTSBuf == NULL) {
     return NULL;
   }
@@ -45,7 +45,7 @@ STSBuf* tsBufCreate(bool autoDelete, int32_t order) {
 }
 
 STSBuf* tsBufCreateFromFile(const char* path, bool autoDelete) {
-  STSBuf* pTSBuf = calloc(1, sizeof(STSBuf));
+  STSBuf* pTSBuf = TDMCALLOC(1, sizeof(STSBuf));
   if (pTSBuf == NULL) {
     return NULL;
   }
@@ -77,7 +77,7 @@ STSBuf* tsBufCreateFromFile(const char* path, bool autoDelete) {
   
   if (header.numOfGroup > pTSBuf->numOfAlloc) {
     pTSBuf->numOfAlloc = header.numOfGroup;
-    STSGroupBlockInfoEx* tmp = realloc(pTSBuf->pData, sizeof(STSGroupBlockInfoEx) * pTSBuf->numOfAlloc);
+    STSGroupBlockInfoEx* tmp = TDMREALLOC(pTSBuf->pData, sizeof(STSGroupBlockInfoEx) * pTSBuf->numOfAlloc);
     if (tmp == NULL) {
       tsBufDestroy(pTSBuf);
       return NULL;
@@ -98,7 +98,7 @@ STSBuf* tsBufCreateFromFile(const char* path, bool autoDelete) {
   
   size_t infoSize = sizeof(STSGroupBlockInfo) * pTSBuf->numOfGroups;
   
-  STSGroupBlockInfo* buf = (STSGroupBlockInfo*)calloc(1, infoSize);
+  STSGroupBlockInfo* buf = (STSGroupBlockInfo*)TDMCALLOC(1, infoSize);
   if (buf == NULL) {
     tsBufDestroy(pTSBuf);
     return NULL; 
@@ -174,7 +174,7 @@ static STSGroupBlockInfoEx* addOneGroupInfo(STSBuf* pTSBuf, int32_t id) {
     uint32_t newSize = (uint32_t)(pTSBuf->numOfAlloc * 1.5);
     assert((int32_t)newSize > pTSBuf->numOfAlloc);
     
-    STSGroupBlockInfoEx* tmp = (STSGroupBlockInfoEx*)realloc(pTSBuf->pData, sizeof(STSGroupBlockInfoEx) * newSize);
+    STSGroupBlockInfoEx* tmp = (STSGroupBlockInfoEx*)TDMREALLOC(pTSBuf->pData, sizeof(STSGroupBlockInfoEx) * newSize);
     if (tmp == NULL) {
       return NULL;
     }
@@ -214,7 +214,7 @@ static STSGroupBlockInfoEx* addOneGroupInfo(STSBuf* pTSBuf, int32_t id) {
 static void shrinkBuffer(STSList* ptsData) {
   // shrink tmp buffer size if it consumes too many memory compared to the pre-defined size
   if (ptsData->allocSize >= ptsData->threshold * 2) {
-    ptsData->rawBuf = realloc(ptsData->rawBuf, MEM_BUF_SIZE);
+    ptsData->rawBuf = TDMREALLOC(ptsData->rawBuf, MEM_BUF_SIZE);
     ptsData->allocSize = MEM_BUF_SIZE;
   }
 }
@@ -290,7 +290,7 @@ static void writeDataToDisk(STSBuf* pTSBuf) {
 static void expandBuffer(STSList* ptsData, int32_t inputSize) {
   if (ptsData->allocSize - ptsData->len < inputSize) {
     int32_t newSize = inputSize + ptsData->len;
-    char*   tmp = realloc(ptsData->rawBuf, (size_t)newSize);
+    char*   tmp = TDMREALLOC(ptsData->rawBuf, (size_t)newSize);
     if (tmp == NULL) {
       // todo
     }
@@ -334,7 +334,7 @@ STSBlock* readDataFromDisk(STSBuf* pTSBuf, int32_t order, bool decomp) {
   // NOTE: mix types tags are not supported
   size_t sz = 0;
   if (pBlock->tag.nType == TSDB_DATA_TYPE_BINARY || pBlock->tag.nType == TSDB_DATA_TYPE_NCHAR) {
-    char* tp = realloc(pBlock->tag.pz, pBlock->tag.nLen + 1);
+    char* tp = TDMREALLOC(pBlock->tag.pz, pBlock->tag.nLen + 1);
     assert(tp != NULL);
 
     memset(tp, 0, pBlock->tag.nLen + 1);
@@ -771,7 +771,7 @@ int32_t tsBufMerge(STSBuf* pDestBuf, const STSBuf* pSrcBuf) {
     if (pDestBuf->numOfAlloc < newSize) {
       pDestBuf->numOfAlloc = newSize;
       
-      STSGroupBlockInfoEx* tmp = realloc(pDestBuf->pData, sizeof(STSGroupBlockInfoEx) * newSize);
+      STSGroupBlockInfoEx* tmp = TDMREALLOC(pDestBuf->pData, sizeof(STSGroupBlockInfoEx) * newSize);
       if (tmp == NULL) {
         return -1;
       }
@@ -969,13 +969,13 @@ static STSBuf* allocResForTSBuf(STSBuf* pTSBuf) {
   const int32_t INITIAL_GROUPINFO_SIZE = 4;
   
   pTSBuf->numOfAlloc = INITIAL_GROUPINFO_SIZE;
-  pTSBuf->pData = calloc(pTSBuf->numOfAlloc, sizeof(STSGroupBlockInfoEx));
+  pTSBuf->pData = TDMCALLOC(pTSBuf->numOfAlloc, sizeof(STSGroupBlockInfoEx));
   if (pTSBuf->pData == NULL) {
     tsBufDestroy(pTSBuf);
     return NULL;
   }
   
-  pTSBuf->tsData.rawBuf = malloc(MEM_BUF_SIZE);
+  pTSBuf->tsData.rawBuf = TDMALLOC(MEM_BUF_SIZE);
   if (pTSBuf->tsData.rawBuf == NULL) {
     tsBufDestroy(pTSBuf);
     return NULL;
@@ -985,13 +985,13 @@ static STSBuf* allocResForTSBuf(STSBuf* pTSBuf) {
   pTSBuf->tsData.threshold = MEM_BUF_SIZE;
   pTSBuf->tsData.allocSize = MEM_BUF_SIZE;
   
-  pTSBuf->assistBuf = malloc(MEM_BUF_SIZE);
+  pTSBuf->assistBuf = TDMALLOC(MEM_BUF_SIZE);
   if (pTSBuf->assistBuf == NULL) {
     tsBufDestroy(pTSBuf);
     return NULL;
   }
   
-  pTSBuf->block.payload = malloc(MEM_BUF_SIZE);
+  pTSBuf->block.payload = TDMALLOC(MEM_BUF_SIZE);
   if (pTSBuf->block.payload == NULL) {
     tsBufDestroy(pTSBuf);
     return NULL;
@@ -1020,7 +1020,7 @@ void tsBufGetGroupIdList(STSBuf* pTSBuf, int32_t* num, int32_t** id) {
     return;
   }
 
-  (*id) = malloc(tsBufGetNumOfGroup(pTSBuf) * sizeof(int32_t));
+  (*id) = TDMALLOC(tsBufGetNumOfGroup(pTSBuf) * sizeof(int32_t));
 
   for(int32_t i = 0; i < size; ++i) {
     (*id)[i] = pTSBuf->pData[i].info.id;

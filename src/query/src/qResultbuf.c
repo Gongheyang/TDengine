@@ -11,7 +11,7 @@
 
 int32_t createDiskbasedResultBuffer(SDiskbasedResultBuf** pResultBuf, int32_t rowSize, int32_t pagesize,
                                     int32_t inMemBufSize, const void* handle) {
-  *pResultBuf = calloc(1, sizeof(SDiskbasedResultBuf));
+  *pResultBuf = TDMCALLOC(1, sizeof(SDiskbasedResultBuf));
 
   SDiskbasedResultBuf* pResBuf = *pResultBuf;
   if (pResBuf == NULL) {
@@ -36,7 +36,7 @@ int32_t createDiskbasedResultBuffer(SDiskbasedResultBuf** pResultBuf, int32_t ro
 
   // init id hash table
   pResBuf->groupSet  = taosHashInit(10, taosGetDefaultHashFunction(TSDB_DATA_TYPE_INT), true, false);
-  pResBuf->assistBuf = malloc(pResBuf->pageSize + 2); // EXTRA BYTES
+  pResBuf->assistBuf = TDMALLOC(pResBuf->pageSize + 2); // EXTRA BYTES
   pResBuf->all = taosHashInit(10, taosGetDefaultHashFunction(TSDB_DATA_TYPE_INT), true, false);
 
   char path[PATH_MAX] = {0};
@@ -219,7 +219,7 @@ static SPageInfo* registerPage(SDiskbasedResultBuf* pResultBuf, int32_t groupId,
 
   pResultBuf->numOfPages += 1;
 
-  SPageInfo* ppi = malloc(sizeof(SPageInfo));//{ .info = PAGE_INFO_INITIALIZER, .pageId = pageId, .pn = NULL};
+  SPageInfo* ppi = TDMALLOC(sizeof(SPageInfo));//{ .info = PAGE_INFO_INITIALIZER, .pageId = pageId, .pn = NULL};
 
   ppi->pageId = pageId;
   ppi->pData  = NULL;
@@ -313,7 +313,7 @@ tFilePage* getNewDataBuf(SDiskbasedResultBuf* pResultBuf, int32_t groupId, int32
 
   // allocate buf
   if (availablePage == NULL) {
-    pi->pData = calloc(1, pResultBuf->pageSize + POINTER_BYTES + 2);  // add extract bytes in case of zipped buffer increased.
+    pi->pData = TDMCALLOC(1, pResultBuf->pageSize + POINTER_BYTES + 2);  // add extract bytes in case of zipped buffer increased.
   } else {
     pi->pData = availablePage;
   }
@@ -357,7 +357,7 @@ tFilePage* getResBufPage(SDiskbasedResultBuf* pResultBuf, int32_t id) {
     }
 
     if (availablePage == NULL) {
-      (*pi)->pData = calloc(1, pResultBuf->pageSize + POINTER_BYTES);
+      (*pi)->pData = TDMCALLOC(1, pResultBuf->pageSize + POINTER_BYTES);
     } else {
       (*pi)->pData = availablePage;
     }

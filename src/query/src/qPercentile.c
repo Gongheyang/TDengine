@@ -28,7 +28,7 @@ int32_t getGroupId(int32_t numOfSlots, int32_t slotIndex, int32_t times) {
 }
 
 static tFilePage *loadDataFromFilePage(tMemBucket *pMemBucket, int32_t slotIdx) {
-  tFilePage *buffer = (tFilePage *)calloc(1, pMemBucket->bytes * pMemBucket->pSlots[slotIdx].info.size + sizeof(tFilePage));
+  tFilePage *buffer = (tFilePage *)TDMCALLOC(1, pMemBucket->bytes * pMemBucket->pSlots[slotIdx].info.size + sizeof(tFilePage));
 
   int32_t groupId = getGroupId(pMemBucket->numOfSlots, slotIdx, pMemBucket->times);
   SIDList list = getDataBufPagesIdList(pMemBucket->pBuffer, groupId);
@@ -312,7 +312,7 @@ static void resetSlotInfo(tMemBucket* pBucket) {
 }
 
 tMemBucket *tMemBucketCreate(int16_t nElemSize, int16_t dataType, double minval, double maxval) {
-  tMemBucket *pBucket = (tMemBucket *)calloc(1, sizeof(tMemBucket));
+  tMemBucket *pBucket = (tMemBucket *)TDMCALLOC(1, sizeof(tMemBucket));
   if (pBucket == NULL) {
     return NULL;
   }
@@ -343,7 +343,7 @@ tMemBucket *tMemBucketCreate(int16_t nElemSize, int16_t dataType, double minval,
     return NULL;
   }
 
-  pBucket->pSlots = (tMemBucketSlot *)calloc(pBucket->numOfSlots, sizeof(tMemBucketSlot));
+  pBucket->pSlots = (tMemBucketSlot *)TDMCALLOC(pBucket->numOfSlots, sizeof(tMemBucketSlot));
   if (pBucket->pSlots == NULL) {
     TDMFREE(pBucket);
     return NULL;
