@@ -271,7 +271,7 @@ void tscSCreateCallBack(void *param, TAOS_RES *tres, int code) {
   pRes->code = taos_errno(pSql); 
   if (pRes->code != TSDB_CODE_SUCCESS) {
     taos_free_result(pSql);  
-    free(builder);
+    TDMFREE(builder);
     tscAsyncResultOnError(pParentSql);
     return;
   }
@@ -284,8 +284,8 @@ void tscSCreateCallBack(void *param, TAOS_RES *tres, int code) {
     pRes->code = builder->fp(builder, result);
 
     taos_free_result(pSql);  
-    free(builder);
-    free(result);
+    TDMFREE(builder);
+    TDMFREE(result);
 
     if (pRes->code == TSDB_CODE_SUCCESS) {
       (*pParentSql->fp)(pParentSql->param, pParentSql, code);  
@@ -464,7 +464,7 @@ int32_t tscRebuildCreateTableStatement(void *param,char *result) {
     snprintf(result + strlen(result), TSDB_MAX_BINARY_LEN - strlen(result), "CREATE TABLE %s USING %s TAGS %s", builder->buf, builder->sTableName, buf);
     code = tscSCreateBuildResult(builder->pParentSql, SCREATE_BUILD_TABLE, builder->buf, result);    
   }  
-  free(buf);
+  TDMFREE(buf);
   return code;
 }
 
@@ -520,7 +520,7 @@ int32_t tscRebuildCreateDBStatement(void *param,char *result) {
   if (code == TSDB_CODE_SUCCESS) {
     code = tscSCreateBuildResult(builder->pParentSql, SCREATE_BUILD_DB, builder->buf, buf);    
   }
-  free(buf);
+  TDMFREE(buf);
   return code;
 }
 
@@ -534,7 +534,7 @@ static int32_t tscGetTableTagColumnName(SSqlObj *pSql, char **result) {
   STableMeta *pMeta = tscGetTableMetaInfoFromCmd(&pSql->cmd, 0, 0)->pTableMeta; 
   if (pMeta->tableType == TSDB_SUPER_TABLE || pMeta->tableType == TSDB_NORMAL_TABLE ||
       pMeta->tableType == TSDB_STREAM_TABLE) {
-    free(buf);
+    TDMFREE(buf);
     return TSDB_CODE_TSC_INVALID_VALUE;
   } 
 
@@ -564,7 +564,7 @@ static int32_t tscRebuildDDLForSubTable(SSqlObj *pSql, const char *tableName, ch
 
   SCreateBuilder *param = (SCreateBuilder *)malloc(sizeof(SCreateBuilder));    
   if (param == NULL) {
-    free(pInterSql);
+    TDMFREE(pInterSql);
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
 
@@ -581,24 +581,24 @@ static int32_t tscRebuildDDLForSubTable(SSqlObj *pSql, const char *tableName, ch
 
   char *query = (char *)calloc(1, TSDB_MAX_BINARY_LEN); 
   if (query == NULL) {
-    free(param);
-    free(pInterSql);
+    TDMFREE(param);
+    TDMFREE(pInterSql);
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
 
   char *columns = NULL;
   int32_t code = tscGetTableTagColumnName(pSql, &columns) ;
   if (code != TSDB_CODE_SUCCESS) {
-    free(param); 
-    free(pInterSql);
-    free(query);
+    TDMFREE(param); 
+    TDMFREE(pInterSql);
+    TDMFREE(query);
     return code;
   }
 
   snprintf(query + strlen(query), TSDB_MAX_BINARY_LEN - strlen(query), "SELECT %s FROM %s WHERE TBNAME IN(\'%s\')", columns, fullName, param->buf);
   doAsyncQuery(pSql->pTscObj, pInterSql, tscSCreateCallBack, param, query, strlen(query));
-  free(query);
-  free(columns);
+  TDMFREE(query);
+  TDMFREE(columns);
 
   return TSDB_CODE_TSC_ACTION_IN_PROGRESS; 
 }
@@ -693,7 +693,7 @@ static int32_t tscProcessShowCreateTable(SSqlObj *pSql) {
   if (code == TSDB_CODE_SUCCESS) {
     code = tscSCreateBuildResult(pSql, SCREATE_BUILD_TABLE, tableName, result);
   } 
-  free(result);
+  TDMFREE(result);
   return code;
 }
 
@@ -709,7 +709,7 @@ static int32_t tscProcessShowCreateDatabase(SSqlObj *pSql) {
 
   SCreateBuilder *param = (SCreateBuilder *)malloc(sizeof(SCreateBuilder));    
   if (param == NULL) {
-    free(pInterSql);
+    TDMFREE(pInterSql);
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
   extractTableName(pTableMetaInfo->name, param->buf);
@@ -738,7 +738,7 @@ static int32_t tscProcessCurrentUser(SSqlObj *pSql) {
   STR_WITH_MAXSIZE_TO_VARSTR(vx, pSql->pTscObj->user, size);
 
   tscSetLocalQueryResult(pSql, vx, pExpr->aliasName, pExpr->resType, pExpr->resBytes);
-  free(vx);
+  TDMFREE(vx);
 
   return TSDB_CODE_SUCCESS;
 }
@@ -767,7 +767,7 @@ static int32_t tscProcessCurrentDB(SSqlObj *pSql) {
   }
 
   tscSetLocalQueryResult(pSql, vx, pExpr->aliasName, pExpr->resType, pExpr->resBytes);
-  free(vx);
+  TDMFREE(vx);
 
   return TSDB_CODE_SUCCESS;
 }
@@ -791,7 +791,7 @@ static int32_t tscProcessServerVer(SSqlObj *pSql) {
   STR_WITH_SIZE_TO_VARSTR(vx, v, (VarDataLenT)t);
   tscSetLocalQueryResult(pSql, vx, pExpr->aliasName, pExpr->resType, pExpr->resBytes);
 
-  free(vx);
+  TDMFREE(vx);
   return TSDB_CODE_SUCCESS;
 
 }
@@ -814,7 +814,7 @@ static int32_t tscProcessClientVer(SSqlObj *pSql) {
   STR_WITH_SIZE_TO_VARSTR(v, version, (VarDataLenT)t);
   tscSetLocalQueryResult(pSql, v, pExpr->aliasName, pExpr->resType, pExpr->resBytes);
 
-  free(v);
+  TDMFREE(v);
   return TSDB_CODE_SUCCESS;
 
 }

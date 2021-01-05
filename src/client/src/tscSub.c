@@ -194,7 +194,7 @@ fail:
   if (pSub != NULL) {
     taosArrayDestroy(pSub->progress);
     tsem_destroy(&pSub->sem);
-    free(pSub);
+    TDMFREE(pSub);
     pSub = NULL;
   }
 
@@ -598,5 +598,5 @@ void taos_unsubscribe(TAOS_SUB *tsub, int keepProgress) {
   taosArrayDestroy(pSub->progress);
   tsem_destroy(&pSub->sem);
   memset(pSub, 0, sizeof(*pSub));
-  free(pSub);
+  TDMFREE(pSub);
 }

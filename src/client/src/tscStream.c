@@ -271,10 +271,10 @@ static void tscProcessStreamRetrieveResult(void *param, TAOS_RES *res, int numOf
     tscDebug("%p stream:%p, query on:%s, fetch result completed, fetched rows:%" PRId64, pSql, pStream, pTableMetaInfo->name,
              pStream->numOfRes);
 
-    tfree(pTableMetaInfo->pTableMeta);
+    TDMFREE(pTableMetaInfo->pTableMeta);
 
     tscFreeSqlResult(pSql);
-    tfree(pSql->pSubs);
+    TDMFREE(pSql->pSubs);
     pSql->subState.numOfSub = 0;
     pTableMetaInfo->vgroupList = tscVgroupInfoClear(pTableMetaInfo->vgroupList);
     tscSetNextLaunchTimer(pStream, pSql);
@@ -592,7 +592,7 @@ TAOS_STREAM *taos_open_stream(TAOS *taos, const char *sqlstr, void (*fp)(void *p
   } else if (code != TSDB_CODE_TSC_ACTION_IN_PROGRESS) {
     tscError("%p open stream failed, sql:%s, code:%s", pSql, sqlstr, tstrerror(pRes->code));
     tscFreeSqlObj(pSql);
-    free(pStream);
+    TDMFREE(pStream);
     return NULL;
   }
 
@@ -622,6 +622,6 @@ void taos_close_stream(TAOS_STREAM *handle) {
     pStream->pSql = NULL;
 
     taos_free_result(pSql);
-    tfree(pStream);
+    TDMFREE(pStream);
   }
 }

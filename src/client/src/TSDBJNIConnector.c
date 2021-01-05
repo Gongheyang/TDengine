@@ -314,7 +314,7 @@ JNIEXPORT jlong JNICALL Java_com_taosdata_jdbc_TSDBJNIConnector_executeQueryImp(
     }
   }
 
-  free(str);
+  TDMFREE(str);
   return (jlong) pSql;
 }
 
@@ -660,7 +660,7 @@ JNIEXPORT jint JNICALL Java_com_taosdata_jdbc_TSDBJNIConnector_validateCreateTab
   int code = taos_validate_sql(tscon, str);
   jniDebug("jobj:%p, conn:%p, code is %d", jobj, tscon, code);
 
-  free(str);
+  TDMFREE(str);
   return code;
 }
 

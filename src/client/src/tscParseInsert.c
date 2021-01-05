@@ -711,7 +711,7 @@ static int32_t doParseInsertStatement(SSqlCmd* pCmd, char **str, SParsedDataColI
   }
 
   int32_t numOfRows = tsParseValues(str, dataBuf, pTableMeta, maxNumOfRows, spd, pCmd, &code, tmpTokenBuf);
-  free(tmpTokenBuf);
+  TDMFREE(tmpTokenBuf);
   if (numOfRows <= 0) {
     return code;
   }
@@ -946,7 +946,7 @@ static int32_t tscCheckIfCreateTable(char **sqlstr, SSqlObj *pSql) {
     }
 
     kvRowCpy(pTag, row);
-    free(row);
+    TDMFREE(row);
     pCmd->tagData.data = pTag;
 
     index = 0;
@@ -1337,10 +1337,10 @@ int tsParseSql(SSqlObj *pSql, bool initial) {
     char* sqlstr = strdup(pSql->sqlstr);
     ret = tsParseInsertSql(pSql);
     if (sqlstr == NULL || pSql->parseRetry >= 1 || ret != TSDB_CODE_TSC_INVALID_SQL) {
-      free(sqlstr);
+      TDMFREE(sqlstr);
     } else {
       tscResetSqlCmdObj(pCmd);
-      free(pSql->sqlstr);
+      TDMFREE(pSql->sqlstr);
       pSql->sqlstr = sqlstr;
       pSql->parseRetry++;
       if ((ret = tsInsertInitialCheck(pSql)) == TSDB_CODE_SUCCESS) {
@@ -1425,7 +1425,7 @@ static void parseFileSendDataBlock(void *param, TAOS_RES *tres, int code) {
       }
 
       taos_free_result(pSql);
-      tfree(pSupporter);
+      TDMFREE(pSupporter);
       fclose(fp);
 
       pParentSql->res.code = code;
@@ -1451,7 +1451,7 @@ static void parseFileSendDataBlock(void *param, TAOS_RES *tres, int code) {
   int32_t count = 0;
   int32_t maxRows = 0;
 
-  tfree(pCmd->pTableNameList);
+  TDMFREE(pCmd->pTableNameList);
   pCmd->pDataBlocks = tscDestroyBlockArrayList(pCmd->pDataBlocks);
 
   if (pCmd->pTableBlockHashList == NULL) {
@@ -1493,8 +1493,8 @@ static void parseFileSendDataBlock(void *param, TAOS_RES *tres, int code) {
     }
   }
 
-  tfree(tokenBuf);
-  free(line);
+  TDMFREE(tokenBuf);
+  TDMFREE(line);
 
   if (count > 0) {
     code = doPackSendDataBlock(pSql, count, pTableDataBlock);
@@ -1506,7 +1506,7 @@ static void parseFileSendDataBlock(void *param, TAOS_RES *tres, int code) {
 
   } else {
     taos_free_result(pSql);
-    tfree(pSupporter);
+    TDMFREE(pSupporter);
     fclose(fp);
 
     pParentSql->fp = pParentSql->fetchFp;
@@ -1534,7 +1534,7 @@ void tscProcessMultiVnodesImportFromFile(SSqlObj *pSql) {
     pSql->res.code = TAOS_SYSTEM_ERROR(errno);
     tscError("%p failed to open file %s to load data from file, code:%s", pSql, pCmd->payload, tstrerror(pSql->res.code));
 
-    tfree(pSupporter);
+    TDMFREE(pSupporter);
     tscAsyncResultOnError(pSql);
 
     return;

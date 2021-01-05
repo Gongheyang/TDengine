@@ -2044,7 +2044,7 @@ static void copyTopBotRes(SQLFunctionCtx *pCtx, int32_t type) {
     }
   }
   
-  tfree(pData);
+  TDMFREE(pData);
 }
 
 /*
@@ -2597,7 +2597,7 @@ static void apercentile_finalizer(SQLFunctionCtx *pCtx) {
       double *res = tHistogramUniform(pOutput->pHisto, ratio, 1);
       
       memcpy(pCtx->aOutputBuf, res, sizeof(double));
-      free(res);
+      TDMFREE(res);
     } else {
       setNull(pCtx->aOutputBuf, pCtx->outputType, pCtx->outputBytes);
       return;
@@ -2608,7 +2608,7 @@ static void apercentile_finalizer(SQLFunctionCtx *pCtx) {
       
       double *res = tHistogramUniform(pOutput->pHisto, ratio, 1);
       memcpy(pCtx->aOutputBuf, res, sizeof(double));
-      free(res);
+      TDMFREE(res);
     } else {  // no need to free
       setNull(pCtx->aOutputBuf, pCtx->outputType, pCtx->outputBytes);
       return;

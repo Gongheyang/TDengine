@@ -59,11 +59,11 @@ void cleanupResultRowInfo(SResultRowInfo *pResultRowInfo) {
 
   if (pResultRowInfo->type == TSDB_DATA_TYPE_BINARY || pResultRowInfo->type == TSDB_DATA_TYPE_NCHAR) {
     for(int32_t i = 0; i < pResultRowInfo->size; ++i) {
-      tfree(pResultRowInfo->pResult[i]->key);
+      TDMFREE(pResultRowInfo->pResult[i]->key);
     }
   }
   
-  tfree(pResultRowInfo->pResult);
+  TDMFREE(pResultRowInfo->pResult);
 }
 
 void resetResultRowInfo(SQueryRuntimeEnv *pRuntimeEnv, SResultRowInfo *pResultRowInfo) {
@@ -143,7 +143,7 @@ void clearResultRow(SQueryRuntimeEnv *pRuntimeEnv, SResultRow *pResultRow, int16
   pResultRow->closed = false;
 
   if (type == TSDB_DATA_TYPE_BINARY || type == TSDB_DATA_TYPE_NCHAR) {
-    tfree(pResultRow->key);
+    TDMFREE(pResultRow->key);
   } else {
     pResultRow->win = TSWINDOW_INITIALIZER;
   }
@@ -221,11 +221,11 @@ void* destroyResultRowPool(SResultRowPool* p) {
   size_t size = taosArrayGetSize(p->pData);
   for(int32_t i = 0; i < size; ++i) {
     void** ptr = taosArrayGet(p->pData, i);
-    tfree(*ptr);
+    TDMFREE(*ptr);
   }
 
   taosArrayDestroy(p->pData);
 
-  tfree(p);
+  TDMFREE(p);
   return NULL;
 }

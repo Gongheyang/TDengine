@@ -329,7 +329,7 @@ tMemBucket *tMemBucketCreate(int16_t nElemSize, int16_t dataType, double minval,
 
   if (setBoundingBox(&pBucket->range, pBucket->type, minval, maxval) != 0) {
     uError("MemBucket:%p, invalid value range: %f-%f", pBucket, minval, maxval);
-    free(pBucket);
+    TDMFREE(pBucket);
     return NULL;
   }
 
@@ -339,13 +339,13 @@ tMemBucket *tMemBucketCreate(int16_t nElemSize, int16_t dataType, double minval,
   pBucket->hashFunc = getHashFunc(pBucket->type);
   if (pBucket->hashFunc == NULL) {
     uError("MemBucket:%p, not support data type %d, failed", pBucket, pBucket->type);
-    free(pBucket);
+    TDMFREE(pBucket);
     return NULL;
   }
 
   pBucket->pSlots = (tMemBucketSlot *)calloc(pBucket->numOfSlots, sizeof(tMemBucketSlot));
   if (pBucket->pSlots == NULL) {
-    free(pBucket);
+    TDMFREE(pBucket);
     return NULL;
   }
 
@@ -367,8 +367,8 @@ void tMemBucketDestroy(tMemBucket *pBucket) {
   }
 
   destroyResultBuf(pBucket->pBuffer);
-  tfree(pBucket->pSlots);
-  tfree(pBucket);
+  TDMFREE(pBucket->pSlots);
+  TDMFREE(pBucket);
 }
 
 void tMemBucketUpdateBoundingBox(MinMaxEntry *r, const char *data, int32_t dataType) {
@@ -686,7 +686,7 @@ double getPercentileImpl(tMemBucket *pMemBucket, int32_t count, double fraction)
         }
 
         double val = (1 - fraction) * td + fraction * nd;
-        tfree(buffer);
+        TDMFREE(buffer);
 
         return val;
       } else {  // incur a second round bucket split

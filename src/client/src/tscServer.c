@@ -391,7 +391,7 @@ void tscProcessMsgFromServer(SRpcMsg *rpcMsg, SRpcEpSet *pEpSet) {
         memcpy(pRes->pRsp, rpcMsg->pCont, pRes->rspLen);
       }
     } else {
-      tfree(pRes->pRsp);
+      TDMFREE(pRes->pRsp);
     }
 
     /*
@@ -747,7 +747,7 @@ int tscBuildQueryMsg(SSqlObj *pSql, SSqlInfo *pInfo) {
   pQueryMsg->queryType      = htonl(pQueryInfo->type);
   pQueryMsg->vgroupLimit    = htobe64(pQueryInfo->vgroupLimit);
   pQueryMsg->sqlstrLen      = htonl(sqlLen);
-  if(pSql->sqlstr && strlen(pSql->sqlstr) < sizeof((pQueryMsg->sqlstr)) {
+  if(pSql->sqlstr && strlen(pSql->sqlstr) < sizeof(pQueryMsg->sqlstr)) {
       strcpy(pQueryMsg->sqlstr, pSql->sqlstr);
   }
 
@@ -1860,11 +1860,11 @@ int tscProcessTableMetaRsp(SSqlObj *pSql) {
     int32_t code = taosHashPut(tscTableMetaInfo, pTableMeta->sTableName, len, pSupTableMeta, size);
     assert(code == TSDB_CODE_SUCCESS);
 
-    tfree(pSupTableMeta);
+    TDMFREE(pSupTableMeta);
 
     CChildTableMeta* cMeta = tscCreateChildMeta(pTableMeta);
     taosHashPut(tscTableMetaInfo, pTableMetaInfo->name, strlen(pTableMetaInfo->name), cMeta, sizeof(CChildTableMeta));
-    tfree(cMeta);
+    TDMFREE(cMeta);
   } else {
     uint32_t s = tscGetTableMetaSize(pTableMeta);
     taosHashPut(tscTableMetaInfo, pTableMetaInfo->name, strlen(pTableMetaInfo->name), pTableMeta, s);
@@ -1887,7 +1887,7 @@ int tscProcessTableMetaRsp(SSqlObj *pSql) {
   }
 
   tscDebug("%p recv table meta, uid:%"PRId64 ", tid:%d, name:%s", pSql, pTableMeta->id.uid, pTableMeta->id.tid, pTableMetaInfo->name);
-  free(pTableMeta);
+  TDMFREE(pTableMeta);
   
   return TSDB_CODE_SUCCESS;
 }
@@ -2079,7 +2079,7 @@ int tscProcessShowRsp(SSqlObj *pSql) {
     pSchema++;
   }
 
-  tfree(pTableMetaInfo->pTableMeta);
+  TDMFREE(pTableMetaInfo->pTableMeta);
   pTableMetaInfo->pTableMeta = tscCreateTableMetaFromMsg(pMetaMsg);
 
   SSchema *pTableSchema = tscGetTableSchema(pTableMetaInfo->pTableMeta);
@@ -2121,7 +2121,7 @@ static void createHBObj(STscObj* pObj) {
   SQueryInfo *pQueryInfo = tscGetQueryInfoDetailSafely(&pSql->cmd, 0);
   if (pQueryInfo == NULL) {
     terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
-    tfree(pSql);
+    TDMFREE(pSql);
     return;
   }
 
@@ -2130,7 +2130,7 @@ static void createHBObj(STscObj* pObj) {
   pSql->cmd.command = pQueryInfo->command;
   if (TSDB_CODE_SUCCESS != tscAllocPayload(&(pSql->cmd), TSDB_DEFAULT_PAYLOAD_SIZE)) {
     terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
-    tfree(pSql);
+    TDMFREE(pSql);
     return;
   }
 
@@ -2213,7 +2213,7 @@ int tscProcessAlterTableMsgRsp(SSqlObj *pSql) {
 
   bool isSuperTable = UTIL_TABLE_IS_SUPER_TABLE(pTableMetaInfo);
   taosHashRemove(tscTableMetaInfo, name, strnlen(name, TSDB_TABLE_FNAME_LEN));
-  tfree(pTableMetaInfo->pTableMeta);
+  TDMFREE(pTableMetaInfo->pTableMeta);
 
   if (isSuperTable) {  // if it is a super table, iterate the hashTable and remove all the childTableMeta
     taosHashEmpty(tscTableMetaInfo);
@@ -2360,7 +2360,7 @@ static int32_t getTableMetaFromMnode(SSqlObj *pSql, STableMetaInfo *pTableMetaIn
 
 int32_t tscGetTableMeta(SSqlObj *pSql, STableMetaInfo *pTableMetaInfo) {
   assert(strlen(pTableMetaInfo->name) != 0);
-  tfree(pTableMetaInfo->pTableMeta);
+  TDMFREE(pTableMetaInfo->pTableMeta);
 
   uint32_t size = tscGetTableMetaMaxSize();
   pTableMetaInfo->pTableMeta = calloc(1, size);

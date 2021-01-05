@@ -275,7 +275,7 @@ static int taos_options_imp(TSDB_OPTION option, const char *pStr) {
             tscInfo("charset:%s is not valid in locale, charset remains:%s", charset, tsCharset);
           }
 
-          free(charset);
+          TDMFREE(charset);
         } else { // it may be windows system
           tscInfo("charset remains:%s", tsCharset);
         }

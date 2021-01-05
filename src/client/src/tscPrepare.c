@@ -860,7 +860,7 @@ TAOS_STMT* taos_stmt_init(TAOS* taos) {
 
   SSqlObj* pSql = calloc(1, sizeof(SSqlObj));
   if (pSql == NULL) {
-    free(pStmt);
+    TDMFREE(pStmt);
     terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
     tscError("failed to allocate memory for statement");
     return NULL;
@@ -901,7 +901,7 @@ int taos_stmt_prepare(TAOS_STMT* stmt, const char* sql, unsigned long length) {
 
   if (pSql->sqlstr == NULL) {
     tscError("%p failed to malloc sql string buffer", pSql);
-    free(pCmd->payload);
+    TDMFREE(pCmd->payload);
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
 
@@ -941,14 +941,14 @@ int taos_stmt_close(TAOS_STMT* stmt) {
       for (uint16_t i = 0; i < normal->numParams; i++) {
         tVariantDestroy(normal->params + i);
       }
-      free(normal->params);
+      TDMFREE(normal->params);
     }
-    free(normal->parts);
-    free(normal->sql);
+    TDMFREE(normal->parts);
+    TDMFREE(normal->sql);
   }
 
   taos_free_result(pStmt->pSql);
-  free(pStmt);
+  TDMFREE(pStmt);
   return TSDB_CODE_SUCCESS;
 }
 
@@ -992,7 +992,7 @@ int taos_stmt_execute(TAOS_STMT* stmt) {
       }
       pStmt->pSql = taos_query((TAOS*)pStmt->taos, sql);
       ret = taos_errno(pStmt->pSql);
-      free(sql);
+      TDMFREE(sql);
     }
   }
   return ret;

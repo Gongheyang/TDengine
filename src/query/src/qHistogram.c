@@ -438,7 +438,7 @@ void tHistogramDestroy(SHistogramInfo** pHisto) {
     return;
   }
 
-  free(*pHisto);
+  TDMFREE(*pHisto);
   *pHisto = NULL;
 }
 
@@ -659,6 +659,6 @@ SHistogramInfo* tHistogramMerge(SHistogramInfo* pHisto1, SHistogramInfo* pHisto2
   pResHistogram->numOfEntries = k;
   memcpy(pResHistogram->elems, pHistoBins, sizeof(SHistBin) * k);
 
-  free(pHistoBins);
+  TDMFREE(pHistoBins);
   return pResHistogram;
 }

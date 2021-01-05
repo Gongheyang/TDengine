@@ -23,7 +23,7 @@ STSBuf* tsBufCreate(bool autoDelete, int32_t order) {
   taosGetTmpfilePath("join", pTSBuf->path);
   pTSBuf->f = fopen(pTSBuf->path, "w+");
   if (pTSBuf->f == NULL) {
-    free(pTSBuf);
+    TDMFREE(pTSBuf);
     return NULL;
   }
   
@@ -54,7 +54,7 @@ STSBuf* tsBufCreateFromFile(const char* path, bool autoDelete) {
   
   pTSBuf->f = fopen(pTSBuf->path, "r+");
   if (pTSBuf->f == NULL) {
-    free(pTSBuf);
+    TDMFREE(pTSBuf);
     return NULL;
   }
   
@@ -113,7 +113,7 @@ STSBuf* tsBufCreateFromFile(const char* path, bool autoDelete) {
     STSGroupBlockInfoEx* pBlockList = &pTSBuf->pData[i];
     memcpy(&pBlockList->info, &buf[i], sizeof(STSGroupBlockInfo));
   }
-  free(buf);
+  TDMFREE(buf);
   
   ret = fseek(pTSBuf->f, 0, SEEK_END);
   UNUSED(ret);
@@ -142,11 +142,11 @@ void* tsBufDestroy(STSBuf* pTSBuf) {
     return NULL;
   }
   
-  tfree(pTSBuf->assistBuf);
-  tfree(pTSBuf->tsData.rawBuf);
+  TDMFREE(pTSBuf->assistBuf);
+  TDMFREE(pTSBuf->tsData.rawBuf);
   
-  tfree(pTSBuf->pData);
-  tfree(pTSBuf->block.payload);
+  TDMFREE(pTSBuf->pData);
+  TDMFREE(pTSBuf->block.payload);
   
   fclose(pTSBuf->f);
   
@@ -158,7 +158,7 @@ void* tsBufDestroy(STSBuf* pTSBuf) {
   }
 
   tVariantDestroy(&pTSBuf->block.tag);
-  free(pTSBuf);
+  TDMFREE(pTSBuf);
   return NULL;
 }
 

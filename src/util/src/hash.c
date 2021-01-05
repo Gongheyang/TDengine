@@ -172,7 +172,7 @@ SHashObj *taosHashInit(size_t capacity, _hash_fn_t fn, bool update, SHashLockTyp
 
   pHashObj->hashList = (SHashEntry **)calloc(pHashObj->capacity, sizeof(void *));
   if (pHashObj->hashList == NULL) {
-    free(pHashObj);
+    tdmfree(pHashObj);
     uError("failed to allocate memory, reason:%s", strerror(errno));
     return NULL;
   } else {
@@ -526,7 +526,7 @@ void taosHashCleanup(SHashObj *pHashObj) {
   taosArrayDestroy(pHashObj->pMemBlock);
 
   memset(pHashObj, 0, sizeof(SHashObj));
-  free(pHashObj);
+  tdmfree(pHashObj);
 }
 
 // for profile only

@@ -4058,7 +4058,7 @@ static int32_t setTableCondForSTableQuery(SSqlCmd* pCmd, SQueryInfo* pQueryInfo,
     int32_t ret = setObjFullName(idBuf, account, &dbToken, &t, &xlen);
     if (ret != TSDB_CODE_SUCCESS) {
       taosStringBuilderDestroy(&sb1);
-      tfree(segments);
+      TDMFREE(segments);
 
       invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg);
       return ret;
@@ -4072,7 +4072,7 @@ static int32_t setTableCondForSTableQuery(SSqlCmd* pCmd, SQueryInfo* pQueryInfo,
   pQueryInfo->tagCond.tbnameCond.len = (int32_t) strlen(str);
 
   taosStringBuilderDestroy(&sb1);
-  tfree(segments);
+  TDMFREE(segments);
   return TSDB_CODE_SUCCESS;
 }
 
@@ -6257,7 +6257,7 @@ int32_t doCheckForCreateFromStable(SSqlObj* pSql, SSqlInfo* pInfo) {
     }
 
     kvRowCpy(pTag->data, row);
-    free(row);
+    TDMFREE(row);
 
     // table name
     if (tscValidateName(&(pCreateTableInfo->name)) != TSDB_CODE_SUCCESS) {

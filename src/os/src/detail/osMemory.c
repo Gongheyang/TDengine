@@ -517,3 +517,121 @@ void taosTZfree(void *ptr) {
     free((void *)((char *)ptr - sizeof(size_t)));
   }
 }
+
+
+int32_t tdm_num = 0;
+long tdm_ps;
+typedef struct{
+    uint64_t normalfn;
+	uint64_t tdmfn;
+	uint64_t normalmn;
+	uint64_t tdmmn;
+	uint64_t normalrn;
+	uint64_t tdmrn;
+}tdmstat;
+
+tdmstat tdm_stat;
+
+void tdminit(){
+	tdm_ps = sysconf(_SC_PAGE_SIZE);
+	
+	srand(time(NULL));
+
+    memset(&tdm_stat, 0, sizeof(tdm_stat));
+}
+
+void *tdmrealloc(void *p, int s){
+    if(p && TDMALLOCED(p)){
+		 atomic_add_fetch_64(&tdm_stat.tdmrn, 1);
+         void *lp = *(void **)((long)p-24);
+         int os=(long)lp - (long)p;
+         if(s<os){
+              os=s;
+         }
+         void *nb = TDMALLOC(s);
+         assert(nb);
+         if(nb){
+              memcpy(nb,p,os);
+         }
+         tdmfree(p);
+
+         return nb;
+    } else {
+		atomic_add_fetch_64(&tdm_stat.normalrn, 1);
+         return realloc(p,s);
+    }
+}
+
+void *tdmalloc(char *f, unsigned line, int s,int set){
+    void *p;
+    int tdmn = atomic_load_32(&tdm_num);
+    if(tdmn >= TDM_MAX_NUM || rand()%10!=0){
+		atomic_add_fetch_64(&tdm_stat.normalmn, 1);
+        if(set){
+            p=calloc(s,1);
+        }else{
+            p=malloc(s);
+        }
+
+        //printf("direct malloc:%p,size:%d\n", p, s);
+        assert(p);
+        return p;
+    }
+
+
+	atomic_add_fetch_64(&tdm_stat.tdmmn, 1);
+
+    int ns = TDMSIZE(s);
+    void *buffer = memalign(tdm_ps, ns);
+    if (buffer == NULL){
+        assert(0);
+    }
+
+    if(set){
+        memset(buffer,0,ns);
+    }
+
+    void *lastp = buffer + ns - tdm_ps;
+
+    *(long *)(lastp-s-8)=0x1234567887654321L;
+    *(long *)(lastp-s-16)=0x0011223344556677L;
+    *(void **)(lastp-s-24)=buffer + ns - tdm_ps;
+
+    sprintf(lastp,"%s:%d,len:%d",f,line,s);
+    *(char *)(lastp+strlen(lastp))=0;
+    *(long *)(lastp+strlen(lastp)+1)=0x1234567887654321L;
+    
+
+    if (mprotect(buffer + ns - tdm_ps, tdm_ps,PROT_READ) == -1){
+        assert(0);
+    }
+
+    atomic_add_fetch_32(&tdm_num, 1);
+   
+    //printf("os:%d,ns:%d,realb:%p,retb:%p,lpd:%p,tdm_num:%d\n", s, ns, buffer, lastp-s, buffer+ns-tdm_ps, tdm_num);
+
+    return lastp - s;
+}
+
+void tdmfree(void *p){
+
+    if(p && TDMALLOCED(p)){
+		atomic_add_fetch_64(&tdm_stat.tdmfn, 1);
+        void * fp = (void *)((0xfffffffffffff000 | tdm_ps) & ((long)p-24));
+        //printf("tdmfree realb:%p,retb:%p,lpd:%p\n", fp,p, *(void **)((long)p-24));
+        mprotect(*(void **)((long)p-24), tdm_ps,PROT_WRITE|PROT_READ);
+        atomic_sub_fetch_32(&tdm_num, 1);
+		memset((void *)((long)p-24), 0, 24);
+        free(fp);
+        fp=0;
+    }else{
+       //printf("direct free %p\n", p);
+       atomic_add_fetch_64(&tdm_stat.normalfn, 1);
+       free(p);
+       p=0;
+    }
+}
+
+
+
+

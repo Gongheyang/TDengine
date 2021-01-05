@@ -17,6 +17,7 @@
 #define TDENGINE_OS_MEMORY_H
 
 #include "osString.h"
+#include <malloc.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -80,6 +81,28 @@ void   taosTMemset(void *ptr, int c);
     // #define tgetline(lineptr, n, stream) taos_getline(lineptr, n, stream, __FILE__, __LINE__)
   #endif  
 #endif 
+
+
+#define TDM_MAX_NUM 1000
+
+extern int32_t tdm_num;
+extern long tdm_ps;
+
+void tdmfree(void *p);
+
+void *tdmrealloc(void *p, int s);
+
+void *tdmalloc(char *f, unsigned line, int s,int set);
+void tdminit();
+
+#define TDMALLOCED(p) ((*(long *)(((void*)p)-8)==0x1234567887654321L) && (*(long *)(((void *)p)-16)==0x0011223344556677L))
+#define TDMSIZE(s) ((s+24)%tdm_ps == 0 ? (s+24)+tdm_ps:((s+24)/tdm_ps+2)*tdm_ps)
+
+#define TDMALLOC(s) tdmalloc(__FILE__, __LINE__, s,0)
+#define TDMCALLOC(s) tdmalloc(__FILE__, __LINE__, s,1)
+#define TDMREALLOC(p,s) tdmrealloc(p,s)
+#define TDMFREE(p) tdmfree((void *)p)
+
 
 #ifdef __cplusplus
 }

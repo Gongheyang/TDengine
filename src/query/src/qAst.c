@@ -112,10 +112,10 @@ void tExprNodeDestroy(tExprNode *pNode, void (*fp)(void *)) {
   } else if (pNode->nodeType == TSQL_NODE_VALUE) {
     tVariantDestroy(pNode->pVal);
   } else if (pNode->nodeType == TSQL_NODE_COL) {
-    free(pNode->pSchema);
+    TDMFREE(pNode->pSchema);
   }
 
-  free(pNode);
+  TDMFREE(pNode);
 }
 
 void tExprTreeDestroy(tExprNode **pExpr, void (*fp)(void *)) {
@@ -132,12 +132,12 @@ void tExprTreeDestroy(tExprNode **pExpr, void (*fp)(void *)) {
     }
   } else if ((*pExpr)->nodeType == TSQL_NODE_VALUE) {
     tVariantDestroy((*pExpr)->pVal);
-    free((*pExpr)->pVal);
+    TDMFREE((*pExpr)->pVal);
   } else if ((*pExpr)->nodeType == TSQL_NODE_COL) {
-    free((*pExpr)->pSchema);
+    TDMFREE((*pExpr)->pSchema);
   }
 
-  free(*pExpr);
+  TDMFREE(*pExpr);
   *pExpr = NULL;
 }
 
@@ -270,8 +270,8 @@ void arithmeticTreeTraverse(tExprNode *pExprs, int32_t numOfRows, char *pOutput,
     }
   }
 
-  free(pLeftOutput);
-  free(pRightOutput);
+  TDMFREE(pLeftOutput);
+  TDMFREE(pRightOutput);
 }
 
 static void exprTreeToBinaryImpl(SBufferWriter* bw, tExprNode* expr) {

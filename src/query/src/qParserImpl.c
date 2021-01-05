@@ -67,7 +67,7 @@ SSqlInfo qSQLParse(const char *pStr) {
   }
 
 abort_parse:
-  ParseFree(pParser, free);
+  ParseFree(pParser, tdmfree);
   return sqlInfo;
 }
 
@@ -106,13 +106,13 @@ void tSqlExprListDestroy(tSQLExprList *pList) {
 
   for (int32_t i = 0; i < pList->nExpr; ++i) {
     if (pList->a[i].aliasName != NULL) {
-      free(pList->a[i].aliasName);
+      TDMFREE(pList->a[i].aliasName);
     }
     tSqlExprDestroy(pList->a[i].pNode);
   }
 
-  free(pList->a);
-  free(pList);
+  TDMFREE(pList->a);
+  TDMFREE(pList);
 }
 
 tSQLExpr *tSqlExprIdValueCreate(SStrToken *pToken, int32_t optrType) {
@@ -299,7 +299,7 @@ void tSqlExprNodeDestroy(tSQLExpr *pExpr) {
 
   tSqlExprListDestroy(pExpr->pParam);
 
-  free(pExpr);
+  TDMFREE(pExpr);
 }
 
 void tSqlExprDestroy(tSQLExpr *pExpr) {
@@ -487,8 +487,8 @@ static void freeVariant(void *pItem) {
 void freeCreateTableInfo(void* p) {
   SCreatedTableInfo* pInfo = (SCreatedTableInfo*) p;
   taosArrayDestroyEx(pInfo->pTagVals, freeVariant);
-  tfree(pInfo->fullname);
-  tfree(pInfo->tagdata.data);
+  TDMFREE(pInfo->fullname);
+  TDMFREE(pInfo->tagdata.data);
 }
 
 void doDestroyQuerySql(SQuerySQL *pQuerySql) {
@@ -515,7 +515,7 @@ void doDestroyQuerySql(SQuerySQL *pQuerySql) {
   taosArrayDestroyEx(pQuerySql->fillType, freeVariant);
   pQuerySql->fillType = NULL;
 
-  free(pQuerySql);
+  TDMFREE(pQuerySql);
 }
 
 void destroyAllSelectClause(SSubclauseInfo *pClause) {
@@ -528,7 +528,7 @@ void destroyAllSelectClause(SSubclauseInfo *pClause) {
     doDestroyQuerySql(pQuerySql);
   }
   
-  tfree(pClause->pClause);
+  TDMFREE(pClause->pClause);
 }
 
 SCreateTableSQL *tSetCreateSqlElems(SArray *pCols, SArray *pTags, SQuerySQL *pSelect, int32_t type) {
@@ -603,7 +603,7 @@ void* destroyCreateTableSql(SCreateTableSQL* pCreate) {
   taosArrayDestroy(pCreate->colInfo.pTagColumns);
 
   taosArrayDestroyEx(pCreate->childTableInfo, freeCreateTableInfo);
-  tfree(pCreate);
+  TDMFREE(pCreate);
 
   return NULL;
 }
@@ -618,18 +618,18 @@ void SqlInfoDestroy(SSqlInfo *pInfo) {
   } else if (pInfo->type == TSDB_SQL_ALTER_TABLE) {
     taosArrayDestroyEx(pInfo->pAlterInfo->varList, freeVariant);
     taosArrayDestroy(pInfo->pAlterInfo->pAddColumns);
-    tfree(pInfo->pAlterInfo->tagData.data);
-    tfree(pInfo->pAlterInfo);
+    TDMFREE(pInfo->pAlterInfo->tagData.data);
+    TDMFREE(pInfo->pAlterInfo);
   } else {
     if (pInfo->pDCLInfo != NULL && pInfo->pDCLInfo->nAlloc > 0) {
-      free(pInfo->pDCLInfo->a);
+      TDMFREE(pInfo->pDCLInfo->a);
     }
 
     if (pInfo->pDCLInfo != NULL && pInfo->type == TSDB_SQL_CREATE_DB) {
       taosArrayDestroyEx(pInfo->pDCLInfo->dbOpt.keep, freeVariant);
     }
 
-    tfree(pInfo->pDCLInfo);
+    TDMFREE(pInfo->pDCLInfo);
   }
 }
 
@@ -657,7 +657,7 @@ SSqlInfo*setSqlInfo(SSqlInfo *pInfo, void *pSqlExprInfo, SStrToken *pTableName, 
   
   if (type == TSDB_SQL_SELECT) {
     pInfo->subclauseInfo = *(SSubclauseInfo*) pSqlExprInfo;
-    free(pSqlExprInfo);
+    TDMFREE(pSqlExprInfo);
   } else {
     pInfo->pCreateTableInfo = pSqlExprInfo;
   }

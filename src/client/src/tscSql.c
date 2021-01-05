@@ -74,12 +74,12 @@ static SSqlObj *taosConnectImpl(const char *ip, const char *user, const char *pa
     char *base64 = (char *)base64_decode(auth, len, &outlen);
     if (base64 == NULL || outlen == 0) {
       tscError("invalid auth info:%s", auth);
-      free(base64);
+      TDMFREE(base64);
       terrno = TSDB_CODE_TSC_INVALID_PASS_LENGTH;
       return NULL;
     } else {
       memcpy(secretEncrypt, base64, outlen);
-      free(base64);
+      TDMFREE(base64);
     }
     secretEncryptLen = outlen;
   }
@@ -108,8 +108,8 @@ static SSqlObj *taosConnectImpl(const char *ip, const char *user, const char *pa
   if (NULL == pObj->tscCorMgmtEpSet) {
     terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
     rpcClose(pDnodeConn);
-    free(pObj->tscCorMgmtEpSet);
-    free(pObj);
+    TDMFREE(pObj->tscCorMgmtEpSet);
+    TDMFREE(pObj);
   }
   memcpy(pObj->tscCorMgmtEpSet, &corMgmtEpSet, sizeof(SRpcCorEpSet));
 
@@ -126,8 +126,8 @@ static SSqlObj *taosConnectImpl(const char *ip, const char *user, const char *pa
     if (len >= TSDB_DB_NAME_LEN) {
       terrno = TSDB_CODE_TSC_INVALID_DB_LENGTH;
       rpcClose(pDnodeConn);
-      free(pObj->tscCorMgmtEpSet);
-      free(pObj);
+      TDMFREE(pObj->tscCorMgmtEpSet);
+      TDMFREE(pObj);
       return NULL;
     }
 
@@ -144,8 +144,8 @@ static SSqlObj *taosConnectImpl(const char *ip, const char *user, const char *pa
   if (NULL == pSql) {
     terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
     rpcClose(pDnodeConn);
-    free(pObj->tscCorMgmtEpSet);
-    free(pObj);
+    TDMFREE(pObj->tscCorMgmtEpSet);
+    TDMFREE(pObj);
     return NULL;
   }
 
@@ -161,9 +161,9 @@ static SSqlObj *taosConnectImpl(const char *ip, const char *user, const char *pa
   if (TSDB_CODE_SUCCESS != tscAllocPayload(&pSql->cmd, TSDB_DEFAULT_PAYLOAD_SIZE)) {
     terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
     rpcClose(pDnodeConn);
-    free(pSql);
-    free(pObj->tscCorMgmtEpSet);
-    free(pObj);
+    TDMFREE(pSql);
+    TDMFREE(pObj->tscCorMgmtEpSet);
+    TDMFREE(pObj);
     return NULL;
   }
 
@@ -868,7 +868,7 @@ int taos_validate_sql(TAOS *taos, const char *sql) {
   int32_t sqlLen = (int32_t)strlen(sql);
   if (sqlLen > tsMaxSQLStringLen) {
     tscError("%p sql too long", pSql);
-    tfree(pSql);
+    TDMFREE(pSql);
     return TSDB_CODE_TSC_EXCEED_SQL_LIMIT;
   }
 
@@ -876,7 +876,7 @@ int taos_validate_sql(TAOS *taos, const char *sql) {
   if (pSql->sqlstr == NULL) {
     tscError("%p failed to malloc sql string buffer", pSql);
     tscDebug("%p Valid SQL result:%d, %s pObj:%p", pSql, pRes->code, taos_errstr(pSql), pObj);
-    tfree(pSql);
+    TDMFREE(pSql);
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
 
@@ -1035,7 +1035,7 @@ int taos_load_table_info(TAOS *taos, const char *tableNameList) {
    * to free connection, which may cause segment fault, when the parse phrase is not even successfully executed.
    */
   pRes->qhandle = 0;
-  free(str);
+  TDMFREE(str);
 
   if (code != TSDB_CODE_SUCCESS) {
     tscFreeSqlObj(pSql);

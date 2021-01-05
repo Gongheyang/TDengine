@@ -270,7 +270,7 @@ static char* evicOneDataPage(SDiskbasedResultBuf* pResultBuf) {
     assert(d->pn == pn);
 
     d->pn = NULL;
-    tfree(pn);
+    TDMFREE(pn);
 
     bufPage = flushPageToDisk(pResultBuf, d);
   }
@@ -421,15 +421,15 @@ void destroyResultBuf(SDiskbasedResultBuf* pResultBuf) {
   }
 
   unlink(pResultBuf->path);
-  tfree(pResultBuf->path);
+  TDMFREE(pResultBuf->path);
 
   SArray** p = taosHashIterate(pResultBuf->groupSet, NULL);
   while(p) {
     size_t n = taosArrayGetSize(*p);
     for(int32_t i = 0; i < n; ++i) {
       SPageInfo* pi = taosArrayGetP(*p, i);
-      tfree(pi->pData);
-      tfree(pi);
+      TDMFREE(pi->pData);
+      TDMFREE(pi);
     }
 
     taosArrayDestroy(*p);
@@ -441,8 +441,8 @@ void destroyResultBuf(SDiskbasedResultBuf* pResultBuf) {
   taosHashCleanup(pResultBuf->groupSet);
   taosHashCleanup(pResultBuf->all);
 
-  tfree(pResultBuf->assistBuf);
-  tfree(pResultBuf);
+  TDMFREE(pResultBuf->assistBuf);
+  TDMFREE(pResultBuf);
 }
 
 SPageInfo* getLastPageInfo(SIDList pList) {

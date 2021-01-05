@@ -33,7 +33,7 @@ void tscInitConnCb(void *param, TAOS_RES *result, int code) {
     taos_close(tscSlowQueryConn);
     tscSlowQueryConn = NULL;
     tscSlowQueryConnInitialized = false;
-    free(sql);
+    TDMFREE(sql);
   } else {
     tscDebug("taos:%p, slow query connect success, code:%d", tscSlowQueryConn, code);
     tscSlowQueryConnInitialized = true;
@@ -82,12 +82,12 @@ void tscSaveSlowQueryFp(void *handle, void *tmrId) {
       taos_connect_a(NULL, "monitor", tsInternalPass, "", 0, tscInitConnCb, sql, &tscSlowQueryConn);
     } else {
       tscError("taos:%p, slow query connect is already initialized", tscSlowQueryConn);
-      free(sql);
+      TDMFREE(sql);
     }
   } else {
     tscDebug("taos:%p, save slow query:%s", tscSlowQueryConn, sql);
     taos_query_a(tscSlowQueryConn, sql, tscSaveSlowQueryFpCb, NULL);
-    free(sql);
+    TDMFREE(sql);
   }
 }
 

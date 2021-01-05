@@ -1461,7 +1461,7 @@ void ParseFinalize(void *p){
   yyParser *pParser = (yyParser*)p;
   while( pParser->yytos>pParser->yystack ) yy_pop_parser_stack(pParser);
 #if YYSTACKDEPTH<=0
-  if( pParser->yystack!=&pParser->yystk0 ) free(pParser->yystack);
+  if( pParser->yystack!=&pParser->yystk0 ) TDMFREE(pParser->yystack);
 #endif
 }
 

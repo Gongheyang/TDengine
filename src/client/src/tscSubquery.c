@@ -255,9 +255,9 @@ static void tscDestroyJoinSupporter(SJoinSupporter* pSupporter) {
     pSupporter->pVgroupTables = NULL;
   }
 
-  tfree(pSupporter->pIdTagList);
+  TDMFREE(pSupporter->pIdTagList);
   tscTagCondRelease(&pSupporter->tagCond);
-  free(pSupporter);
+  TDMFREE(pSupporter);
 }
 
 /*
@@ -308,7 +308,7 @@ static void filterVgroupTables(SQueryInfo* pQueryInfo, SArray* pVgroupTables) {
   assert(taosArrayGetSize(pVgroupTables) > 0);
   TSDB_QUERY_SET_TYPE(pQueryInfo->type, TSDB_QUERY_TYPE_MULTITABLE_QUERY);
 
-  tfree(list);
+  TDMFREE(list);
 }
 
 static SArray* buildVgroupTableByResult(SQueryInfo* pQueryInfo, SArray* pVgroupTables) {
@@ -335,7 +335,7 @@ static SArray* buildVgroupTableByResult(SQueryInfo* pQueryInfo, SArray* pVgroupT
     taosArrayPush(pNew, &info);
   }
 
-  tfree(list);
+  TDMFREE(list);
   TSDB_QUERY_SET_TYPE(pQueryInfo->type, TSDB_QUERY_TYPE_MULTITABLE_QUERY);
 
   return pNew;
@@ -1624,8 +1624,8 @@ static void doCleanupSubqueries(SSqlObj *pSql, int32_t numOfSubs) {
     
     SRetrieveSupport* pSupport = pSub->param;
     
-    tfree(pSupport->localBuffer);
-    tfree(pSupport);
+    TDMFREE(pSupport->localBuffer);
+    TDMFREE(pSupport);
     
     taos_free_result(pSub);
   }
@@ -1667,7 +1667,7 @@ int32_t tscHandleMasterSTableQuery(SSqlObj *pSql) {
   if (ret != 0) {
     pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
     tscAsyncResultOnError(pSql);
-    tfree(pMemoryBuf);
+    TDMFREE(pMemoryBuf);
     return ret;
   }
   
@@ -1676,7 +1676,7 @@ int32_t tscHandleMasterSTableQuery(SSqlObj *pSql) {
   tscDebug("%p retrieved query data from %d vnode(s)", pSql, pState->numOfSub);
 
   if (pSql->pSubs == NULL) {
-    tfree(pSql->pSubs);
+    TDMFREE(pSql->pSubs);
     pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
     tscLocalReducerEnvDestroy(pMemoryBuf, pDesc, pModel, pFinalModel,pState->numOfSub);
 
@@ -1701,7 +1701,7 @@ int32_t tscHandleMasterSTableQuery(SSqlObj *pSql) {
     trs->localBuffer = (tFilePage *)calloc(1, nBufferSize + sizeof(tFilePage));
     if (trs->localBuffer == NULL) {
       tscError("%p failed to malloc buffer for local buffer, orderOfSub:%d, reason:%s", pSql, i, strerror(errno));
-      tfree(trs);
+      TDMFREE(trs);
       break;
     }
     
@@ -1713,8 +1713,8 @@ int32_t tscHandleMasterSTableQuery(SSqlObj *pSql) {
     SSqlObj *pNew = tscCreateSTableSubquery(pSql, trs, NULL);
     if (pNew == NULL) {
       tscError("%p failed to malloc buffer for subObj, orderOfSub:%d, reason:%s", pSql, i, strerror(errno));
-      tfree(trs->localBuffer);
-      tfree(trs);
+      TDMFREE(trs->localBuffer);
+      TDMFREE(trs);
       break;
     }
     
@@ -1764,8 +1764,8 @@ static void tscFreeRetrieveSup(SSqlObj *pSql) {
   }
 
   tscDebug("%p start to free subquery supp obj:%p", pSql, trsupport);
-  tfree(trsupport->localBuffer);
-  tfree(trsupport);
+  TDMFREE(trsupport->localBuffer);
+  TDMFREE(trsupport);
 }
 
 static void tscRetrieveFromDnodeCallBack(void *param, TAOS_RES *tres, int numOfRows);
@@ -2177,7 +2177,7 @@ static void doFreeInsertSupporter(SSqlObj* pSqlObj) {
 
   for(int32_t i = 0; i < pSqlObj->subState.numOfSub; ++i) {
     SSqlObj* pSql = pSqlObj->pSubs[i];
-    tfree(pSql->param);
+    TDMFREE(pSql->param);
   }
 }
 
@@ -2561,7 +2561,7 @@ TAOS_ROW doSetResultRowData(SSqlObj *pSql) {
 
   assert(pRes->row >= 0 && pRes->row <= pRes->numOfRows);
   if (pRes->row >= pRes->numOfRows) {  // all the results has returned to invoker
-    tfree(pRes->tsrow);
+    TDMFREE(pRes->tsrow);
     return pRes->tsrow;
   }
 
