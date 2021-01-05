@@ -1336,6 +1336,8 @@ void tscJoinQueryCallback(void* param, TAOS_RES* tres, int code) {
   SJoinSupporter* pSupporter = (SJoinSupporter*)param;
   SSqlObj* pParentSql = pSupporter->pObj;
 
+  tscCheckpSql2(pSql, pParentSql);
+    
   // There is only one subquery and table for each subquery.
   SQueryInfo* pQueryInfo = tscGetQueryInfoDetail(&pSql->cmd, 0);
   assert(pQueryInfo->numOfTables == 1 && pSql->cmd.numOfClause == 1);

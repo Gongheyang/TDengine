@@ -1997,6 +1997,7 @@ SSqlObj* createSubqueryObj(SSqlObj* pSql, int16_t tableIndex, void (*fp)(), void
   pNew->pTscObj   = pSql->pTscObj;
   pNew->signature = pNew;
   pNew->sqlstr    = strdup(pSql->sqlstr);
+  pNew->parentRid = pSql->self;
 
   SSqlCmd* pnCmd = &pNew->cmd;
   memcpy(pnCmd, pCmd, sizeof(SSqlCmd));
@@ -2145,6 +2146,10 @@ SSqlObj* createSubqueryObj(SSqlObj* pSql, int16_t tableIndex, void (*fp)(), void
   }
 
   registerSqlObj(pNew);
+
+  pSql->metaSubRid = pNew->self;
+  pSql->metaSubPtr = pNew;
+    
   return pNew;
 
 _error:
