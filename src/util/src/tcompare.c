@@ -226,7 +226,7 @@ static int32_t compareStrPatternComp(const void* pLeft, const void* pRight) {
   buf[sz] = 0;
 
   int32_t ret = patternMatch(pattern, buf, sz, &pInfo);
-  free(buf);
+  TDMFREE(buf);
   return (ret == TSDB_PATTERN_MATCH) ? 0 : 1;
 }
 

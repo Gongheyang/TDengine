@@ -27,7 +27,7 @@ static SSkipListIterator *doCreateSkipListIterator(SSkipList *pSkipList, int32_t
 static void tSkipListDoInsert(SSkipList *pSkipList, SSkipListNode **direction, SSkipListNode *pNode, bool isForward);
 static bool tSkipListGetPosToPut(SSkipList *pSkipList, SSkipListNode **backward, void *pData);
 static SSkipListNode *tSkipListNewNode(uint8_t level);
-#define tSkipListFreeNode(n) tfree((n))
+#define tSkipListFreeNode(n) TDMFREE((n))
 static SSkipListNode *tSkipListPutImpl(SSkipList *pSkipList, void *pData, SSkipListNode **direction, bool isForward,
                                        bool hasDup);
 
@@ -99,12 +99,12 @@ void tSkipListDestroy(SSkipList *pSkipList) {
   tSkipListUnlock(pSkipList);
   if (pSkipList->lock != NULL) {
     pthread_rwlock_destroy(pSkipList->lock);
-    tfree(pSkipList->lock);
+    TDMFREE(pSkipList->lock);
   }
 
   tSkipListFreeNode(pSkipList->pHead);
   tSkipListFreeNode(pSkipList->pTail);
-  tfree(pSkipList);
+  TDMFREE(pSkipList);
 }
 
 SSkipListNode *tSkipListPut(SSkipList *pSkipList, void *pData) {
@@ -332,7 +332,7 @@ void *tSkipListDestroyIter(SSkipListIterator *iter) {
     return NULL;
   }
 
-  tfree(iter);
+  TDMFREE(iter);
   return NULL;
 }
 

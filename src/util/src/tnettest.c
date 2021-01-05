@@ -406,7 +406,7 @@ static void taosNetTestStartup(char *host, int32_t port) {
     }
   }
 
-  free(pStep);
+  TDMFREE(pStep);
 }
 
 static void taosNetTestRpc(char *host, int32_t startPort, int32_t pkgLen) {

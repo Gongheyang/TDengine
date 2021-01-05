@@ -22,7 +22,7 @@
 
 #define DO_FREE_HASH_NODE(_n) \
   do {                        \
-    tfree(_n);            \
+    TDMFREE(_n);            \
   } while (0)
 
 #define FREE_HASH_NODE(_h, _n)  \
@@ -514,13 +514,13 @@ void taosHashCleanup(SHashObj *pHashObj) {
   }
 
   taosHashEmpty(pHashObj);
-  tfree(pHashObj->hashList);
+  TDMFREE(pHashObj->hashList);
 
   // destroy mem block
   size_t memBlock = taosArrayGetSize(pHashObj->pMemBlock);
   for (int32_t i = 0; i < memBlock; ++i) {
     void *p = taosArrayGetP(pHashObj->pMemBlock, i);
-    tfree(p);
+    TDMFREE(p);
   }
 
   taosArrayDestroy(pHashObj->pMemBlock);

@@ -114,7 +114,7 @@ static void timerAddRef(tmr_obj_t* timer) { atomic_add_fetch_8(&timer->refCount,
 
 static void timerDecRef(tmr_obj_t* timer) {
   if (atomic_sub_fetch_8(&timer->refCount, 1) == 0) {
-    free(timer);
+    TDMFREE(timer);
   }
 }
 
@@ -575,7 +575,7 @@ void taosTmrCleanUp(void* handle) {
     for (int i = 0; i < tListLen(wheels); i++) {
       time_wheel_t* wheel = wheels + i;
       pthread_mutex_destroy(&wheel->mutex);
-      free(wheel->slots);
+      TDMFREE(wheel->slots);
     }
 
     pthread_mutex_destroy(&tmrCtrlMutex);
@@ -585,12 +585,12 @@ void taosTmrCleanUp(void* handle) {
       tmr_obj_t* t = list->timers;
       while (t != NULL) {
         tmr_obj_t* next = t->mnext;
-        free(t);
+        TDMFREE(t);
         t = next;
       }
     }
-    free(timerMap.slots);
-    free(tmrCtrls);
+    TDMFREE(timerMap.slots);
+    TDMFREE(tmrCtrls);
 
     tmrDebug("timer module is cleaned up");
   }

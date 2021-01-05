@@ -52,9 +52,9 @@ mpool_h taosMemPoolInit(int numOfBlock, int blockSize) {
 
   if (pool_p->pool == NULL || pool_p->freeList == NULL) {
     uError("failed to allocate memory\n");
-    tfree(pool_p->freeList);
-    tfree(pool_p->pool);
-    tfree(pool_p);
+    TDMFREE(pool_p->freeList);
+    TDMFREE(pool_p->pool);
+    TDMFREE(pool_p);
     return NULL;
   }
 
@@ -120,8 +120,8 @@ void taosMemPoolCleanUp(mpool_h handle) {
   pool_t *pool_p = (pool_t *)handle;
 
   pthread_mutex_destroy(&pool_p->mutex);
-  if (pool_p->pool) free(pool_p->pool);
-  if (pool_p->freeList) free(pool_p->freeList);
+  if (pool_p->pool) TDMFREE(pool_p->pool);
+  if (pool_p->freeList) TDMFREE(pool_p->freeList);
   memset(pool_p, 0, sizeof(*pool_p));
-  free(pool_p);
+  TDMFREE(pool_p);
 }

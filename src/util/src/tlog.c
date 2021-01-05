@@ -513,8 +513,8 @@ static SLogBuff *taosLogBuffNew(int32_t bufSize) {
   return tLogBuff;
 
 _err:
-  tfree(LOG_BUF_BUFFER(tLogBuff));
-  tfree(tLogBuff);
+  TDMFREE(LOG_BUF_BUFFER(tLogBuff));
+  TDMFREE(tLogBuff);
   return NULL;
 }
 

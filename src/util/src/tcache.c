@@ -104,7 +104,7 @@ static FORCE_INLINE void taosCacheReleaseNode(SCacheObj *pCacheObj, SCacheDataNo
     pCacheObj->freeFp(pNode->data);
   }
 
-  free(pNode);
+  TDMFREE(pNode);
 }
 
 static FORCE_INLINE STrashElem* doRemoveElemInTrashcan(SCacheObj* pCacheObj, STrashElem *pElem) {
@@ -138,8 +138,8 @@ static FORCE_INLINE void doDestroyTrashcanElem(SCacheObj* pCacheObj, STrashElem 
     pCacheObj->freeFp(pElem->pData->data);
   }
 
-  free(pElem->pData);
-  free(pElem);
+  TDMFREE(pElem->pData);
+  TDMFREE(pElem);
 }
 
 /**
@@ -168,7 +168,7 @@ SCacheObj *taosCacheInit(int32_t keyType, int64_t refreshTimeInSeconds, bool ext
   pCacheObj->pHashTable = taosHashInit(4096, taosGetDefaultHashFunction(keyType), false, HASH_ENTRY_LOCK);
   pCacheObj->name = strdup(cacheName);
   if (pCacheObj->pHashTable == NULL) {
-    free(pCacheObj);
+    TDMFREE(pCacheObj);
     uError("failed to allocate memory, reason:%s", strerror(errno));
     return NULL;
   }
@@ -180,7 +180,7 @@ SCacheObj *taosCacheInit(int32_t keyType, int64_t refreshTimeInSeconds, bool ext
 
   if (__cache_lock_init(pCacheObj) != 0) {
     taosHashCleanup(pCacheObj->pHashTable);
-    free(pCacheObj);
+    TDMFREE(pCacheObj);
     
     uError("failed to init lock, reason:%s", strerror(errno));
     return NULL;
@@ -228,7 +228,7 @@ void *taosCachePut(SCacheObj *pCacheObj, const void *key, size_t keyLen, const v
             pCacheObj->freeFp(p->data);
           }
 
-          tfree(p);
+          TDMFREE(p);
         } else {
           taosAddToTrashcan(pCacheObj, p);
           uDebug("cache:%s, key:%p, %p exist in cache, updated old:%p", pCacheObj->name, key, pNode1->data, p->data);
@@ -436,7 +436,7 @@ void taosCacheRelease(SCacheObj *pCacheObj, void **data, bool _remove) {
               pCacheObj->freeFp(pNode->data);
             }
 
-            free(pNode);
+            TDMFREE(pNode);
           }
         }
       } else {
@@ -615,9 +615,9 @@ void doCleanupDataCache(SCacheObj *pCacheObj) {
 
   __cache_lock_destroy(pCacheObj);
   
-  tfree(pCacheObj->name);
+  TDMFREE(pCacheObj->name);
   memset(pCacheObj, 0, sizeof(SCacheObj));
-  free(pCacheObj);
+  TDMFREE(pCacheObj);
 }
 
 bool travHashTableFn(void* param, void* data) {

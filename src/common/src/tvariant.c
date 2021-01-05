@@ -125,7 +125,7 @@ void tVariantDestroy(tVariant *pVar) {
   if (pVar == NULL) return;
   
   if (pVar->nType == TSDB_DATA_TYPE_BINARY || pVar->nType == TSDB_DATA_TYPE_NCHAR) {
-    tfree(pVar->pz);
+    TDMFREE(pVar->pz);
     pVar->nLen = 0;
   }
 
@@ -134,7 +134,7 @@ void tVariantDestroy(tVariant *pVar) {
     size_t num = taosArrayGetSize(pVar->arr);
     for(size_t i = 0; i < num; i++) {
       void* p = taosArrayGetP(pVar->arr, i);
-      free(p);
+      TDMFREE(p);
     }
     taosArrayDestroy(pVar->arr);
     pVar->arr = NULL;
@@ -406,7 +406,7 @@ static int32_t toBinary(tVariant *pVariant, char **pDest, int32_t *pDestSize) {
       }
       
       taosUcs4ToMbs(pVariant->wpz, (int32_t)newSize, pBuf);
-      free(pVariant->wpz);
+      TDMFREE(pVariant->wpz);
       pBuf[newSize] = 0;
     } else {
       taosUcs4ToMbs(pVariant->wpz, (int32_t)newSize, *pDest);
@@ -456,7 +456,7 @@ static int32_t toNchar(tVariant *pVariant, char **pDest, int32_t *pDestSize) {
     
     // free the binary buffer in the first place
     if (pVariant->nType == TSDB_DATA_TYPE_BINARY) {
-      free(pVariant->wpz);
+      TDMFREE(pVariant->wpz);
     }
     
     pVariant->wpz = pWStr;
@@ -515,7 +515,7 @@ static FORCE_INLINE int32_t convertToInteger(tVariant *pVariant, int64_t *result
     
     if (token.type == TK_NULL) {
       if (releaseVariantPtr) {
-        free(pVariant->pz);
+        TDMFREE(pVariant->pz);
         pVariant->nLen = 0;
       }
 
@@ -531,7 +531,7 @@ static FORCE_INLINE int32_t convertToInteger(tVariant *pVariant, int64_t *result
     if (token.type == TK_FLOAT) {
       double v = strtod(pVariant->pz, &endPtr);
       if (releaseVariantPtr) {
-        free(pVariant->pz);
+        TDMFREE(pVariant->pz);
         pVariant->nLen = 0;
       }
       
@@ -543,7 +543,7 @@ static FORCE_INLINE int32_t convertToInteger(tVariant *pVariant, int64_t *result
     } else if (token.type == TK_INTEGER) {
       int64_t val = strtoll(pVariant->pz, &endPtr, 10);
       if (releaseVariantPtr) {
-        free(pVariant->pz);
+        TDMFREE(pVariant->pz);
         pVariant->nLen = 0;
       }
       
@@ -569,7 +569,7 @@ static FORCE_INLINE int32_t convertToInteger(tVariant *pVariant, int64_t *result
     if (token.type == TK_FLOAT) {
       double v = wcstod(pVariant->wpz, &endPtr);
       if (releaseVariantPtr) {
-        free(pVariant->pz);
+        TDMFREE(pVariant->pz);
         pVariant->nLen = 0;
       }
       
@@ -580,7 +580,7 @@ static FORCE_INLINE int32_t convertToInteger(tVariant *pVariant, int64_t *result
       *result = (int64_t)v;
     } else if (token.type == TK_NULL) {
       if (releaseVariantPtr) {
-        free(pVariant->pz);
+        TDMFREE(pVariant->pz);
         pVariant->nLen = 0;
       }
       setNull((char *)result, type, tDataTypeDesc[type].nSize);
@@ -588,7 +588,7 @@ static FORCE_INLINE int32_t convertToInteger(tVariant *pVariant, int64_t *result
     } else {
       int64_t val = wcstoll(pVariant->wpz, &endPtr, 10);
       if (releaseVariantPtr) {
-        free(pVariant->pz);
+        TDMFREE(pVariant->pz);
         pVariant->nLen = 0;
       }
       
@@ -869,21 +869,21 @@ int32_t tVariantTypeSetType(tVariant *pVariant, char type) {
         errno = 0;
         double v = strtod(pVariant->pz, NULL);
         if ((errno == ERANGE && v == -1) || (isinf(v) || isnan(v))) {
-          free(pVariant->pz);
+          TDMFREE(pVariant->pz);
           return -1;
         }
         
-        free(pVariant->pz);
+        TDMFREE(pVariant->pz);
         pVariant->dKey = v;
       } else if (pVariant->nType == TSDB_DATA_TYPE_NCHAR) {
         errno = 0;
         double v = wcstod(pVariant->wpz, NULL);
         if ((errno == ERANGE && v == -1) || (isinf(v) || isnan(v))) {
-          free(pVariant->pz);
+          TDMFREE(pVariant->pz);
           return -1;
         }
         
-        free(pVariant->pz);
+        TDMFREE(pVariant->pz);
         pVariant->dKey = v;
       } else if (pVariant->nType >= TSDB_DATA_TYPE_BOOL && pVariant->nType <= TSDB_DATA_TYPE_BIGINT) {
         pVariant->dKey = (double)(pVariant->i64Key);

@@ -29,7 +29,7 @@ void* taosArrayInit(size_t size, size_t elemSize) {
 
   pArray->pData = calloc(size, elemSize);
   if (pArray->pData == NULL) {
-    free(pArray);
+    TDMFREE(pArray);
     return NULL;
   }
 
@@ -189,8 +189,8 @@ void taosArrayDestroy(SArray* pArray) {
     return;
   }
 
-  free(pArray->pData);
-  free(pArray);
+  TDMFREE(pArray->pData);
+  TDMFREE(pArray);
 }
 
 void taosArrayDestroyEx(SArray* pArray, void (*fp)(void*)) {

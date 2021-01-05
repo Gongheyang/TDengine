@@ -201,9 +201,9 @@ void taosCleanUpScheduler(void *param) {
     taosTmrStopA(&pSched->pTimer);
   }
 
-  if (pSched->queue) free(pSched->queue);
-  if (pSched->qthread) free(pSched->qthread);
-  free(pSched); // fix memory leak
+  if (pSched->queue) TDMFREE(pSched->queue);
+  if (pSched->qthread) TDMFREE(pSched->qthread);
+  TDMFREE(pSched); // fix memory leak
 }
 
 // for debug purpose, dump the scheduler status every 1min.

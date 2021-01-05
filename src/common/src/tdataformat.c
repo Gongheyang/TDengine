@@ -97,7 +97,7 @@ int tdInitTSchemaBuilder(STSchemaBuilder *pBuilder, int32_t version) {
 
 void tdDestroyTSchemaBuilder(STSchemaBuilder *pBuilder) {
   if (pBuilder) {
-    tfree(pBuilder->columns);
+    TDMFREE(pBuilder->columns);
   }
 }
 
@@ -187,7 +187,7 @@ SDataRow tdNewDataRowFromSchema(STSchema *pSchema) {
  * Free the SDataRow object
  */
 void tdFreeDataRow(SDataRow row) {
-  if (row) free(row);
+  if (row) TDMFREE(row);
 }
 
 SDataRow tdDataRowDup(SDataRow row) {
@@ -339,9 +339,9 @@ int tdInitDataCols(SDataCols *pCols, STSchema *pSchema) {
 
 void tdFreeDataCols(SDataCols *pCols) {
   if (pCols) {
-    tfree(pCols->buf);
-    tfree(pCols->cols);
-    free(pCols);
+    TDMFREE(pCols->buf);
+    TDMFREE(pCols->cols);
+    TDMFREE(pCols);
   }
 }
 
@@ -582,7 +582,7 @@ int tdSetKVRowDataOfCol(SKVRow *orow, int16_t colId, int8_t type, void *value) {
     }
 
     *orow = nrow;
-    free(row);
+    TDMFREE(row);
   } else {
     ASSERT(((SColIdx *)ptr)->colId == colId);
     if (IS_VAR_DATA_TYPE(type)) {
@@ -627,7 +627,7 @@ int tdSetKVRowDataOfCol(SKVRow *orow, int16_t colId, int8_t type, void *value) {
         }
 
         *orow = nrow;
-        free(row);
+        TDMFREE(row);
       }
     } else {
       memcpy(kvRowColVal(row, (SColIdx *)ptr), value, TYPE_BYTES[type]);
@@ -662,15 +662,15 @@ int tdInitKVRowBuilder(SKVRowBuilder *pBuilder) {
   pBuilder->size = 0;
   pBuilder->buf = malloc(pBuilder->alloc);
   if (pBuilder->buf == NULL) {
-    free(pBuilder->pColIdx);
+    TDMFREE(pBuilder->pColIdx);
     return -1;
   }
   return 0;
 }
 
 void tdDestroyKVRowBuilder(SKVRowBuilder *pBuilder) {
-  tfree(pBuilder->pColIdx);
-  tfree(pBuilder->buf);
+  TDMFREE(pBuilder->pColIdx);
+  TDMFREE(pBuilder->buf);
 }
 
 void tdResetKVRowBuilder(SKVRowBuilder *pBuilder) {

@@ -82,11 +82,11 @@ void taosCloseQueue(taos_queue param) {
   while (pNode) {
     pTemp = pNode;
     pNode = pNode->next;
-    free (pTemp);
+    TDMFREE (pTemp);
   }
 
   pthread_mutex_destroy(&queue->mutex);
-  free(queue);
+  TDMFREE(queue);
 
   uTrace("queue:%p is closed", queue);
 }
@@ -105,7 +105,7 @@ void taosFreeQitem(void *param) {
   char *temp = (char *)param;
   temp -= sizeof(STaosQnode);
   uTrace("item:%p, node:%p is freed", param, temp);
-  free(temp);
+  TDMFREE(temp);
 }
 
 int taosWriteQitem(taos_queue param, int type, void *item) {
@@ -166,7 +166,7 @@ void *taosAllocateQall() {
 }
 
 void taosFreeQall(void *param) {
-  free(param);
+  TDMFREE(param);
 }
 
 int taosReadAllQitems(taos_queue param, taos_qall p2) {
@@ -251,7 +251,7 @@ void taosCloseQset(taos_qset param) {
 
   pthread_mutex_destroy(&qset->mutex);
   tsem_destroy(&qset->sem);
-  free(qset);
+  TDMFREE(qset);
   uTrace("qset:%p is closed", qset);
 }
 

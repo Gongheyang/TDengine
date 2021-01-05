@@ -73,7 +73,7 @@ int taosOpenRef(int max, void (*fp)(void *))
 
   lockedBy = calloc(sizeof(int64_t), (size_t)max);
   if (lockedBy == NULL) {
-    free(nodeList);
+    TDMFREE(nodeList);
     terrno = TSDB_CODE_REF_NO_MEMORY;
     return -1;
   }
@@ -102,8 +102,8 @@ int taosOpenRef(int max, void (*fp)(void *))
     uTrace("rsetId:%d is opened, max:%d, fp:%p refSetNum:%d", rsetId, max, fp, tsRefSetNum);
   } else {
     rsetId = TSDB_CODE_REF_FULL;
-    free (nodeList);
-    free (lockedBy);
+    TDMFREE (nodeList);
+    TDMFREE (lockedBy);
     uTrace("run out of Ref ID, maximum:%d refSetNum:%d", TSDB_REF_OBJECTS, tsRefSetNum);
   } 
 
@@ -438,7 +438,7 @@ static int taosDecRefCount(int rsetId, int64_t rid, int remove) {
   if (released) {
     uTrace("rsetId:%d p:%p rid:%" PRId64 " is removed, count:%d, free mem: %p", rsetId, pNode->p, rid, pSet->count, pNode);
     (*pSet->fp)(pNode->p); 
-    free(pNode);
+    TDMFREE(pNode);
 
     taosDecRsetCount(pSet);
   } 
@@ -485,8 +485,8 @@ static void taosDecRsetCount(SRefSet *pSet) {
     pSet->max = 0;
     pSet->fp = NULL;
 
-    tfree(pSet->nodeList);
-    tfree(pSet->lockedBy);
+    TDMFREE(pSet->nodeList);
+    TDMFREE(pSet->lockedBy);
 
     tsRefSetNum--;
     uTrace("rsetId:%d is cleaned, refSetNum:%d count:%d", pSet->rsetId, tsRefSetNum, pSet->count);

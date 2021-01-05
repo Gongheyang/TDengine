@@ -48,7 +48,7 @@ void tWorkerCleanup(SWorkerPool *pPool) {
     }
   }
 
-  free(pPool->worker);
+  TDMFREE(pPool->worker);
   taosCloseQset(pPool->qset);
   pthread_mutex_destroy(&pPool->mutex);
 

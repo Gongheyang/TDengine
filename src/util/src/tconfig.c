@@ -317,7 +317,7 @@ void taosReadGlobalLogCfg() {
     taosReadLogOption(option, value);
   }
 
-  tfree(line);
+  TDMFREE(line);
   fclose(fp);
 }
 
@@ -369,7 +369,7 @@ bool taosReadGlobalCfg() {
 
   fclose(fp);
 
-  tfree(line);
+  TDMFREE(line);
 
   if (debugFlag & DEBUG_TRACE || debugFlag & DEBUG_DEBUG || debugFlag & DEBUG_DUMP) {
     taosSetAllDebugFlag();

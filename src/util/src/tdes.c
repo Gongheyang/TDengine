@@ -58,7 +58,7 @@ char* taosDesDecode(int64_t key, char* src, int len) {
   len += 8;
 
   char* decode = taosDesImp(keyStr, temp, len, DECRYPTION_MODE);
-  free(temp);
+  TDMFREE(temp);
 
   return decode;
 }

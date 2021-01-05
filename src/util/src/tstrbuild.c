@@ -38,7 +38,7 @@ char* taosStringBuilderGetResult(SStringBuilder* sb, size_t* len) {
 }
 
 void taosStringBuilderDestroy(SStringBuilder* sb) {
-  free(sb->buf);
+  TDMFREE(sb->buf);
   sb->buf = NULL;
   sb->pos = 0;
   sb->size = 0;
