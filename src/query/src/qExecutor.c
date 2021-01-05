@@ -6820,7 +6820,7 @@ static void freeColumnFilterInfo(SColumnFilterInfo* pFilter, int32_t numOfFilter
 
     for (int32_t i = 0; i < numOfFilters; i++) {
       if (pFilter[i].filterstr) {
-        TDMFREE((void*)(pFilter[i].pz));
+        TDMFREE(pFilter[i].pz);
       }
     }
 

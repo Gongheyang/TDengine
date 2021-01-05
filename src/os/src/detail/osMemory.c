@@ -624,7 +624,7 @@ void tdmfree(void *p){
 		memset((void *)((long)p-24), 0, 24);
         free(fp);
         fp=0;
-    }else{
+    }else if(p){
        //printf("direct free %p\n", p);
        atomic_add_fetch_64(&tdm_stat.normalfn, 1);
        free(p);

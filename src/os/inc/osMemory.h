@@ -101,7 +101,10 @@ void tdminit();
 #define TDMALLOC(s) tdmalloc(__FILE__, __LINE__, s,0)
 #define TDMCALLOC(s) tdmalloc(__FILE__, __LINE__, s,1)
 #define TDMREALLOC(p,s) tdmrealloc(p,s)
-#define TDMFREE(p) tdmfree((void *)p)
+#define TDMFREE(p) do { if(p) \
+			{tdmfree((void *)p); \
+			p = 0; } \
+		   } while (0)
 
 
 #ifdef __cplusplus
