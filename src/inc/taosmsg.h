@@ -476,6 +476,7 @@ typedef struct {
   int16_t     numOfCols;        // the number of columns will be load from vnode
   SInterval   interval;
   uint16_t    tagCondLen;       // tag length in current query
+  uint32_t    tbnameCondLen;    // table name filter condition string length
   int16_t     numOfGroupCols;   // num of group by columns
   int16_t     orderByIdx;
   int16_t     orderType;        // used in group by xx order by xxx
@@ -495,6 +496,7 @@ typedef struct {
   int32_t     tsOrder;          // ts comp block order
   int32_t     numOfTags;        // number of tags columns involved
   char        sqlstr[256];
+  int32_t     sqlstrLen;        // sql query string
   SColumnInfo colList[];
 } SQueryTableMsg;
 
@@ -726,7 +728,6 @@ typedef struct {
 typedef struct STableMetaMsg {
   int32_t       contLen;
   char          tableId[TSDB_TABLE_FNAME_LEN];   // table id
-  char          sTableId[TSDB_TABLE_FNAME_LEN];
   uint8_t       numOfTags;
   uint8_t       precision;
   uint8_t       tableType;
@@ -736,6 +737,9 @@ typedef struct STableMetaMsg {
   int32_t       tid;
   uint64_t      uid;
   SVgroupMsg    vgroup;
+
+  char          sTableName[TSDB_TABLE_FNAME_LEN];
+  uint64_t      suid;
   SSchema       schema[];
 } STableMetaMsg;
 
