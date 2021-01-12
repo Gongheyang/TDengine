@@ -766,12 +766,10 @@ int tscBuildQueryMsg(SSqlObj *pSql, SSqlInfo *pInfo) {
     SColumn *pCol = taosArrayGetP(pQueryInfo->colList, i);
     SSchema *pColSchema = &pSchema[pCol->colIndex.columnIndex];
 
-    if (pCol->colIndex.columnIndex >= tscGetNumOfColumns(pTableMeta) || pColSchema->type < TSDB_DATA_TYPE_BOOL ||
-        pColSchema->type > TSDB_DATA_TYPE_NCHAR) {
+    if (pCol->colIndex.columnIndex >= tscGetNumOfColumns(pTableMeta) || !isValidDataType(pColSchema->type)) {
       tscError("%p tid:%d uid:%" PRIu64" id:%s, column index out of range, numOfColumns:%d, index:%d, column name:%s",
           pSql, pTableMeta->id.tid, pTableMeta->id.uid, pTableMetaInfo->name, tscGetNumOfColumns(pTableMeta), pCol->colIndex.columnIndex,
                pColSchema->name);
-
       return TSDB_CODE_TSC_INVALID_SQL;
     }
 
@@ -837,7 +835,7 @@ int tscBuildQueryMsg(SSqlObj *pSql, SSqlInfo *pInfo) {
         memcpy(pMsg, pExpr->param[j].pz, pExpr->param[j].nLen);
         pMsg += pExpr->param[j].nLen;
       } else {
-        pSqlFuncExpr->arg[j].argValue.i64 = htobe64(pExpr->param[j].i64Key);
+        pSqlFuncExpr->arg[j].argValue.i64 = htobe64(pExpr->param[j].i64);
       }
     }
 
@@ -877,7 +875,7 @@ int tscBuildQueryMsg(SSqlObj *pSql, SSqlInfo *pInfo) {
             memcpy(pMsg, pExpr->param[j].pz, pExpr->param[j].nLen);
             pMsg += pExpr->param[j].nLen;
           } else {
-            pSqlFuncExpr1->arg[j].argValue.i64 = htobe64(pExpr->param[j].i64Key);
+            pSqlFuncExpr1->arg[j].argValue.i64 = htobe64(pExpr->param[j].i64);
           }
         }
 
@@ -955,7 +953,7 @@ int tscBuildQueryMsg(SSqlObj *pSql, SSqlInfo *pInfo) {
       SSchema *pColSchema = &pSchema[pCol->colIndex.columnIndex];
 
       if ((pCol->colIndex.columnIndex >= numOfTagColumns || pCol->colIndex.columnIndex < -1) ||
-          (pColSchema->type < TSDB_DATA_TYPE_BOOL || pColSchema->type > TSDB_DATA_TYPE_NCHAR)) {
+          (!isValidDataType(pColSchema->type))) {
         tscError("%p tid:%d uid:%" PRIu64 " id:%s, tag index out of range, totalCols:%d, numOfTags:%d, index:%d, column name:%s",
                  pSql, pTableMeta->id.tid, pTableMeta->id.uid, pTableMetaInfo->name, total, numOfTagColumns,
                  pCol->colIndex.columnIndex, pColSchema->name);
@@ -1843,7 +1841,7 @@ int tscProcessTableMetaRsp(SSqlObj *pSql) {
       assert(i == 0);
     }
 
-    assert(pSchema->type >= TSDB_DATA_TYPE_BOOL && pSchema->type <= TSDB_DATA_TYPE_NCHAR);
+    assert(isValidDataType(pSchema->type));
     pSchema++;
   }
 
