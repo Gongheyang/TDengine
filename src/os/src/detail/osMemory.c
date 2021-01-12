@@ -573,7 +573,7 @@ void *tdmalloc(char *f, unsigned line, int s,int set){
         }
 
         //printf("direct malloc:%p,size:%d\n", p, s);
-        assert(p);
+        //assert(p);
         return p;
     }
 
@@ -583,7 +583,7 @@ void *tdmalloc(char *f, unsigned line, int s,int set){
     int ns = TDMSIZE(s);
     void *buffer = memalign(tdm_ps, ns);
     if (buffer == NULL){
-        assert(0);
+        return buffer;
     }
 
     if(set){
