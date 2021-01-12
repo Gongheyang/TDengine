@@ -503,6 +503,8 @@ void tscFreeSqlObj(SSqlObj* pSql) {
   pCmd->allocSize = 0;
   
   tsem_destroy(&pSql->rspSem);
+
+  memset(pSql, 0, sizeof(*pSql));
   TDMFREE(pSql);
 }
 

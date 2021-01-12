@@ -84,6 +84,8 @@ int32_t tscInitRpc(const char *user, const char *secretEncrypt, void **pDnodeCon
 void taos_init_imp(void) {
   char temp[128]  = {0};
   
+  tdminit();
+
   errno = TSDB_CODE_SUCCESS;
   srand(taosGetTimestampSec());
   deltaToUtcInitOnce();
