@@ -624,7 +624,7 @@ int32_t tscAllocateMemIfNeed(STableDataBlocks *pDataBlock, int32_t rowSize, int3
       remain = pDataBlock->nAllocSize - pDataBlock->size;
     }
 
-    char *tmp = realloc(pDataBlock->pData, (size_t)pDataBlock->nAllocSize);
+    char *tmp = TDMREALLOC(pDataBlock->pData, (size_t)pDataBlock->nAllocSize);
     if (tmp != NULL) {
       pDataBlock->pData = tmp;
       memset(pDataBlock->pData + pDataBlock->size, 0, pDataBlock->nAllocSize - pDataBlock->size);
@@ -715,7 +715,7 @@ static int32_t doParseInsertStatement(SSqlCmd* pCmd, char **str, SParsedDataColI
   }
 
   int32_t code = TSDB_CODE_TSC_INVALID_SQL;
-  char *  tmpTokenBuf = calloc(1, 16*1024);  // used for deleting Escape character: \\, \', \"
+  char *  tmpTokenBuf = TDMCALLOC(1, 16*1024);  // used for deleting Escape character: \\, \', \"
   if (NULL == tmpTokenBuf) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
@@ -950,7 +950,7 @@ static int32_t tscCheckIfCreateTable(char **sqlstr, SSqlObj *pSql) {
     tdSortKVRowByColIdx(row);
 
     pCmd->tagData.dataLen = kvRowLen(row);
-    char* pTag = realloc(pCmd->tagData.data, pCmd->tagData.dataLen);
+    char* pTag = TDMREALLOC(pCmd->tagData.data, pCmd->tagData.dataLen);
     if (pTag == NULL) {
       return TSDB_CODE_TSC_OUT_OF_MEMORY;
     }
@@ -1476,7 +1476,7 @@ static void parseFileSendDataBlock(void *param, TAOS_RES *tres, int code) {
   }
 
   tscAllocateMemIfNeed(pTableDataBlock, tinfo.rowSize, &maxRows);
-  char *tokenBuf = calloc(1, 4096);
+  char *tokenBuf = TDMCALLOC(1, 4096);
 
   while ((readLen = tgetline(&line, &n, fp)) != -1) {
     if (('\r' == line[readLen - 1]) || ('\n' == line[readLen - 1])) {
@@ -1535,7 +1535,7 @@ void tscProcessMultiVnodesImportFromFile(SSqlObj *pSql) {
 
   assert(pCmd->dataSourceType == DATA_FROM_DATA_FILE  && strlen(pCmd->payload) != 0);
 
-  SImportFileSupport *pSupporter = calloc(1, sizeof(SImportFileSupport));
+  SImportFileSupport *pSupporter = TDMCALLOC(1, sizeof(SImportFileSupport));
   SSqlObj *pNew = createSubqueryObj(pSql, 0, parseFileSendDataBlock, pSupporter, TSDB_SQL_INSERT, NULL);
   pCmd->count = 1;
 

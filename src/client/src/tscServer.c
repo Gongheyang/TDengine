@@ -201,7 +201,7 @@ void tscProcessHeartBeatRsp(void *param, TAOS_RES *tres, int code) {
     }
 
     if (pRes->length == NULL) {
-      pRes->length = calloc(2,  sizeof(int32_t));
+      pRes->length = TDMCALLOC(2,  sizeof(int32_t));
     }
 
     pRes->length[0] = total;
@@ -209,7 +209,7 @@ void tscProcessHeartBeatRsp(void *param, TAOS_RES *tres, int code) {
   } else {
     tscDebug("%" PRId64 " heartbeat failed, code:%s", pObj->hbrid, tstrerror(code));
     if (pRes->length == NULL) {
-      pRes->length = calloc(2, sizeof(int32_t));
+      pRes->length = TDMCALLOC(2, sizeof(int32_t));
     }
 
     pRes->length[1] = 0;
@@ -386,7 +386,7 @@ void tscProcessMsgFromServer(SRpcMsg *rpcMsg, SRpcEpSet *pEpSet) {
     pRes->rspLen  = rpcMsg->contLen;
 
     if (pRes->rspLen > 0 && rpcMsg->pCont) {
-      char *tmp = (char *)realloc(pRes->pRsp, pRes->rspLen);
+      char *tmp = (char *)TDMREALLOC(pRes->pRsp, pRes->rspLen);
       if (tmp == NULL) {
         pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
       } else {
@@ -2026,7 +2026,7 @@ int tscProcessSTableVgroupRsp(SSqlObj *pSql) {
     size_t size = sizeof(SVgroupMsg) * pVgroupMsg->numOfVgroups + sizeof(SVgroupsMsg);
 
     size_t vgroupsz = sizeof(SVgroupInfo) * pVgroupMsg->numOfVgroups + sizeof(SVgroupsInfo);
-    pInfo->vgroupList = calloc(1, vgroupsz);
+    pInfo->vgroupList = TDMCALLOC(1, vgroupsz);
     assert(pInfo->vgroupList != NULL);
 
     pInfo->vgroupList->numOfVgroups = pVgroupMsg->numOfVgroups;
@@ -2114,7 +2114,7 @@ static void createHBObj(STscObj* pObj) {
     return;
   }
 
-  SSqlObj *pSql = (SSqlObj *)calloc(1, sizeof(SSqlObj));
+  SSqlObj *pSql = (SSqlObj *)TDMCALLOC(1, sizeof(SSqlObj));
   if (NULL == pSql) return;
 
   pSql->fp = tscProcessHeartBeatRsp;
@@ -2304,7 +2304,7 @@ int tscProcessRetrieveRspFromNode(SSqlObj *pSql) {
 void tscTableMetaCallBack(void *param, TAOS_RES *res, int code);
 
 static int32_t getTableMetaFromMnode(SSqlObj *pSql, STableMetaInfo *pTableMetaInfo) {
-  SSqlObj *pNew = calloc(1, sizeof(SSqlObj));
+  SSqlObj *pNew = TDMCALLOC(1, sizeof(SSqlObj));
   if (NULL == pNew) {
     tscError("%p malloc failed for new sqlobj to get table meta", pSql);
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -2364,7 +2364,7 @@ int32_t tscGetTableMeta(SSqlObj *pSql, STableMetaInfo *pTableMetaInfo) {
   TDMFREE(pTableMetaInfo->pTableMeta);
 
   uint32_t size = tscGetTableMetaMaxSize();
-  pTableMetaInfo->pTableMeta = calloc(1, size);
+  pTableMetaInfo->pTableMeta = TDMCALLOC(1, size);
 
   pTableMetaInfo->pTableMeta->tableInfo.numOfColumns  = -1;
   int32_t len = (int32_t) strlen(pTableMetaInfo->name);
@@ -2437,7 +2437,7 @@ int tscGetSTableVgroupInfo(SSqlObj *pSql, int32_t clauseIndex) {
     return TSDB_CODE_SUCCESS;
   }
 
-  SSqlObj *pNew = calloc(1, sizeof(SSqlObj));
+  SSqlObj *pNew = TDMCALLOC(1, sizeof(SSqlObj));
   pNew->pTscObj = pSql->pTscObj;
   pNew->signature = pNew;
 

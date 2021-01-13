@@ -96,7 +96,7 @@ static SSub* tscCreateSubscription(STscObj* pObj, const char* topic, const char*
   int code = TSDB_CODE_SUCCESS, line = __LINE__;
   SSqlObj* pSql = NULL;
 
-  SSub* pSub = calloc(1, sizeof(SSub));
+  SSub* pSub = TDMCALLOC(1, sizeof(SSub));
   if (pSub == NULL) {
     line = __LINE__;
     code = TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -117,7 +117,7 @@ static SSub* tscCreateSubscription(STscObj* pObj, const char* topic, const char*
     goto fail;
   }
 
-  pSql = calloc(1, sizeof(SSqlObj));
+  pSql = TDMCALLOC(1, sizeof(SSqlObj));
   if (pSql == NULL) {
     line = __LINE__;
     code = TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -423,7 +423,7 @@ TAOS_SUB *taos_subscribe(TAOS *taos, int restart, const char* topic, const char 
 }
 
 SSqlObj* recreateSqlObj(SSub* pSub) {
-  SSqlObj* pSql = calloc(1, sizeof(SSqlObj));
+  SSqlObj* pSql = TDMCALLOC(1, sizeof(SSqlObj));
   if (pSql == NULL) {
     return NULL;
   }

@@ -104,13 +104,13 @@ static void tscInitSqlContext(SSqlCmd *pCmd, SLocalReducer *pReducer, tOrderDesc
     }
 
     pCtx->interBufBytes = pExpr->interBytes;
-    pCtx->resultInfo = calloc(1, pCtx->interBufBytes + sizeof(SResultRowCellInfo));
+    pCtx->resultInfo = TDMCALLOC(1, pCtx->interBufBytes + sizeof(SResultRowCellInfo));
     pCtx->stableQuery = true;
   }
 
   int16_t          n = 0;
   int16_t          tagLen = 0;
-  SQLFunctionCtx **pTagCtx = calloc(pQueryInfo->fieldsInfo.numOfOutput, POINTER_BYTES);
+  SQLFunctionCtx **pTagCtx = TDMCALLOC(pQueryInfo->fieldsInfo.numOfOutput, POINTER_BYTES);
 
   SQLFunctionCtx *pCtx = NULL;
   for (int32_t i = 0; i < pQueryInfo->fieldsInfo.numOfOutput; ++i) {
@@ -136,7 +136,7 @@ static SFillColInfo* createFillColInfo(SQueryInfo* pQueryInfo) {
   int32_t numOfCols = (int32_t)tscNumOfFields(pQueryInfo);
   int32_t offset = 0;
   
-  SFillColInfo* pFillCol = calloc(numOfCols, sizeof(SFillColInfo));
+  SFillColInfo* pFillCol = TDMCALLOC(numOfCols, sizeof(SFillColInfo));
   for(int32_t i = 0; i < numOfCols; ++i) {
     SInternalField* pIField = taosArrayGet(pQueryInfo->fieldsInfo.internalField, i);
 
@@ -214,7 +214,7 @@ void tscCreateLocalReducer(tExtMemBuffer **pMemBuffer, int32_t numOfBuffer, tOrd
 
   size_t size = sizeof(SLocalReducer) + POINTER_BYTES * numOfFlush;
   
-  SLocalReducer *pReducer = (SLocalReducer *) calloc(1, size);
+  SLocalReducer *pReducer = (SLocalReducer *) TDMCALLOC(1, size);
   if (pReducer == NULL) {
     tscError("%p failed to create local merge structure, out of memory", pSql);
 
@@ -238,7 +238,7 @@ void tscCreateLocalReducer(tExtMemBuffer **pMemBuffer, int32_t numOfBuffer, tOrd
     int32_t numOfFlushoutInFile = pMemBuffer[i]->fileMeta.flushoutData.nLength;
 
     for (int32_t j = 0; j < numOfFlushoutInFile; ++j) {
-      SLocalDataSource *ds = (SLocalDataSource *)malloc(sizeof(SLocalDataSource) + pMemBuffer[0]->pageSize);
+      SLocalDataSource *ds = (SLocalDataSource *)TDMALLOC(sizeof(SLocalDataSource) + pMemBuffer[0]->pageSize);
       if (ds == NULL) {
         tscError("%p failed to create merge structure", pSql);
         pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -285,7 +285,7 @@ void tscCreateLocalReducer(tExtMemBuffer **pMemBuffer, int32_t numOfBuffer, tOrd
 
   pReducer->numOfBuffer = idx;
 
-  SCompareParam *param = malloc(sizeof(SCompareParam));
+  SCompareParam *param = TDMALLOC(sizeof(SCompareParam));
   if (param == NULL) {
     TDMFREE(pReducer);
     return;
@@ -308,7 +308,7 @@ void tscCreateLocalReducer(tExtMemBuffer **pMemBuffer, int32_t numOfBuffer, tOrd
 
   // the input data format follows the old format, but output in a new format.
   // so, all the input must be parsed as old format
-  pReducer->pCtx = (SQLFunctionCtx *)calloc(tscSqlExprNumOfExprs(pQueryInfo), sizeof(SQLFunctionCtx));
+  pReducer->pCtx = (SQLFunctionCtx *)TDMCALLOC(tscSqlExprNumOfExprs(pQueryInfo), sizeof(SQLFunctionCtx));
   pReducer->rowSize = pMemBuffer[0]->nElemSize;
 
   tscRestoreSQLFuncForSTableQuery(pQueryInfo);
@@ -321,15 +321,15 @@ void tscCreateLocalReducer(tExtMemBuffer **pMemBuffer, int32_t numOfBuffer, tOrd
   pReducer->hasPrevRow = false;
   pReducer->hasUnprocessedRow = false;
 
-  pReducer->prevRowOfInput = (char *)calloc(1, pReducer->rowSize);
+  pReducer->prevRowOfInput = (char *)TDMCALLOC(1, pReducer->rowSize);
 
   // used to keep the latest input row
-  pReducer->pTempBuffer = (tFilePage *)calloc(1, pReducer->rowSize + sizeof(tFilePage));
-  pReducer->discardData = (tFilePage *)calloc(1, pReducer->rowSize + sizeof(tFilePage));
+  pReducer->pTempBuffer = (tFilePage *)TDMCALLOC(1, pReducer->rowSize + sizeof(tFilePage));
+  pReducer->discardData = (tFilePage *)TDMCALLOC(1, pReducer->rowSize + sizeof(tFilePage));
   pReducer->discard = false;
 
   pReducer->nResultBufSize = pMemBuffer[0]->pageSize * 16;
-  pReducer->pResultBuf = (tFilePage *)calloc(1, pReducer->nResultBufSize + sizeof(tFilePage));
+  pReducer->pResultBuf = (tFilePage *)TDMCALLOC(1, pReducer->nResultBufSize + sizeof(tFilePage));
 
   pReducer->resColModel = finalmodel;
   pReducer->resColModel->capacity = pReducer->nResultBufSize;
@@ -340,7 +340,7 @@ void tscCreateLocalReducer(tExtMemBuffer **pMemBuffer, int32_t numOfBuffer, tOrd
   }
 
   assert(finalmodel->rowSize > 0 && finalmodel->rowSize <= pReducer->rowSize);
-  pReducer->pFinalRes = calloc(1, pReducer->rowSize * pReducer->resColModel->capacity);
+  pReducer->pFinalRes = TDMCALLOC(1, pReducer->rowSize * pReducer->resColModel->capacity);
 
   if (pReducer->pTempBuffer == NULL || pReducer->discardData == NULL || pReducer->pResultBuf == NULL ||
       pReducer->pFinalRes == NULL || pReducer->prevRowOfInput == NULL) {
@@ -553,7 +553,7 @@ static int32_t createOrderDescriptor(tOrderDescriptor **pOrderDesc, SSqlCmd *pCm
     numOfGroupByCols++;
   }
 
-  int32_t *orderColIndexList = (int32_t *)calloc(numOfGroupByCols, sizeof(int32_t));
+  int32_t *orderColIndexList = (int32_t *)TDMCALLOC(numOfGroupByCols, sizeof(int32_t));
   if (orderColIndexList == NULL) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
@@ -659,7 +659,7 @@ int32_t tscLocalReducerEnvCreate(SSqlObj *pSql, tExtMemBuffer ***pMemBuffer, tOr
   SQueryInfo *    pQueryInfo = tscGetQueryInfoDetail(pCmd, pCmd->clauseIndex);
   STableMetaInfo *pTableMetaInfo = tscGetMetaInfo(pQueryInfo, 0);
 
-  (*pMemBuffer) = (tExtMemBuffer **)malloc(POINTER_BYTES * pSql->subState.numOfSub);
+  (*pMemBuffer) = (tExtMemBuffer **)TDMALLOC(POINTER_BYTES * pSql->subState.numOfSub);
   if (*pMemBuffer == NULL) {
     tscError("%p failed to allocate memory", pSql);
     pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -668,7 +668,7 @@ int32_t tscLocalReducerEnvCreate(SSqlObj *pSql, tExtMemBuffer ***pMemBuffer, tOr
   
   size_t size = tscSqlExprNumOfExprs(pQueryInfo);
   
-  pSchema = (SSchema *)calloc(1, sizeof(SSchema) * size);
+  pSchema = (SSchema *)TDMCALLOC(1, sizeof(SSchema) * size);
   if (pSchema == NULL) {
     tscError("%p failed to allocate memory", pSql);
     pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -950,10 +950,10 @@ static void doFillResult(SSqlObj *pSql, SLocalReducer *pLocalReducer, bool doneO
   // todo extract function
   int64_t actualETime = (pQueryInfo->order.order == TSDB_ORDER_ASC)? pQueryInfo->window.ekey: pQueryInfo->window.skey;
 
-  tFilePage **pResPages = malloc(POINTER_BYTES * pQueryInfo->fieldsInfo.numOfOutput);
+  tFilePage **pResPages = TDMALLOC(POINTER_BYTES * pQueryInfo->fieldsInfo.numOfOutput);
   for (int32_t i = 0; i < pQueryInfo->fieldsInfo.numOfOutput; ++i) {
     TAOS_FIELD *pField = tscFieldInfoGetField(&pQueryInfo->fieldsInfo, i);
-    pResPages[i] = calloc(1, sizeof(tFilePage) + pField->bytes * pLocalReducer->resColModel->capacity);
+    pResPages[i] = TDMCALLOC(1, sizeof(tFilePage) + pField->bytes * pLocalReducer->resColModel->capacity);
   }
 
   while (1) {
@@ -1134,7 +1134,7 @@ static void fillMultiRowsOfTagsVal(SQueryInfo *pQueryInfo, int32_t numOfRes, SLo
 
   assert(maxBufSize >= 0);
 
-  char *buf = malloc((size_t)maxBufSize);
+  char *buf = TDMALLOC((size_t)maxBufSize);
   for (int32_t k = 0; k < size; ++k) {
     SQLFunctionCtx *pCtx = &pLocalReducer->pCtx[k];
     if (pCtx->functionId != TSDB_FUNC_TAG) {
@@ -1608,14 +1608,14 @@ void tscInitResObjForLocalQuery(SSqlObj *pObj, int32_t numOfRes, int32_t rowLen)
   pRes->row = 0;
 
   pRes->rspType = 0;  // used as a flag to denote if taos_retrieved() has been called yet
-  pRes->pLocalReducer = (SLocalReducer *)calloc(1, sizeof(SLocalReducer));
+  pRes->pLocalReducer = (SLocalReducer *)TDMCALLOC(1, sizeof(SLocalReducer));
 
   /*
    * we need one additional byte space
    * the sprintf function needs one additional space to put '\0' at the end of string
    */
   size_t allocSize = numOfRes * rowLen + sizeof(tFilePage) + 1;
-  pRes->pLocalReducer->pResultBuf = (tFilePage *)calloc(1, allocSize);
+  pRes->pLocalReducer->pResultBuf = (tFilePage *)TDMCALLOC(1, allocSize);
 
   pRes->pLocalReducer->pResultBuf->num = numOfRes;
   pRes->data = pRes->pLocalReducer->pResultBuf->data;
@@ -1623,7 +1623,7 @@ void tscInitResObjForLocalQuery(SSqlObj *pObj, int32_t numOfRes, int32_t rowLen)
 
 int32_t doArithmeticCalculate(SQueryInfo* pQueryInfo, tFilePage* pOutput, int32_t rowSize, int32_t finalRowSize) {
   int32_t maxRowSize = MAX(rowSize, finalRowSize);
-  char* pbuf = calloc(1, (size_t)(pOutput->num * maxRowSize));
+  char* pbuf = TDMCALLOC(1, (size_t)(pOutput->num * maxRowSize));
 
   size_t size = tscNumOfFields(pQueryInfo);
   SArithmeticSupport arithSup = {0};
@@ -1632,7 +1632,7 @@ int32_t doArithmeticCalculate(SQueryInfo* pQueryInfo, tFilePage* pOutput, int32_
   arithSup.offset     = 0;
   arithSup.numOfCols  = (int32_t) tscSqlExprNumOfExprs(pQueryInfo);
   arithSup.exprList   = pQueryInfo->exprList;
-  arithSup.data       = calloc(arithSup.numOfCols, POINTER_BYTES);
+  arithSup.data       = TDMCALLOC(arithSup.numOfCols, POINTER_BYTES);
 
   for(int32_t k = 0; k < arithSup.numOfCols; ++k) {
     SSqlExpr* pExpr = tscSqlExprGet(pQueryInfo, k);

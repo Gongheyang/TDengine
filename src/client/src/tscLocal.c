@@ -280,7 +280,7 @@ void tscSCreateCallBack(void *param, TAOS_RES *tres, int code) {
     taos_fetch_rows_a(tres, tscSCreateCallBack, param);    
     builder->callStage = SCREATE_CALLBACK_RETRIEVE;
   } else {
-    char *result = calloc(1, TSDB_MAX_BINARY_LEN);
+    char *result = TDMCALLOC(1, TSDB_MAX_BINARY_LEN);
     pRes->code = builder->fp(builder, result);
 
     taos_free_result(pSql);  
@@ -454,7 +454,7 @@ int32_t tscRebuildCreateTableStatement(void *param,char *result) {
   SCreateBuilder *builder = (SCreateBuilder *)param;
   int32_t code = TSDB_CODE_SUCCESS;
 
-  char *buf = calloc(1,TSDB_MAX_BINARY_LEN);
+  char *buf = TDMCALLOC(1,TSDB_MAX_BINARY_LEN);
   if (buf == NULL) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
@@ -512,7 +512,7 @@ int32_t tscRebuildCreateDBStatement(void *param,char *result) {
   SCreateBuilder *builder = (SCreateBuilder *)param;
   int32_t code = TSDB_CODE_SUCCESS;
 
-  char *buf = calloc(1, TSDB_MAX_BINARY_LEN);
+  char *buf = TDMCALLOC(1, TSDB_MAX_BINARY_LEN);
   if (buf == NULL) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
@@ -525,7 +525,7 @@ int32_t tscRebuildCreateDBStatement(void *param,char *result) {
 }
 
 static int32_t tscGetTableTagColumnName(SSqlObj *pSql, char **result) {
-  char *buf = (char *)malloc(TSDB_MAX_BINARY_LEN);
+  char *buf = (char *)TDMALLOC(TSDB_MAX_BINARY_LEN);
   if (buf == NULL) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY; 
   }
@@ -557,12 +557,12 @@ static int32_t tscRebuildDDLForSubTable(SSqlObj *pSql, const char *tableName, ch
   STableMetaInfo *pTableMetaInfo = tscGetMetaInfo(pQueryInfo, 0);
   STableMeta *    pMeta = pTableMetaInfo->pTableMeta;
 
-  SSqlObj *pInterSql = (SSqlObj *)calloc(1, sizeof(SSqlObj)); 
+  SSqlObj *pInterSql = (SSqlObj *)TDMCALLOC(1, sizeof(SSqlObj)); 
   if (pInterSql == NULL) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }  
 
-  SCreateBuilder *param = (SCreateBuilder *)malloc(sizeof(SCreateBuilder));    
+  SCreateBuilder *param = (SCreateBuilder *)TDMALLOC(sizeof(SCreateBuilder));    
   if (param == NULL) {
     TDMFREE(pInterSql);
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -579,7 +579,7 @@ static int32_t tscRebuildDDLForSubTable(SSqlObj *pSql, const char *tableName, ch
   param->fp         = tscRebuildCreateTableStatement;
   param->callStage  = SCREATE_CALLBACK_QUERY;
 
-  char *query = (char *)calloc(1, TSDB_MAX_BINARY_LEN); 
+  char *query = (char *)TDMCALLOC(1, TSDB_MAX_BINARY_LEN); 
   if (query == NULL) {
     TDMFREE(param);
     TDMFREE(pInterSql);
@@ -678,7 +678,7 @@ static int32_t tscProcessShowCreateTable(SSqlObj *pSql) {
   char tableName[TSDB_TABLE_NAME_LEN] = {0};
   extractTableName(pTableMetaInfo->name, tableName);
 
-  char *result = (char *)calloc(1, TSDB_MAX_BINARY_LEN);
+  char *result = (char *)TDMCALLOC(1, TSDB_MAX_BINARY_LEN);
   int32_t code = TSDB_CODE_SUCCESS;
   if (UTIL_TABLE_IS_SUPER_TABLE(pTableMetaInfo)) {
     code = tscRebuildDDLForSuperTable(pSql, tableName, result);
@@ -702,12 +702,12 @@ static int32_t tscProcessShowCreateDatabase(SSqlObj *pSql) {
 
   STableMetaInfo *pTableMetaInfo = tscGetMetaInfo(pQueryInfo, 0);
 
-  SSqlObj *pInterSql = (SSqlObj *)calloc(1, sizeof(SSqlObj)); 
+  SSqlObj *pInterSql = (SSqlObj *)TDMCALLOC(1, sizeof(SSqlObj)); 
   if (pInterSql == NULL) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }  
 
-  SCreateBuilder *param = (SCreateBuilder *)malloc(sizeof(SCreateBuilder));    
+  SCreateBuilder *param = (SCreateBuilder *)TDMALLOC(sizeof(SCreateBuilder));    
   if (param == NULL) {
     TDMFREE(pInterSql);
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -729,7 +729,7 @@ static int32_t tscProcessCurrentUser(SSqlObj *pSql) {
   pExpr->resBytes = TSDB_USER_LEN + TSDB_DATA_TYPE_BINARY;
   pExpr->resType = TSDB_DATA_TYPE_BINARY;
 
-  char* vx = calloc(1, pExpr->resBytes);
+  char* vx = TDMCALLOC(1, pExpr->resBytes);
   if (vx == NULL) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
@@ -755,7 +755,7 @@ static int32_t tscProcessCurrentDB(SSqlObj *pSql) {
   size_t t = strlen(db);
   pExpr->resBytes = TSDB_DB_NAME_LEN + VARSTR_HEADER_SIZE;
 
-  char* vx = calloc(1, pExpr->resBytes);
+  char* vx = TDMCALLOC(1, pExpr->resBytes);
   if (vx == NULL) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
@@ -782,7 +782,7 @@ static int32_t tscProcessServerVer(SSqlObj *pSql) {
   size_t t = strlen(v);
   pExpr->resBytes = (int16_t)(t + VARSTR_HEADER_SIZE);
 
-  char* vx = calloc(1, pExpr->resBytes);
+  char* vx = TDMCALLOC(1, pExpr->resBytes);
   if (vx == NULL) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
 
@@ -805,7 +805,7 @@ static int32_t tscProcessClientVer(SSqlObj *pSql) {
   size_t t = strlen(version);
   pExpr->resBytes = (int16_t)(t + VARSTR_HEADER_SIZE);
 
-  char* v = calloc(1, pExpr->resBytes);
+  char* v = TDMCALLOC(1, pExpr->resBytes);
   if (v == NULL) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
 

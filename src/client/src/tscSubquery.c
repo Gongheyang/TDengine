@@ -208,7 +208,7 @@ static int64_t doTSBlockIntersect(SSqlObj* pSql, SJoinSupporter* pSupporter1, SJ
 
 // todo handle failed to create sub query
 SJoinSupporter* tscCreateJoinSupporter(SSqlObj* pSql, int32_t index) {
-  SJoinSupporter* pSupporter = calloc(1, sizeof(SJoinSupporter));
+  SJoinSupporter* pSupporter = TDMCALLOC(1, sizeof(SJoinSupporter));
   if (pSupporter == NULL) {
     return NULL;
   }
@@ -802,7 +802,7 @@ static void tidTagRetrieveCallback(void* param, TAOS_RES* tres, int32_t numOfRow
     size_t length = pSupporter->totalLen + validLen;
 
     // todo handle memory error
-    char* tmp = realloc(pSupporter->pIdTagList, length);
+    char* tmp = TDMREALLOC(pSupporter->pIdTagList, length);
     if (tmp == NULL) {
       tscError("%p failed to malloc memory", pSql);
 
@@ -1324,7 +1324,7 @@ void tscSetupOutputColumnIndex(SSqlObj* pSql) {
   SQueryInfo* pQueryInfo = tscGetQueryInfoDetail(pCmd, pCmd->clauseIndex);
 
   int32_t numOfExprs = (int32_t)tscSqlExprNumOfExprs(pQueryInfo);
-  pRes->pColumnIndex = calloc(1, sizeof(SColumnIndex) * numOfExprs);
+  pRes->pColumnIndex = TDMCALLOC(1, sizeof(SColumnIndex) * numOfExprs);
   if (pRes->pColumnIndex == NULL) {
     pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
     return;
@@ -1455,7 +1455,7 @@ int32_t tscCreateJoinSubquery(SSqlObj *pSql, int16_t tableIndex, SJoinSupporter 
   assert(pSql->res.numOfRows == 0);
 
   if (pSql->pSubs == NULL) {
-    pSql->pSubs = calloc(pSql->subState.numOfSub, POINTER_BYTES);
+    pSql->pSubs = TDMCALLOC(pSql->subState.numOfSub, POINTER_BYTES);
     if (pSql->pSubs == NULL) {
       return TSDB_CODE_TSC_OUT_OF_MEMORY;
     }
@@ -1705,7 +1705,7 @@ int32_t tscHandleMasterSTableQuery(SSqlObj *pSql) {
     return ret;
   }
   
-  pSql->pSubs = calloc(pState->numOfSub, POINTER_BYTES);
+  pSql->pSubs = TDMCALLOC(pState->numOfSub, POINTER_BYTES);
 
   tscDebug("%p retrieved query data from %d vnode(s)", pSql, pState->numOfSub);
 
@@ -1723,7 +1723,7 @@ int32_t tscHandleMasterSTableQuery(SSqlObj *pSql) {
   
   int32_t i = 0;
   for (; i < pState->numOfSub; ++i) {
-    SRetrieveSupport *trs = (SRetrieveSupport *)calloc(1, sizeof(SRetrieveSupport));
+    SRetrieveSupport *trs = (SRetrieveSupport *)TDMCALLOC(1, sizeof(SRetrieveSupport));
     if (trs == NULL) {
       tscError("%p failed to malloc buffer for SRetrieveSupport, orderOfSub:%d, reason:%s", pSql, i, strerror(errno));
       break;
@@ -1732,7 +1732,7 @@ int32_t tscHandleMasterSTableQuery(SSqlObj *pSql) {
     trs->pExtMemBuffer = pMemoryBuf;
     trs->pOrderDescriptor = pDesc;
 
-    trs->localBuffer = (tFilePage *)calloc(1, nBufferSize + sizeof(tFilePage));
+    trs->localBuffer = (tFilePage *)TDMCALLOC(1, nBufferSize + sizeof(tFilePage));
     if (trs->localBuffer == NULL) {
       tscError("%p failed to malloc buffer for local buffer, orderOfSub:%d, reason:%s", pSql, i, strerror(errno));
       TDMFREE(trs);
@@ -2346,7 +2346,7 @@ int32_t tscHandleMultivnodeInsert(SSqlObj *pSql) {
   if (pSql->pSubs != NULL) {
     for(int32_t i = 0; i < pSql->subState.numOfSub; ++i) {
       SSqlObj* pSub = pSql->pSubs[i];
-      SInsertSupporter* pSup = calloc(1, sizeof(SInsertSupporter));
+      SInsertSupporter* pSup = TDMCALLOC(1, sizeof(SInsertSupporter));
       pSup->index = i;
       pSup->pSql = pSql;
 
@@ -2369,7 +2369,7 @@ int32_t tscHandleMultivnodeInsert(SSqlObj *pSql) {
   int32_t numOfSub = 0;
 
   pSql->subState.numOfRemain = pSql->subState.numOfSub;
-  pSql->pSubs = calloc(pSql->subState.numOfSub, POINTER_BYTES);
+  pSql->pSubs = TDMCALLOC(pSql->subState.numOfSub, POINTER_BYTES);
   if (pSql->pSubs == NULL) {
     goto _error;
   }
@@ -2377,7 +2377,7 @@ int32_t tscHandleMultivnodeInsert(SSqlObj *pSql) {
   tscDebug("%p submit data to %d vnode(s)", pSql, pSql->subState.numOfSub);
 
   while(numOfSub < pSql->subState.numOfSub) {
-    SInsertSupporter* pSupporter = calloc(1, sizeof(SInsertSupporter));
+    SInsertSupporter* pSupporter = TDMCALLOC(1, sizeof(SInsertSupporter));
     if (pSupporter == NULL) {
       goto _error;
     }
@@ -2467,7 +2467,7 @@ static void doBuildResFromSubqueries(SSqlObj* pSql) {
   int32_t rowSize = tscGetResRowLength(pQueryInfo->exprList);
 
   assert(numOfRes * rowSize > 0);
-  char* tmp = realloc(pRes->pRsp, numOfRes * rowSize + sizeof(tFilePage));
+  char* tmp = TDMREALLOC(pRes->pRsp, numOfRes * rowSize + sizeof(tFilePage));
   if (tmp == NULL) {
     pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
     return;
@@ -2532,10 +2532,10 @@ void tscBuildResFromSubqueries(SSqlObj *pSql) {
     SQueryInfo* pQueryInfo = tscGetQueryInfoDetail(&pSql->cmd, pSql->cmd.clauseIndex);
     pRes->numOfCols = (int16_t) tscSqlExprNumOfExprs(pQueryInfo);
 
-    pRes->tsrow  = calloc(pRes->numOfCols, POINTER_BYTES);
-    pRes->urow   = calloc(pRes->numOfCols, POINTER_BYTES);
-    pRes->buffer = calloc(pRes->numOfCols, POINTER_BYTES);
-    pRes->length = calloc(pRes->numOfCols, sizeof(int32_t));
+    pRes->tsrow  = TDMCALLOC(pRes->numOfCols, POINTER_BYTES);
+    pRes->urow   = TDMCALLOC(pRes->numOfCols, POINTER_BYTES);
+    pRes->buffer = TDMCALLOC(pRes->numOfCols, POINTER_BYTES);
+    pRes->length = TDMCALLOC(pRes->numOfCols, sizeof(int32_t));
 
     if (pRes->tsrow == NULL || pRes->buffer == NULL || pRes->length == NULL) {
       pRes->code = TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -2561,7 +2561,7 @@ static UNUSED_FUNC void transferNcharData(SSqlObj *pSql, int32_t columnIndex, TA
   if (pRes->tsrow[columnIndex] != NULL && pField->type == TSDB_DATA_TYPE_NCHAR) {
     // convert unicode to native code in a temporary buffer extra one byte for terminated symbol
     if (pRes->buffer[columnIndex] == NULL) {
-      pRes->buffer[columnIndex] = malloc(pField->bytes + TSDB_NCHAR_SIZE);
+      pRes->buffer[columnIndex] = TDMALLOC(pField->bytes + TSDB_NCHAR_SIZE);
     }
     
     /* string terminated char for binary data*/

@@ -1386,7 +1386,7 @@ static int32_t handleArithmeticExpr(SSqlCmd* pCmd, int32_t clauseIndex, int32_t 
     SInternalField* pInfo = tscFieldInfoGetInternalField(&pQueryInfo->fieldsInfo, slot);
 
     if (pInfo->pSqlExpr == NULL) {
-      SExprInfo* pArithExprInfo = calloc(1, sizeof(SExprInfo));
+      SExprInfo* pArithExprInfo = TDMCALLOC(1, sizeof(SExprInfo));
 
       // arithmetic expression always return result in the format of double float
       pArithExprInfo->bytes      = sizeof(double);
@@ -2980,7 +2980,7 @@ static SColumnFilterInfo* addColumnFilterInfo(SColumn* pColumn) {
 
   int32_t size = pColumn->numOfFilters + 1;
 
-  char* tmp = (char*) realloc((void*)(pColumn->filterInfo), sizeof(SColumnFilterInfo) * (size));
+  char* tmp = (char*) TDMREALLOC((void*)(pColumn->filterInfo), sizeof(SColumnFilterInfo) * (size));
   if (tmp != NULL) {
     pColumn->filterInfo = (SColumnFilterInfo*)tmp;
   } else {
@@ -3022,13 +3022,13 @@ static int32_t doExtractColumnFilterInfo(SSqlCmd* pCmd, SQueryInfo* pQueryInfo, 
 
   // TK_GT,TK_GE,TK_EQ,TK_NE are based on the pColumn->lowerBndd
   } else if (colType == TSDB_DATA_TYPE_BINARY) {
-    pColumnFilter->pz = (int64_t)calloc(1, pRight->val.nLen + TSDB_NCHAR_SIZE);
+    pColumnFilter->pz = (int64_t)TDMCALLOC(1, pRight->val.nLen + TSDB_NCHAR_SIZE);
     pColumnFilter->len = pRight->val.nLen;
     retVal = tVariantDump(&pRight->val, (char*)pColumnFilter->pz, colType, false);
 
   } else if (colType == TSDB_DATA_TYPE_NCHAR) {
     // pRight->val.nLen + 1 is larger than the actual nchar string length
-    pColumnFilter->pz = (int64_t)calloc(1, (pRight->val.nLen + 1) * TSDB_NCHAR_SIZE);
+    pColumnFilter->pz = (int64_t)TDMCALLOC(1, (pRight->val.nLen + 1) * TSDB_NCHAR_SIZE);
     retVal = tVariantDump(&pRight->val, (char*)pColumnFilter->pz, colType, false);
     size_t len = twcslen((wchar_t*)pColumnFilter->pz);
     pColumnFilter->len = len * TSDB_NCHAR_SIZE;
@@ -4494,7 +4494,7 @@ int32_t parseFillClause(SSqlCmd* pCmd, SQueryInfo* pQueryInfo, SQuerySQL* pQuery
   size_t size = tscNumOfFields(pQueryInfo);
   
   if (pQueryInfo->fillVal == NULL) {
-    pQueryInfo->fillVal = calloc(size, sizeof(int64_t));
+    pQueryInfo->fillVal = TDMCALLOC(size, sizeof(int64_t));
     if (pQueryInfo->fillVal == NULL) {
       return TSDB_CODE_TSC_OUT_OF_MEMORY;
     }
@@ -4935,7 +4935,7 @@ int32_t setAlterTableInfo(SSqlObj* pSql, struct SSqlInfo* pInfo) {
 
     tVariantListItem* pItem = taosArrayGet(pVarList, 1);
     SSchema* pTagsSchema = tscGetTableColumnSchema(pTableMetaInfo->pTableMeta, columnIndex.columnIndex);
-    pAlterSQL->tagData.data = calloc(1, pTagsSchema->bytes * TSDB_NCHAR_SIZE + VARSTR_HEADER_SIZE);
+    pAlterSQL->tagData.data = TDMCALLOC(1, pTagsSchema->bytes * TSDB_NCHAR_SIZE + VARSTR_HEADER_SIZE);
 
     if (tVariantDump(&pItem->pVar, pAlterSQL->tagData.data, pTagsSchema->type, true) != TSDB_CODE_SUCCESS) {
       return invalidSqlErrMsg(tscGetErrorMsgPayload(pCmd), msg13);
@@ -6268,7 +6268,7 @@ int32_t doCheckForCreateFromStable(SSqlObj* pSql, SSqlInfo* pInfo) {
     pTag->dataLen = kvRowLen(row);
 
     if (pTag->data == NULL) {
-      pTag->data = malloc(pTag->dataLen);
+      pTag->data = TDMALLOC(pTag->dataLen);
     }
 
     kvRowCpy(pTag->data, row);
@@ -6676,23 +6676,23 @@ int32_t exprTreeFromSqlExpr(SSqlCmd* pCmd, tExprNode **pExpr, const tSQLExpr* pS
   }
 
   if (pSqlExpr->pLeft == NULL && pSqlExpr->pRight == NULL && pSqlExpr->nSQLOptr == 0) {
-    *pExpr = calloc(1, sizeof(tExprNode));
+    *pExpr = TDMCALLOC(1, sizeof(tExprNode));
     return TSDB_CODE_SUCCESS;
   }
   
   if (pSqlExpr->pLeft == NULL) {
     if (pSqlExpr->nSQLOptr >= TK_BOOL && pSqlExpr->nSQLOptr <= TK_STRING) {
-      *pExpr = calloc(1, sizeof(tExprNode));
+      *pExpr = TDMCALLOC(1, sizeof(tExprNode));
       (*pExpr)->nodeType = TSQL_NODE_VALUE;
-      (*pExpr)->pVal = calloc(1, sizeof(tVariant));
+      (*pExpr)->pVal = TDMCALLOC(1, sizeof(tVariant));
       
       tVariantAssign((*pExpr)->pVal, &pSqlExpr->val);
       return TSDB_CODE_SUCCESS;
     } else if (pSqlExpr->nSQLOptr >= TK_COUNT && pSqlExpr->nSQLOptr <= TK_AVG_IRATE) {
       // arithmetic expression on the results of aggregation functions
-      *pExpr = calloc(1, sizeof(tExprNode));
+      *pExpr = TDMCALLOC(1, sizeof(tExprNode));
       (*pExpr)->nodeType = TSQL_NODE_COL;
-      (*pExpr)->pSchema = calloc(1, sizeof(SSchema));
+      (*pExpr)->pSchema = TDMCALLOC(1, sizeof(SSchema));
       strncpy((*pExpr)->pSchema->name, pSqlExpr->operand.z, pSqlExpr->operand.n);
       
       // set the input column data byte and type.
@@ -6723,9 +6723,9 @@ int32_t exprTreeFromSqlExpr(SSqlCmd* pCmd, tExprNode **pExpr, const tSQLExpr* pS
       STableMeta* pTableMeta = tscGetMetaInfo(pQueryInfo, 0)->pTableMeta;
       int32_t numOfColumns = tscGetNumOfColumns(pTableMeta);
 
-      *pExpr = calloc(1, sizeof(tExprNode));
+      *pExpr = TDMCALLOC(1, sizeof(tExprNode));
       (*pExpr)->nodeType = TSQL_NODE_COL;
-      (*pExpr)->pSchema = calloc(1, sizeof(SSchema));
+      (*pExpr)->pSchema = TDMCALLOC(1, sizeof(SSchema));
 
       SSchema* pSchema = tscGetTableColumnSchema(pTableMeta, index.columnIndex);
       *(*pExpr)->pSchema = *pSchema;
@@ -6746,7 +6746,7 @@ int32_t exprTreeFromSqlExpr(SSqlCmd* pCmd, tExprNode **pExpr, const tSQLExpr* pS
     }
     
   } else {
-    *pExpr = (tExprNode *)calloc(1, sizeof(tExprNode));
+    *pExpr = (tExprNode *)TDMCALLOC(1, sizeof(tExprNode));
     (*pExpr)->nodeType = TSQL_NODE_EXPR;
     
     (*pExpr)->_node.hasPK = false;

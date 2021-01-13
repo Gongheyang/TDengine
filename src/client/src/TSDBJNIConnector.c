@@ -289,7 +289,7 @@ JNIEXPORT jlong JNICALL Java_com_taosdata_jdbc_TSDBJNIConnector_executeQueryImp(
 
   jsize len = (*env)->GetArrayLength(env, jsql);
 
-  char *str = (char *) calloc(1, sizeof(char) * (len + 1));
+  char *str = (char *) TDMCALLOC(1, sizeof(char) * (len + 1));
   if (str == NULL) {
     jniError("jobj:%p, conn:%p, alloc memory failed", jobj, tscon);
     return JNI_OUT_OF_MEMORY;
@@ -651,7 +651,7 @@ JNIEXPORT jint JNICALL Java_com_taosdata_jdbc_TSDBJNIConnector_validateCreateTab
 
   jsize len = (*env)->GetArrayLength(env, jsql);
 
-  char *str = (char *)calloc(1, sizeof(char) * (len + 1));
+  char *str = (char *)TDMCALLOC(1, sizeof(char) * (len + 1));
   (*env)->GetByteArrayRegion(env, jsql, 0, len, (jbyte *)str);
   if ((*env)->ExceptionCheck(env)) {
     // todo handle error

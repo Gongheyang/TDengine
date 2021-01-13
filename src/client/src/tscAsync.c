@@ -52,7 +52,7 @@ void doAsyncQuery(STscObj* pObj, SSqlObj* pSql, __async_cb_func_t fp, void* para
 
   registerSqlObj(pSql);
 
-  pSql->sqlstr = calloc(1, sqlLen + 1);
+  pSql->sqlstr = TDMCALLOC(1, sqlLen + 1);
   if (pSql->sqlstr == NULL) {
     tscError("%p failed to malloc sql string buffer", pSql);
     pSql->res.code = TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -97,7 +97,7 @@ void taos_query_a(TAOS *taos, const char *sqlstr, __async_cb_func_t fp, void *pa
   
   nPrintTsc("%s", sqlstr);
   
-  SSqlObj *pSql = (SSqlObj *)calloc(1, sizeof(SSqlObj));
+  SSqlObj *pSql = (SSqlObj *)TDMCALLOC(1, sizeof(SSqlObj));
   if (pSql == NULL) {
     tscError("failed to malloc sqlObj");
     tscQueueAsyncError(fp, param, TSDB_CODE_TSC_OUT_OF_MEMORY);
@@ -369,7 +369,7 @@ static void tscProcessAsyncError(SSchedMsg *pMsg) {
 }
 
 void tscQueueAsyncError(void(*fp), void *param, int32_t code) {
-  int32_t* c = malloc(sizeof(int32_t));
+  int32_t* c = TDMALLOC(sizeof(int32_t));
   *c = code;
   
   SSchedMsg schedMsg = { 0 };

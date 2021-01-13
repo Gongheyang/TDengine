@@ -265,10 +265,10 @@ int32_t tscCreateResPointerInfo(SSqlRes* pRes, SQueryInfo* pQueryInfo) {
   if (pRes->tsrow == NULL) {
     pRes->numOfCols = pQueryInfo->fieldsInfo.numOfOutput;
 
-    pRes->tsrow  = calloc(pRes->numOfCols, POINTER_BYTES);
-    pRes->urow   = calloc(pRes->numOfCols, POINTER_BYTES);
-    pRes->length = calloc(pRes->numOfCols, sizeof(int32_t));
-    pRes->buffer = calloc(pRes->numOfCols, POINTER_BYTES);
+    pRes->tsrow  = TDMCALLOC(pRes->numOfCols, POINTER_BYTES);
+    pRes->urow   = TDMCALLOC(pRes->numOfCols, POINTER_BYTES);
+    pRes->length = TDMCALLOC(pRes->numOfCols, sizeof(int32_t));
+    pRes->buffer = TDMCALLOC(pRes->numOfCols, POINTER_BYTES);
 
     // not enough memory
     if (pRes->tsrow == NULL  || pRes->urow == NULL || pRes->length == NULL || (pRes->buffer == NULL && pRes->numOfCols > 0)) {
@@ -322,7 +322,7 @@ void tscSetResRawPtr(SSqlRes* pRes, SQueryInfo* pQueryInfo) {
 
     } else if (pInfo->field.type == TSDB_DATA_TYPE_NCHAR) {
       // convert unicode to native code in a temporary buffer extra one byte for terminated symbol
-      pRes->buffer[i] = realloc(pRes->buffer[i], pInfo->field.bytes * pRes->numOfRows);
+      pRes->buffer[i] = TDMREALLOC(pRes->buffer[i], pInfo->field.bytes * pRes->numOfRows);
 
       // string terminated char for binary data
       memset(pRes->buffer[i], 0, pInfo->field.bytes * pRes->numOfRows);
@@ -531,7 +531,7 @@ SParamInfo* tscAddParamToDataBlock(STableDataBlocks* pDataBlock, char type, uint
   uint32_t needed = pDataBlock->numOfParams + 1;
   if (needed > pDataBlock->numOfAllocedParams) {
     needed *= 2;
-    void* tmp = realloc(pDataBlock->params, needed * sizeof(SParamInfo));
+    void* tmp = TDMREALLOC(pDataBlock->params, needed * sizeof(SParamInfo));
     if (tmp == NULL) {
       return NULL;
     }
@@ -636,7 +636,7 @@ int32_t tscCopyDataBlockToPayload(SSqlObj* pSql, STableDataBlocks* pDataBlock) {
  */
 int32_t tscCreateDataBlock(size_t initialSize, int32_t rowSize, int32_t startOffset, const char* name,
                            STableMeta* pTableMeta, STableDataBlocks** dataBlocks) {
-  STableDataBlocks* dataBuf = (STableDataBlocks*)calloc(1, sizeof(STableDataBlocks));
+  STableDataBlocks* dataBuf = (STableDataBlocks*)TDMCALLOC(1, sizeof(STableDataBlocks));
   if (dataBuf == NULL) {
     tscError("failed to allocated memory, reason:%s", strerror(errno));
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -648,7 +648,7 @@ int32_t tscCreateDataBlock(size_t initialSize, int32_t rowSize, int32_t startOff
     dataBuf->nAllocSize = dataBuf->headerSize*2;
   }
   
-  dataBuf->pData = calloc(1, dataBuf->nAllocSize);
+  dataBuf->pData = TDMCALLOC(1, dataBuf->nAllocSize);
   if (dataBuf->pData == NULL) {
     tscError("failed to allocated memory, reason:%s", strerror(errno));
     TDMFREE(dataBuf);
@@ -773,7 +773,7 @@ static int32_t getRowExpandSize(STableMeta* pTableMeta) {
 
 static void extractTableNameList(SSqlCmd* pCmd) {
   pCmd->numOfTables = (int32_t) taosHashGetSize(pCmd->pTableBlockHashList);
-  pCmd->pTableNameList = calloc(pCmd->numOfTables, POINTER_BYTES);
+  pCmd->pTableNameList = TDMCALLOC(pCmd->numOfTables, POINTER_BYTES);
 
   STableDataBlocks **p1 = taosHashIterate(pCmd->pTableBlockHashList, NULL);
   int32_t i = 0;
@@ -818,7 +818,7 @@ int32_t tscMergeTableDataBlocks(SSqlObj* pSql) {
         dataBuf->nAllocSize = (uint32_t)(dataBuf->nAllocSize * 1.5);
       }
 
-      char* tmp = realloc(dataBuf->pData, dataBuf->nAllocSize);
+      char* tmp = TDMREALLOC(dataBuf->pData, dataBuf->nAllocSize);
       if (tmp != NULL) {
         dataBuf->pData = tmp;
         memset(dataBuf->pData + dataBuf->size, 0, dataBuf->nAllocSize - dataBuf->size);
@@ -912,12 +912,12 @@ int tscAllocPayload(SSqlCmd* pCmd, int size) {
   if (pCmd->payload == NULL) {
     assert(pCmd->allocSize == 0);
 
-    pCmd->payload = (char*)calloc(1, size);
+    pCmd->payload = (char*)TDMCALLOC(1, size);
     if (pCmd->payload == NULL) return TSDB_CODE_TSC_OUT_OF_MEMORY;
     pCmd->allocSize = size;
   } else {
     if (pCmd->allocSize < (uint32_t)size) {
-      char* b = realloc(pCmd->payload, size);
+      char* b = TDMREALLOC(pCmd->payload, size);
       if (b == NULL) return TSDB_CODE_TSC_OUT_OF_MEMORY;
       pCmd->payload = b;
       pCmd->allocSize = size;
@@ -1061,7 +1061,7 @@ static SSqlExpr* doBuildSqlExpr(SQueryInfo* pQueryInfo, int16_t functionId, SCol
     int16_t size, int16_t resColId, int16_t interSize, int32_t colType) {
   STableMetaInfo* pTableMetaInfo = tscGetMetaInfo(pQueryInfo, pColIndex->tableIndex);
   
-  SSqlExpr* pExpr = calloc(1, sizeof(SSqlExpr));
+  SSqlExpr* pExpr = TDMCALLOC(1, sizeof(SSqlExpr));
   if (pExpr == NULL) {
     return NULL;
   }
@@ -1196,7 +1196,7 @@ int32_t tscSqlExprCopy(SArray* dst, const SArray* src, uint64_t uid, bool deepco
     if (pExpr->uid == uid) {
       
       if (deepcopy) {
-        SSqlExpr* p1 = calloc(1, sizeof(SSqlExpr));
+        SSqlExpr* p1 = TDMCALLOC(1, sizeof(SSqlExpr));
         if (p1 == NULL) {
           return -1;
         }
@@ -1240,7 +1240,7 @@ SColumn* tscColumnListInsert(SArray* pColumnList, SColumnIndex* pColIndex) {
   }
 
   if (i >= numOfCols || numOfCols == 0) {
-    SColumn* b = calloc(1, sizeof(SColumn));
+    SColumn* b = TDMCALLOC(1, sizeof(SColumn));
     if (b == NULL) {
       return NULL;
     }
@@ -1251,7 +1251,7 @@ SColumn* tscColumnListInsert(SArray* pColumnList, SColumnIndex* pColIndex) {
     SColumn* pCol = taosArrayGetP(pColumnList, i);
   
     if (i < numOfCols && (pCol->colIndex.columnIndex > col || pCol->colIndex.tableIndex != pColIndex->tableIndex)) {
-      SColumn* b = calloc(1, sizeof(SColumn));
+      SColumn* b = TDMCALLOC(1, sizeof(SColumn));
       if (b == NULL) {
         return NULL;
       }
@@ -1277,7 +1277,7 @@ static void destroyFilterInfo(SColumnFilterInfo* pFilterInfo, int32_t numOfFilte
 SColumn* tscColumnClone(const SColumn* src) {
   assert(src != NULL);
   
-  SColumn* dst = calloc(1, sizeof(SColumn));
+  SColumn* dst = TDMCALLOC(1, sizeof(SColumn));
   if (dst == NULL) {
     return NULL;
   }
@@ -1537,7 +1537,7 @@ int32_t tscTagCondCopy(STagCond* dest, const STagCond* src) {
     
     if (pCond->len > 0) {
       assert(pCond->cond != NULL);
-      c.cond = malloc(c.len);
+      c.cond = TDMALLOC(c.len);
       if (c.cond == NULL) {
         return -1;
       }
@@ -1699,14 +1699,14 @@ int32_t tscAddSubqueryInfo(SSqlCmd* pCmd) {
 
   // todo refactor: remove this structure
   size_t s = pCmd->numOfClause + 1;
-  char*  tmp = realloc(pCmd->pQueryInfo, s * POINTER_BYTES);
+  char*  tmp = TDMREALLOC(pCmd->pQueryInfo, s * POINTER_BYTES);
   if (tmp == NULL) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
 
   pCmd->pQueryInfo = (SQueryInfo**)tmp;
 
-  SQueryInfo* pQueryInfo = calloc(1, sizeof(SQueryInfo));
+  SQueryInfo* pQueryInfo = TDMCALLOC(1, sizeof(SQueryInfo));
   if (pQueryInfo == NULL) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
@@ -1826,14 +1826,14 @@ void clearAllTableMetaInfo(SQueryInfo* pQueryInfo) {
 
 STableMetaInfo* tscAddTableMetaInfo(SQueryInfo* pQueryInfo, const char* name, STableMeta* pTableMeta,
                                     SVgroupsInfo* vgroupList, SArray* pTagCols, SArray* pVgroupTables) {
-  void* pAlloc = realloc(pQueryInfo->pTableMetaInfo, (pQueryInfo->numOfTables + 1) * POINTER_BYTES);
+  void* pAlloc = TDMREALLOC(pQueryInfo->pTableMetaInfo, (pQueryInfo->numOfTables + 1) * POINTER_BYTES);
   if (pAlloc == NULL) {
     terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
     return NULL;
   }
 
   pQueryInfo->pTableMetaInfo = pAlloc;
-  STableMetaInfo* pTableMetaInfo = calloc(1, sizeof(STableMetaInfo));
+  STableMetaInfo* pTableMetaInfo = TDMCALLOC(1, sizeof(STableMetaInfo));
   if (pTableMetaInfo == NULL) {
     terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
     return NULL;
@@ -1902,7 +1902,7 @@ void registerSqlObj(SSqlObj* pSql) {
 }
 
 SSqlObj* createSimpleSubObj(SSqlObj* pSql, void (*fp)(), void* param, int32_t cmd) {
-  SSqlObj* pNew = (SSqlObj*)calloc(1, sizeof(SSqlObj));
+  SSqlObj* pNew = (SSqlObj*)TDMCALLOC(1, sizeof(SSqlObj));
   if (pNew == NULL) {
     tscError("%p new subquery failed, tableIndex:%d", pSql, 0);
     return NULL;
@@ -1989,7 +1989,7 @@ static void doSetSqlExprAndResultFieldInfo(SQueryInfo* pNewQueryInfo, int64_t ui
 SSqlObj* createSubqueryObj(SSqlObj* pSql, int16_t tableIndex, void (*fp)(), void* param, int32_t cmd, SSqlObj* pPrevSql) {
   SSqlCmd* pCmd = &pSql->cmd;
 
-  SSqlObj* pNew = (SSqlObj*)calloc(1, sizeof(SSqlObj));
+  SSqlObj* pNew = (SSqlObj*)TDMCALLOC(1, sizeof(SSqlObj));
   if (pNew == NULL) {
     tscError("%p new subquery failed, tableIndex:%d", pSql, tableIndex);
     terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -2058,7 +2058,7 @@ SSqlObj* createSubqueryObj(SSqlObj* pSql, int16_t tableIndex, void (*fp)(), void
   }
 
   if (pQueryInfo->fillType != TSDB_FILL_NONE) {
-    pNewQueryInfo->fillVal = malloc(pQueryInfo->fieldsInfo.numOfOutput * sizeof(int64_t));
+    pNewQueryInfo->fillVal = TDMALLOC(pQueryInfo->fieldsInfo.numOfOutput * sizeof(int64_t));
     if (pNewQueryInfo->fillVal == NULL) {
       terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
       goto _error;
@@ -2433,7 +2433,7 @@ void tscTryQueryNextClause(SSqlObj* pSql, __async_cb_func_t fp) {
 }
 
 void* malloc_throw(size_t size) {
-  void* p = malloc(size);
+  void* p = TDMALLOC(size);
   if (p == NULL) {
     THROW(TSDB_CODE_TSC_OUT_OF_MEMORY);
   }
@@ -2441,7 +2441,7 @@ void* malloc_throw(size_t size) {
 }
 
 void* calloc_throw(size_t nmemb, size_t size) {
-  void* p = calloc(nmemb, size);
+  void* p = TDMCALLOC(nmemb, size);
   if (p == NULL) {
     THROW(TSDB_CODE_TSC_OUT_OF_MEMORY);
   }
@@ -2513,7 +2513,7 @@ SVgroupsInfo* tscVgroupInfoClone(SVgroupsInfo *vgroupList) {
   }
 
   size_t size = sizeof(SVgroupsInfo) + sizeof(SVgroupInfo) * vgroupList->numOfVgroups;
-  SVgroupsInfo* pNew = calloc(1, size);
+  SVgroupsInfo* pNew = TDMCALLOC(1, size);
   if (pNew == NULL) {
     return NULL;
   }
@@ -2591,7 +2591,7 @@ int32_t copyTagData(STagData* dst, const STagData* src) {
   tstrncpy(dst->name, src->name, tListLen(dst->name));
 
   if (dst->dataLen > 0) {
-    dst->data = malloc(dst->dataLen);
+    dst->data = TDMALLOC(dst->dataLen);
     if (dst->data == NULL) {
       return -1;
     }
@@ -2606,7 +2606,7 @@ STableMeta* createSuperTableMeta(STableMetaMsg* pChild) {
   assert(pChild != NULL);
   int32_t total = pChild->numOfColumns + pChild->numOfTags;
 
-  STableMeta* pTableMeta = calloc(1, sizeof(STableMeta) + sizeof(SSchema) * total);
+  STableMeta* pTableMeta = TDMCALLOC(1, sizeof(STableMeta) + sizeof(SSchema) * total);
   pTableMeta->tableType = TSDB_SUPER_TABLE;
   pTableMeta->tableInfo.numOfTags = pChild->numOfTags;
   pTableMeta->tableInfo.numOfColumns = pChild->numOfColumns;
@@ -2637,7 +2637,7 @@ uint32_t tscGetTableMetaSize(STableMeta* pTableMeta) {
 CChildTableMeta* tscCreateChildMeta(STableMeta* pTableMeta) {
   assert(pTableMeta != NULL);
 
-  CChildTableMeta* cMeta = calloc(1, sizeof(CChildTableMeta));
+  CChildTableMeta* cMeta = TDMCALLOC(1, sizeof(CChildTableMeta));
   cMeta->tableType = TSDB_CHILD_TABLE;
   cMeta->vgId = pTableMeta->vgId;
   cMeta->id   = pTableMeta->id;
@@ -2650,7 +2650,7 @@ int32_t tscCreateTableMetaFromCChildMeta(STableMeta* pChild, const char* name) {
   assert(pChild != NULL);
 
   uint32_t size = tscGetTableMetaMaxSize();
-  STableMeta* p = calloc(1, size);
+  STableMeta* p = TDMCALLOC(1, size);
 
   taosHashGetClone(tscTableMetaInfo, pChild->sTableName, strnlen(pChild->sTableName, TSDB_TABLE_FNAME_LEN), NULL, p, -1);
   if (p->id.uid > 0) { // tableMeta exists, build child table meta and return
@@ -2679,7 +2679,7 @@ uint32_t tscGetTableMetaMaxSize() {
 STableMeta* tscTableMetaClone(STableMeta* pTableMeta) {
   assert(pTableMeta != NULL);
   uint32_t size = tscGetTableMetaSize(pTableMeta);
-  STableMeta* p = calloc(1, size);
+  STableMeta* p = TDMCALLOC(1, size);
   memcpy(p, pTableMeta, size);
   return p;
 }

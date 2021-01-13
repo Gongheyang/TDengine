@@ -569,7 +569,7 @@ TAOS_STREAM *taos_open_stream(TAOS *taos, const char *sqlstr, void (*fp)(void *p
   STscObj *pObj = (STscObj *)taos;
   if (pObj == NULL || pObj->signature != pObj) return NULL;
 
-  SSqlObj *pSql = (SSqlObj *)calloc(1, sizeof(SSqlObj));
+  SSqlObj *pSql = (SSqlObj *)TDMCALLOC(1, sizeof(SSqlObj));
   if (pSql == NULL) {
     return NULL;
   }
@@ -580,7 +580,7 @@ TAOS_STREAM *taos_open_stream(TAOS *taos, const char *sqlstr, void (*fp)(void *p
   SSqlCmd *pCmd = &pSql->cmd;
   SSqlRes *pRes = &pSql->res;
 
-  SSqlStream *pStream = (SSqlStream *)calloc(1, sizeof(SSqlStream));
+  SSqlStream *pStream = (SSqlStream *)TDMCALLOC(1, sizeof(SSqlStream));
   if (pStream == NULL) {
     tscError("%p open stream failed, sql:%s, reason:%s, code:0x%08x", pSql, sqlstr, pCmd->payload, pRes->code);
     tscFreeSqlObj(pSql);
@@ -596,7 +596,7 @@ TAOS_STREAM *taos_open_stream(TAOS *taos, const char *sqlstr, void (*fp)(void *p
   pSql->param = pStream;
   pSql->maxRetry = TSDB_MAX_REPLICA;
 
-  pSql->sqlstr = calloc(1, strlen(sqlstr) + 1);
+  pSql->sqlstr = TDMCALLOC(1, strlen(sqlstr) + 1);
   if (pSql->sqlstr == NULL) {
     tscError("%p failed to malloc sql string buffer", pSql);
     tscFreeSqlObj(pSql);

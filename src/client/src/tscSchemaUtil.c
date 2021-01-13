@@ -152,7 +152,7 @@ STableMeta* tscCreateTableMetaFromMsg(STableMetaMsg* pTableMetaMsg) {
   assert(pTableMetaMsg != NULL && pTableMetaMsg->numOfColumns >= 2 && pTableMetaMsg->numOfTags >= 0);
   
   int32_t schemaSize = (pTableMetaMsg->numOfColumns + pTableMetaMsg->numOfTags) * sizeof(SSchema);
-  STableMeta* pTableMeta = calloc(1, sizeof(STableMeta) + schemaSize);
+  STableMeta* pTableMeta = TDMCALLOC(1, sizeof(STableMeta) + schemaSize);
 
   pTableMeta->tableType = pTableMetaMsg->tableType;
   pTableMeta->vgId      = pTableMetaMsg->vgroup.vgId;

@@ -54,7 +54,7 @@ static int normalStmtAddPart(SNormalStmt* stmt, bool isParam, char* str, uint32_
   uint16_t size = stmt->numParts + 1;
   if (size > stmt->sizeParts) {
     size *= 2;
-    void* tmp = realloc(stmt->parts, sizeof(SNormalStmtPart) * size);
+    void* tmp = TDMREALLOC(stmt->parts, sizeof(SNormalStmtPart) * size);
     if (tmp == NULL) {
       return TSDB_CODE_TSC_OUT_OF_MEMORY;
     }
@@ -125,7 +125,7 @@ static int normalStmtBindParam(STscStmt* stmt, TAOS_BIND* bind) {
 
       case TSDB_DATA_TYPE_BINARY:
       case TSDB_DATA_TYPE_NCHAR:
-        var->pz = (char*)malloc((*tb->length) + 1);
+        var->pz = (char*)TDMALLOC((*tb->length) + 1);
         if (var->pz == NULL) {
           return TSDB_CODE_TSC_OUT_OF_MEMORY;
         }
@@ -179,7 +179,7 @@ static int normalStmtPrepare(STscStmt* stmt) {
   }
 
   if (normal->numParams > 0) {
-    normal->params = calloc(normal->numParams, sizeof(tVariant));
+    normal->params = TDMCALLOC(normal->numParams, sizeof(tVariant));
     if (normal->params == NULL) {
       return TSDB_CODE_TSC_OUT_OF_MEMORY;
     }
@@ -714,7 +714,7 @@ static int insertStmtBindParam(STscStmt* stmt, TAOS_BIND* bind) {
       totalDataSize += dataSize + sizeof(SSubmitBlk);
       if (totalDataSize > pBlock->nAllocSize) {
         const double factor = 1.5;
-        void* tmp = realloc(pBlock->pData, (uint32_t)(totalDataSize * factor));
+        void* tmp = TDMREALLOC(pBlock->pData, (uint32_t)(totalDataSize * factor));
         if (tmp == NULL) {
           return TSDB_CODE_TSC_OUT_OF_MEMORY;
         }
@@ -850,7 +850,7 @@ TAOS_STMT* taos_stmt_init(TAOS* taos) {
     return NULL;
   }
 
-  STscStmt* pStmt = calloc(1, sizeof(STscStmt));
+  STscStmt* pStmt = TDMCALLOC(1, sizeof(STscStmt));
   if (pStmt == NULL) {
     terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
     tscError("failed to allocate memory for statement");
@@ -858,7 +858,7 @@ TAOS_STMT* taos_stmt_init(TAOS* taos) {
   }
   pStmt->taos = pObj;
 
-  SSqlObj* pSql = calloc(1, sizeof(SSqlObj));
+  SSqlObj* pSql = TDMCALLOC(1, sizeof(SSqlObj));
   if (pSql == NULL) {
     TDMFREE(pStmt);
     terrno = TSDB_CODE_TSC_OUT_OF_MEMORY;
@@ -897,7 +897,7 @@ int taos_stmt_prepare(TAOS_STMT* stmt, const char* sql, unsigned long length) {
     return TSDB_CODE_TSC_OUT_OF_MEMORY;
   }
 
-  pSql->sqlstr = realloc(pSql->sqlstr, sqlLen + 1);
+  pSql->sqlstr = TDMREALLOC(pSql->sqlstr, sqlLen + 1);
 
   if (pSql->sqlstr == NULL) {
     tscError("%p failed to malloc sql string buffer", pSql);
