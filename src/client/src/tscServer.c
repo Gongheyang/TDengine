@@ -728,6 +728,7 @@ int tscBuildQueryMsg(SSqlObj *pSql, SSqlInfo *pInfo) {
   pQueryMsg->limit          = htobe64(pQueryInfo->limit.limit);
   pQueryMsg->offset         = htobe64(pQueryInfo->limit.offset);
   pQueryMsg->numOfCols      = htons((int16_t)taosArrayGetSize(pQueryInfo->colList));
+  pQueryMsg->interval.tz    = htobe64(timezone);
   pQueryMsg->interval.interval = htobe64(pQueryInfo->interval.interval);
   pQueryMsg->interval.sliding  = htobe64(pQueryInfo->interval.sliding);
   pQueryMsg->interval.offset   = htobe64(pQueryInfo->interval.offset);

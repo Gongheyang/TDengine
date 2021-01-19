@@ -479,6 +479,15 @@ int64_t taosTimeTruncate(int64_t t, const SInterval* pInterval, int32_t precisio
     }
 
     start = (int64_t)(mktime(&tm) * TSDB_TICK_PER_SECOND(precision));
+
+  #if defined(WINDOWS) && _MSC_VER >= 1900
+    // see https://docs.microsoft.com/en-us/cpp/c-runtime-library/daylight-dstbias-timezone-and-tzname?view=vs-2019
+    int64_t timezone = _timezone;
+    int32_t daylight = _daylight;
+    char**  tzname = _tzname;
+  #endif    
+    assert(pInterval->tz % 3600 == 0);
+    start -= (timezone - pInterval->tz) * TSDB_TICK_PER_SECOND(precision);
   } else {
     int64_t delta = t - pInterval->interval;
     int32_t factor = (delta >= 0) ? 1 : -1;
@@ -497,8 +506,9 @@ int64_t taosTimeTruncate(int64_t t, const SInterval* pInterval, int32_t precisio
       int32_t daylight = _daylight;
       char**  tzname = _tzname;
   #endif
-
-      start += (int64_t)(timezone * TSDB_TICK_PER_SECOND(precision));
+      assert(pInterval->tz % 3600 == 0);
+  
+      start += (int64_t)(pInterval->tz * TSDB_TICK_PER_SECOND(precision));
     }
 
     int64_t end = 0;

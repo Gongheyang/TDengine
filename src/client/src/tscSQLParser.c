@@ -776,6 +776,8 @@ int32_t parseIntervalClause(SSqlObj* pSql, SQueryInfo* pQueryInfo, SQuerySQL* pQ
     return TSDB_CODE_TSC_INVALID_SQL;
   }
 
+  pQueryInfo->interval.tz = timezone;
+
   return TSDB_CODE_SUCCESS;
 }
 

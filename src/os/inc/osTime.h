@@ -63,7 +63,7 @@ static FORCE_INLINE int64_t taosGetTimestamp(int32_t precision) {
 
 
 typedef struct SInterval {
-  int32_t tz;            // query client timezone
+  int64_t tz;            // query client timezone
   char    intervalUnit;
   char    slidingUnit;
   char    offsetUnit;

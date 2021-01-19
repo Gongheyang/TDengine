@@ -323,7 +323,7 @@ static int32_t taosNumOfRemainRows(SFillInfo* pFillInfo) {
 
 SFillInfo* taosInitFillInfo(int32_t order, TSKEY skey, int32_t numOfTags, int32_t capacity, int32_t numOfCols,
                             int64_t slidingTime, int8_t slidingUnit, int8_t precision, int32_t fillType,
-                            SFillColInfo* pCol, void* handle) {
+                            SFillColInfo* pCol, void* handle, int64_t tz) {
   if (fillType == TSDB_FILL_NONE) {
     return NULL;
   }
@@ -344,6 +344,8 @@ SFillInfo* taosInitFillInfo(int32_t order, TSKEY skey, int32_t numOfTags, int32_
   pFillInfo->interval.intervalUnit = slidingUnit;
   pFillInfo->interval.sliding      = slidingTime;
   pFillInfo->interval.slidingUnit  = slidingUnit;
+
+  pFillInfo->interval.tz = tz;
 
   pFillInfo->pData = malloc(POINTER_BYTES * numOfCols);
   if (numOfTags > 0) {

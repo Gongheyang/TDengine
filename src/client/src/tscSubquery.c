@@ -2292,8 +2292,8 @@ static void multiVnodeInsertFinalize(void* param, TAOS_RES* tres, int numOfRows)
       }
     }
 
-    tscError("%p Async insertion completed, total inserted:%d rows, numOfFailed:%d, numOfTotal:%d", pParentObj,
-             pParentObj->res.numOfRows, numOfFailed, numOfSub);
+    tscError("%p Async insertion completed, total inserted:%d rows, numOfFailed:%d, numOfTotal:%d, code:%d", pParentObj,
+             pParentObj->res.numOfRows, numOfFailed, numOfSub, pParentObj->res.code);
 
     tscDebug("%p cleanup %d tableMeta in hashTable", pParentObj, pParentObj->cmd.numOfTables);
     for(int32_t i = 0; i < pParentObj->cmd.numOfTables; ++i) {
