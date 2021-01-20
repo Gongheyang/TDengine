@@ -733,7 +733,7 @@ int main(int argc, char *argv[]) {
   if (use_metric) {
     /* Create metric table */
     printf("Creating meters super table...\n");
-    snprintf(command, BUFFER_SIZE, "create table if not exists %s.st0 (ts timestamp%s) tags (uuid binary(50))", db_name, cols);
+    snprintf(command, BUFFER_SIZE, "create table if not exists %s.st0 (ts timestamp %s) tags (uuid binary(50))", db_name, cols);
     queryDB(taos, command);
     printf("meters created!\n");
   }
