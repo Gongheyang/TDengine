@@ -20,6 +20,7 @@
 #include "os.h"
 #include "taosdef.h"
 #include "tutil.h"
+#include "tulog.h"
 
 /*
  * mktime64 - Converts date to seconds.
@@ -457,6 +458,13 @@ int64_t taosTimeTruncate(int64_t t, const SInterval* pInterval, int32_t precisio
     return t;
   }
 
+#if defined(WINDOWS) && _MSC_VER >= 1900
+    // see https://docs.microsoft.com/en-us/cpp/c-runtime-library/daylight-dstbias-timezone-and-tzname?view=vs-2019
+    int64_t timezone = _timezone;
+    int32_t daylight = _daylight;
+    char**  tzname = _tzname;
+#endif   
+
   int64_t start = t;
   if (pInterval->slidingUnit == 'n' || pInterval->slidingUnit == 'y') {
     start /= (int64_t)(TSDB_TICK_PER_SECOND(precision));
@@ -479,15 +487,26 @@ int64_t taosTimeTruncate(int64_t t, const SInterval* pInterval, int32_t precisio
     }
 
     start = (int64_t)(mktime(&tm) * TSDB_TICK_PER_SECOND(precision));
-
-  #if defined(WINDOWS) && _MSC_VER >= 1900
-    // see https://docs.microsoft.com/en-us/cpp/c-runtime-library/daylight-dstbias-timezone-and-tzname?view=vs-2019
-    int64_t timezone = _timezone;
-    int32_t daylight = _daylight;
-    char**  tzname = _tzname;
-  #endif    
+ 
     assert(pInterval->tz % 3600 == 0);
     start -= (timezone - pInterval->tz) * TSDB_TICK_PER_SECOND(precision);
+    
+    if (start > t) {
+      if (pInterval->slidingUnit == 'y') {
+        tm.tm_mon = 0;
+        tm.tm_year--;
+      } else {
+        tm.tm_mon--;
+        int mon = tm.tm_year * 12 + tm.tm_mon;
+        mon = (int)(mon / pInterval->sliding * pInterval->sliding);
+        tm.tm_year = mon / 12;
+        tm.tm_mon = mon % 12;
+      }
+      
+      start = (int64_t)(mktime(&tm) * TSDB_TICK_PER_SECOND(precision));
+
+      start -= (timezone - pInterval->tz) * TSDB_TICK_PER_SECOND(precision);
+    }
   } else {
     int64_t delta = t - pInterval->interval;
     int32_t factor = (delta >= 0) ? 1 : -1;
@@ -499,28 +518,27 @@ int64_t taosTimeTruncate(int64_t t, const SInterval* pInterval, int32_t precisio
       * here we revised the start time of day according to the local time zone,
       * but in case of DST, the start time of one day need to be dynamically decided.
       */
-      // todo refactor to extract function that is available for Linux/Windows/Mac platform
-  #if defined(WINDOWS) && _MSC_VER >= 1900
-      // see https://docs.microsoft.com/en-us/cpp/c-runtime-library/daylight-dstbias-timezone-and-tzname?view=vs-2019
-      int64_t timezone = _timezone;
-      int32_t daylight = _daylight;
-      char**  tzname = _tzname;
-  #endif
       assert(pInterval->tz % 3600 == 0);
   
       start += (int64_t)(pInterval->tz * TSDB_TICK_PER_SECOND(precision));
+
+      if (start > t) {
+        start -= (int64_t)(pInterval->tz * TSDB_TICK_PER_SECOND(precision));
+        
+        start = (delta / pInterval->sliding - 1) * pInterval->sliding;
+      }
     }
 
     int64_t end = 0;
 
     // not enough time range
-    if (INT64_MAX - start > pInterval->interval - 1) {
+    if (start < 0 || INT64_MAX - start > pInterval->interval - 1) {
       end = start + pInterval->interval - 1;
 
       while(end < t && ((start + pInterval->sliding) <= INT64_MAX)) { // move forward to the correct time window
         start += pInterval->sliding;
 
-        if (INT64_MAX - start > pInterval->interval - 1) {
+        if (start < 0 || INT64_MAX - start > pInterval->interval - 1) {
           end = start + pInterval->interval - 1;
         } else {
           end = INT64_MAX;
@@ -538,6 +556,22 @@ int64_t taosTimeTruncate(int64_t t, const SInterval* pInterval, int32_t precisio
       start = taosTimeAdd(start, -pInterval->interval, pInterval->intervalUnit, precision);
     }
   }
+
+
+
+
+/*
+
+  struct tm tm;
+  time_t tt = (time_t)start/(int64_t)(TSDB_TICK_PER_SECOND(precision));
+  localtime_r(&tt, &tm);
+  uError("origin start:%" PRId64 ", final start:%" PRId64 ",in tz:%" PRId64 ",local tz:%" PRId64 ",interval:%" PRId64 "%c,sliding:%" PRId64 "%c,y:%d,m:%d,d:%d,h:%d,m:%d,s:%d",
+    t, start, pInterval->tz, timezone, pInterval->interval, pInterval->intervalUnit, pInterval->sliding, pInterval->slidingUnit, 
+    tm.tm_year, tm.tm_mon, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+*/
+
+
+  
   return start;
 }
 
