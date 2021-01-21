@@ -396,7 +396,7 @@ void tscFreeQueryInfo(SSqlCmd* pCmd) {
   tfree(pCmd->pQueryInfo);
 }
 
-void tscResetSqlCmdObj(SSqlCmd* pCmd) {
+void tscResetSqlCmdObj(SSqlCmd* pCmd, bool removeMeta) {
   pCmd->command   = 0;
   pCmd->numOfCols = 0;
   pCmd->count     = 0;
@@ -414,7 +414,7 @@ void tscResetSqlCmdObj(SSqlCmd* pCmd) {
   pCmd->numOfTables = 0;
   tfree(pCmd->pTableNameList);
 
-  pCmd->pTableBlockHashList = tscDestroyBlockHashTable(pCmd->pTableBlockHashList);
+  pCmd->pTableBlockHashList = tscDestroyBlockHashTable(pCmd->pTableBlockHashList, removeMeta);
   pCmd->pDataBlocks = tscDestroyBlockArrayList(pCmd->pDataBlocks);
   tscFreeQueryInfo(pCmd);
 }
@@ -510,7 +510,7 @@ void tscFreeSqlObj(SSqlObj* pSql) {
   pSql->self = 0;
 
   tscFreeSqlResult(pSql);
-  tscResetSqlCmdObj(pCmd);
+  tscResetSqlCmdObj(pCmd, false);
 
   tfree(pCmd->tagData.data);
   pCmd->tagData.dataLen = 0;
@@ -524,7 +524,7 @@ void tscFreeSqlObj(SSqlObj* pSql) {
   free(pSql);
 }
 
-void tscDestroyDataBlock(STableDataBlocks* pDataBlock) {
+void tscDestroyDataBlock(STableDataBlocks* pDataBlock, bool removeMeta) {
   if (pDataBlock == NULL) {
     return;
   }
@@ -535,6 +535,10 @@ void tscDestroyDataBlock(STableDataBlocks* pDataBlock) {
   // free the refcount for metermeta
   if (pDataBlock->pTableMeta != NULL) {
     tfree(pDataBlock->pTableMeta);
+  }
+
+  if (removeMeta) {
+    taosHashRemove(tscTableMetaInfo, pDataBlock->tableName, strnlen(pDataBlock->tableName, TSDB_TABLE_FNAME_LEN));
   }
 
   tfree(pDataBlock);
@@ -572,21 +576,21 @@ void*  tscDestroyBlockArrayList(SArray* pDataBlockList) {
   size_t size = taosArrayGetSize(pDataBlockList);
   for (int32_t i = 0; i < size; i++) {
     void* d = taosArrayGetP(pDataBlockList, i);
-    tscDestroyDataBlock(d);
+    tscDestroyDataBlock(d, false);
   }
 
   taosArrayDestroy(pDataBlockList);
   return NULL;
 }
 
-void* tscDestroyBlockHashTable(SHashObj* pBlockHashTable) {
+void* tscDestroyBlockHashTable(SHashObj* pBlockHashTable, bool removeMeta) {
   if (pBlockHashTable == NULL) {
     return NULL;
   }
 
   STableDataBlocks** p = taosHashIterate(pBlockHashTable, NULL);
   while(p) {
-    tscDestroyDataBlock(*p);
+    tscDestroyDataBlock(*p, removeMeta);
     p = taosHashIterate(pBlockHashTable, p);
   }
 
@@ -797,7 +801,7 @@ static void extractTableNameList(SSqlCmd* pCmd) {
     p1 = taosHashIterate(pCmd->pTableBlockHashList, p1);
   }
 
-  pCmd->pTableBlockHashList = tscDestroyBlockHashTable(pCmd->pTableBlockHashList);
+  pCmd->pTableBlockHashList = tscDestroyBlockHashTable(pCmd->pTableBlockHashList, false);
 }
 
 int32_t tscMergeTableDataBlocks(SSqlObj* pSql) {
