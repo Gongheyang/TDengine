@@ -5,35 +5,54 @@ import java.util.Properties;
 
 public class JDBCDemo {
     private static String host;
+    private static String driverType = "jni";
     private static final String dbName = "test";
-    private static final String tbName = "weather";
+    private static final String stbName = "weather";
+    private static final String tbName = "subweather";
     private Connection connection;
+    private static int numOfSTb = 300000;
+    private static int numOfTb = 3;
+
 
     public static void main(String[] args) {
         for (int i = 0; i < args.length; i++) {
             if ("-host".equalsIgnoreCase(args[i]) && i < args.length - 1)
                 host = args[++i];
+            if ("-driverType".equalsIgnoreCase(args[i]) && i < args.length - 1) {
+                driverType = args[++i];
+                if (!"jni".equalsIgnoreCase(driverType) && !"restful".equalsIgnoreCase(driverType))
+                    printHelp();
+            }
         }
+
         if (host == null) {
             printHelp();
         }
+
         JDBCDemo demo = new JDBCDemo();
         demo.init();
+        demo.dropDatabase();
         demo.createDatabase();
         demo.useDatabase();
-        demo.dropTable();
+//        demo.dropTable();
+        demo.createSTable();
         demo.createTable();
         demo.insert();
         demo.select();
-        demo.dropTable();
+//        demo.dropTable();
         demo.close();
     }
 
     private void init() {
-        final String url = "jdbc:TAOS://" + host + ":6030/?user=root&password=taosdata";
         // get connection
         try {
-            Class.forName("com.taosdata.jdbc.TSDBDriver");
+            String url = "jdbc:TAOS://" + host + ":6030/?user=root&password=taosdata";
+            if (driverType.equals("restful")) {
+                Class.forName("com.taosdata.jdbc.rs.RestfulDriver");
+                url = "jdbc:TAOS-RS://" + host + ":6041/?user=root&password=taosdata";
+            } else {
+                Class.forName("com.taosdata.jdbc.TSDBDriver");
+            }
             Properties properties = new Properties();
             properties.setProperty("charset", "UTF-8");
             properties.setProperty("locale", "en_US.UTF-8");
@@ -47,6 +66,11 @@ public class JDBCDemo {
         }
     }
 
+    private void dropDatabase() {
+        String sql = "DROP database if exists " + dbName;
+        exuete(sql);
+    }
+
     private void createDatabase() {
         String sql = "create database if not exists " + dbName;
         exuete(sql);
@@ -57,38 +81,15 @@ public class JDBCDemo {
         exuete(sql);
     }
 
-    private void dropTable() {
-        final String sql = "drop table if exists " + dbName + "." + tbName + "";
-        exuete(sql);
-    }
-
-    private void createTable() {
-        final String sql = "create table if not exists " + dbName + "." + tbName + " (ts timestamp, temperature float, humidity int)";
-        exuete(sql);
-    }
-
-    private void insert() {
-        final String sql = "insert into test.weather (ts, temperature, humidity) values(now, 20.5, 34)";
-        exuete(sql);
-    }
-
     private void select() {
-        final String sql = "select * from test.weather";
-        executeQuery(sql);
+	for (int i = 0; i < numOfSTb; i++) {
+            for (int j = 0; j < numOfTb; j++) {
+        	final String sql = "select last_row(humidity) from " + dbName + "." + tbName + i + "_" + j;
+		System.out.println(sql);
+        	executeQuery(sql);
+	    }
+	}
     }
-
-    private void close() {
-        try {
-            if (connection != null) {
-                this.connection.close();
-                System.out.println("connection closed.");
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    /************************************************************************/
 
     private void executeQuery(String sql) {
         try (Statement statement = connection.createStatement()) {
@@ -96,7 +97,9 @@ public class JDBCDemo {
             ResultSet resultSet = statement.executeQuery(sql);
             long end = System.currentTimeMillis();
             printSql(sql, true, (end - start));
-            printResult(resultSet);
+//            printResult(resultSet);
+//            resultSet.close();
+//            statement.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -114,6 +117,33 @@ public class JDBCDemo {
         }
     }
 
+    private void insert() {
+	for (int i = 0; i < numOfSTb; i++) {
+	    for (int j = 0; j < numOfTb; j++) {
+        	final String sql = "INSERT INTO " + dbName + "." + tbName + i + "_" + j + " (ts, temperature, humidity, name) values(now, 20.5, 34, \"" + i + "\")";
+		System.out.println(sql);
+        	exuete(sql);
+	    }
+	}
+    }
+
+    private void createSTable() {
+	for (int i = 0; i < numOfSTb; i ++) {
+        	final String sql = "create table if not exists " + dbName + "." + stbName + i + " (ts timestamp, temperature float, humidity int, name BINARY(" + (i % 73+10) + ")) TAGS (tag1 INT)";
+		System.out.println(sql);
+        	exuete(sql);
+	}
+    }
+
+    private void createTable() {
+	for (int i = 0; i < numOfSTb; i ++) {
+	    for (int j = 0; j < numOfTb; j++) {
+        	final String sql = "create table if not exists " + dbName + "." + tbName + i + "_" + j + " USING " + stbName + i + " TAGS(" + j + ")";
+		System.out.println(sql);
+        	exuete(sql);
+	    }
+	}
+    }
 
     private void printSql(String sql, boolean succeed, long cost) {
         System.out.println("[ " + (succeed ? "OK" : "ERROR!") + " ] time cost: " + cost + " ms, execute statement ====> " + sql);
@@ -131,8 +161,24 @@ public class JDBCDemo {
         }
     }
 
+    private void close() {
+        try {
+            if (connection != null) {
+                this.connection.close();
+                System.out.println("connection closed.");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void dropTable() {
+        final String sql = "drop table if exists " + dbName + "." + tbName + "";
+        exuete(sql);
+    }
+
     private static void printHelp() {
-        System.out.println("Usage: java -jar JDBCDemo.jar -host <hostname>");
+        System.out.println("Usage: java -jar JdbcDemo.jar -host <hostname> -driverType <jni|restful>");
         System.exit(0);
     }
 
