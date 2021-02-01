@@ -8,6 +8,7 @@ import java.util.Calendar;
 import java.util.Properties;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 public class JDBCDemo {
     private static String host;
@@ -31,6 +32,8 @@ public class JDBCDemo {
         demo.createTable();
 
         demo.insertBatch();
+
+        TimeUnit.SECONDS.sleep(3600);
 
 //        demo.insert();
 //        demo.select();
@@ -169,7 +172,6 @@ public class JDBCDemo {
             printSql(sql, execute, (end - start));
         } catch (SQLException e) {
             e.printStackTrace();
-
         }
     }
 
