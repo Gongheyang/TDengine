@@ -60,7 +60,8 @@ public class JDBCDemo {
                 for (int i = 0; i < 10000; i++) {
                     if (i % 500 == 0 && StringUtils.isNotEmpty(sql)) {
                         sql = "INSERT INTO base_" + id + " USING " + tbName + " TAGS ('" + id + "') VALUES" + sql;
-                        exuete(sql);
+                        System.out.println("sql >>> " + sql);
+//                        exuete(sql);
                         sql = "";
                     } else {
                         calendar.add(Calendar.MINUTE, -new Random().nextInt(10));
