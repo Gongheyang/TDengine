@@ -1,7 +1,13 @@
 package com.taosdata.example;
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.time.DateFormatUtils;
+
 import java.sql.*;
+import java.util.Calendar;
 import java.util.Properties;
+import java.util.Random;
+import java.util.UUID;
 
 public class JDBCDemo {
     private static String host;
@@ -9,7 +15,7 @@ public class JDBCDemo {
     private static final String tbName = "weather";
     private Connection connection;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         for (int i = 0; i < args.length; i++) {
             if ("-host".equalsIgnoreCase(args[i]) && i < args.length - 1)
                 host = args[++i];
@@ -23,10 +29,46 @@ public class JDBCDemo {
         demo.useDatabase();
         demo.dropTable();
         demo.createTable();
-        demo.insert();
-        demo.select();
-        demo.dropTable();
+
+        demo.insertBatch();
+
+//        demo.insert();
+//        demo.select();
+//        demo.dropTable();
         demo.close();
+    }
+
+    private void insertBatch() throws InterruptedException {
+        Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.MINUTE, -5);
+        for (int i = 0; i < 100; i++) {
+            insertSingle();
+        }
+        Thread.sleep(1000);
+    }
+
+    private void insertSingle() {
+        new Thread(() -> {
+            System.out.println(Thread.currentThread().getName() + "开始插入数据");
+            String sql = "";
+            for (int j = 0; j < 1000000; j++) {
+                String id = UUID.randomUUID().toString().replace("-", "");
+                Calendar calendar = Calendar.getInstance();
+                for (int i = 0; i < 10000; i++) {
+                    if (i % 500 == 0 && StringUtils.isNotEmpty(sql)) {
+                        sql = "INSERT INTO base_" + id + " USING " + tbName + " TAGS ('" + id + "') VALUES" + sql;
+                        exuete(sql);
+                        sql = "";
+                    } else {
+                        calendar.add(Calendar.MINUTE, -new Random().nextInt(10));
+                        String format = DateFormatUtils.format(calendar.getTime(), "yyyy-MM-dd HH:mm:ss");
+                        sql += " ('" + format + "', " + new Random().nextDouble() * 10000 + ")";
+                    }
+                }
+                System.out.println(Thread.currentThread().getName() + ",第" + j + "个参数：" + id + "完成10000条写入");
+            }
+            System.out.println(Thread.currentThread().getName() + "插入完毕");
+        }).start();
     }
 
     private void init() {
