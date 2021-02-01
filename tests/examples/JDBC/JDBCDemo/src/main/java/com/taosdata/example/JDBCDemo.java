@@ -3,15 +3,81 @@ package com.taosdata.example;
 import java.sql.*;
 import java.util.Properties;
 
+class multiThreadingClass extends Thread
+{
+    public int id;
+    public int from, to;
+    public int numOfTb;
+    public Connection connection;
+    public String dbName, stbName, tbName;
+
+    public void run()
+    {
+        System.out.println("ID: " + id + " from: " + from + " to: " + to);
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            System.out.println("Thread " + id + " interrupted.");
+        }
+
+        for (int i = from; i < to; i++) {
+            for (int j = 0; j < numOfTb; j++) {
+                if (j % 1000 == 0) {
+                    try {
+                        System.out.print(id + "s.");
+                        Thread.sleep(1);
+                    } catch (InterruptedException e) {
+                        System.out.println("Thread " + id + " interrupted.");
+                    }
+                }
+                final String sql = "select last_row(humidity) from " + dbName + "." + tbName + i + "_" + j;
+//		        System.out.println(sql);
+        	    executeQuery(sql);
+	        }
+	    }
+    }
+
+    private void printSql(String sql, boolean succeed, long cost) {
+        System.out.println("[ " + (succeed ? "OK" : "ERROR!") + " ] time cost: " + cost + " ms, execute statement ====> " + sql);
+    }
+
+    private void printResult(ResultSet resultSet) throws SQLException {
+        ResultSetMetaData metaData = resultSet.getMetaData();
+        while (resultSet.next()) {
+            for (int i = 1; i <= metaData.getColumnCount(); i++) {
+                String columnLabel = metaData.getColumnLabel(i);
+                String value = resultSet.getString(i);
+                System.out.printf("%s: %s\t", columnLabel, value);
+            }
+            System.out.println();
+        }
+    }
+
+    private void executeQuery(String sql) {
+        try (Statement statement = connection.createStatement()) {
+            long start = System.currentTimeMillis();
+            ResultSet resultSet = statement.executeQuery(sql);
+            long end = System.currentTimeMillis();
+//            printSql(sql, true, (end - start));
+//            printResult(resultSet);
+//            resultSet.close();
+//            statement.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
 public class JDBCDemo {
     private static String host;
     private static String driverType = "jni";
     private static final String dbName = "test";
     private static final String stbName = "weather";
     private static final String tbName = "subweather";
-    private Connection connection;
-    private static int numOfSTb = 300000;
+    public Connection connection;
+    private static int numOfSTb = 3000000;
     private static int numOfTb = 3;
+    private int numOfThreads = 100;
 
 
     public static void main(String[] args) {
@@ -31,14 +97,15 @@ public class JDBCDemo {
 
         JDBCDemo demo = new JDBCDemo();
         demo.init();
-        demo.dropDatabase();
-        demo.createDatabase();
+//        demo.dropDatabase();
+//        demo.createDatabase();
         demo.useDatabase();
 //        demo.dropTable();
-        demo.createSTable();
-        demo.createTable();
-        demo.insert();
-        demo.select();
+//        demo.createSTable();
+//        demo.createTable();
+//        demo.insert();
+        demo.selectMultiThreading();
+//        demo.select();
 //        demo.dropTable();
         demo.close();
     }
@@ -81,14 +148,58 @@ public class JDBCDemo {
         exuete(sql);
     }
 
+    private void selectMultiThreading() {
+        int a = numOfSTb / numOfThreads;
+
+        if (a < 1) {
+            numOfThreads = numOfSTb;
+            a = 1;
+        }
+
+        int b = 0;
+        if (numOfThreads != 0) {
+            b = numOfSTb % numOfThreads;
+        }
+
+        multiThreadingClass instance[] = new multiThreadingClass[numOfThreads];
+
+        int last = 0;
+        for (int i = 0; i < numOfThreads; i ++) {
+            instance[i] = new multiThreadingClass();
+            instance[i].id = i;
+            instance[i].from = last;
+            if (i < b) {
+                instance[i].to = last + a;
+            } else {
+                instance[i].to = last + a - 1;
+            }
+
+            last = instance[i].to + 1;
+            instance[i].numOfTb = numOfTb;
+            instance[i].connection = connection;
+            instance[i].dbName = dbName;
+            instance[i].tbName = tbName;
+
+            instance[i].start();
+        }
+
+        for (int i = 0; i < numOfThreads; i ++) {
+            try {
+                instance[i].join();
+            } catch (InterruptedException ie) {
+                ie.printStackTrace();
+            }
+        }
+    }
+
     private void select() {
-	for (int i = 0; i < numOfSTb; i++) {
+        for (int i = 0; i < numOfSTb; i++) {
             for (int j = 0; j < numOfTb; j++) {
-        	final String sql = "select last_row(humidity) from " + dbName + "." + tbName + i + "_" + j;
-		System.out.println(sql);
-        	executeQuery(sql);
+                final String sql = "select last_row(humidity) from " + dbName + "." + tbName + i + "_" + j;
+//		        System.out.println(sql);
+        	    executeQuery(sql);
+	        }
 	    }
-	}
     }
 
     private void executeQuery(String sql) {
@@ -146,7 +257,8 @@ public class JDBCDemo {
     }
 
     private void printSql(String sql, boolean succeed, long cost) {
-        System.out.println("[ " + (succeed ? "OK" : "ERROR!") + " ] time cost: " + cost + " ms, execute statement ====> " + sql);
+        System.out.print(".");
+//        System.out.println("[ " + (succeed ? "OK" : "ERROR!") + " ] time cost: " + cost + " ms, execute statement ====> " + sql);
     }
 
     private void exuete(String sql) {
