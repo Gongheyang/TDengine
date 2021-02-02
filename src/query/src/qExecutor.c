@@ -4115,12 +4115,12 @@ int32_t setParamValue(SQueryRuntimeEnv* pRuntimeEnv) {
     pRuntimeEnv->pCtx[i].param[0].arr = NULL;
     pRuntimeEnv->pCtx[i].param[0].nType = TSDB_DATA_TYPE_INT; // avoid freeing the memory by setting the type to be int
 
-    int32_t numOfGroup = taosArrayGetSize(pRuntimeEnv->prevResult);
+    int32_t numOfGroup = (int32_t) taosArrayGetSize(pRuntimeEnv->prevResult);
     for(int32_t j = 0; j < numOfGroup; ++j) {
       SInterResult *p = taosArrayGet(pRuntimeEnv->prevResult, j);
       if (pQuery->tagLen == 0 || memcmp(p->tags, pRuntimeEnv->tagVal, pQuery->tagLen) == 0) {
 
-        int32_t numOfCols = taosArrayGetSize(p->pResult);
+        int32_t numOfCols = (int32_t) taosArrayGetSize(p->pResult);
         for(int32_t k = 0; k < numOfCols; ++k) {
           SStddevInterResult* pres = taosArrayGet(p->pResult, k);
           if (pres->colId == pFuncMsg->colInfo.colId) {
@@ -4961,7 +4961,7 @@ int32_t doInitQInfo(SQInfo *pQInfo, STSBuf *pTsBuf, SArray* prevResult, void *ts
   }
 
   // create runtime environment
-  code = setupQueryRuntimeEnv(pRuntimeEnv, pQInfo->tableGroupInfo.numOfTables, pQuery->order.order);
+  code = setupQueryRuntimeEnv(pRuntimeEnv, (int32_t) pQInfo->tableGroupInfo.numOfTables, pQuery->order.order);
   if (code != TSDB_CODE_SUCCESS) {
     return code;
   }
