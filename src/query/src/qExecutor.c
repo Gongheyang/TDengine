@@ -356,7 +356,7 @@ bool isSelectivityWithTagsQuery(SQuery *pQuery) {
       continue;
     }
 
-    if ((aAggs[functId].nStatus & TSDB_FUNCSTATE_SELECTIVITY) != 0) {
+    if ((aAggs[functId].status & TSDB_FUNCSTATE_SELECTIVITY) != 0) {
       numOfSelectivity++;
     }
   }
@@ -835,7 +835,7 @@ static void doBlockwiseApplyFunctions(SQueryRuntimeEnv *pRuntimeEnv, STimeWindow
 
   for (int32_t k = 0; k < pQuery->numOfOutput; ++k) {
     pCtx[k].size = forwardStep;
-    pCtx[k].nStartQueryTimestamp = pWin->skey;
+    pCtx[k].startTs = pWin->skey;
     pCtx[k].startOffset = (QUERY_IS_ASC_QUERY(pQuery)) ? offset : offset - (forwardStep - 1);
 
     int32_t functionId = pQuery->pExpr1[k].base.functionId;
@@ -860,7 +860,7 @@ static void doRowwiseApplyFunctions(SQueryRuntimeEnv *pRuntimeEnv, STimeWindow *
   SQLFunctionCtx *pCtx = pRuntimeEnv->pCtx;
 
   for (int32_t k = 0; k < pQuery->numOfOutput; ++k) {
-    pCtx[k].nStartQueryTimestamp = pWin->skey;
+    pCtx[k].startTs = pWin->skey;
 
     int32_t functionId = pQuery->pExpr1[k].base.functionId;
     if (functionNeedToExecute(pRuntimeEnv, &pCtx[k], functionId)) {
@@ -1277,7 +1277,7 @@ static void blockwiseApplyFunctions(SQueryRuntimeEnv *pRuntimeEnv, SDataStatis *
     for (int32_t k = 0; k < pQuery->numOfOutput; ++k) {
       int32_t functionId = pQuery->pExpr1[k].base.functionId;
       if (functionNeedToExecute(pRuntimeEnv, &pCtx[k], functionId)) {
-        pCtx[k].nStartQueryTimestamp = pQuery->window.skey;
+        pCtx[k].startTs = pQuery->window.skey;
         aAggs[functionId].xFunction(&pCtx[k]);
       }
     }
@@ -1793,7 +1793,7 @@ void setExecParams(SQuery *pQuery, SQLFunctionCtx *pCtx, void* inputData, TSKEY 
   pCtx->startOffset = QUERY_IS_ASC_QUERY(pQuery) ? pQuery->pos: (pQuery->pos - pCtx->size + 1);
   assert(pCtx->startOffset >= 0);
 
-  uint32_t status = aAggs[functionId].nStatus;
+  uint32_t status = aAggs[functionId].status;
   if (((status & (TSDB_FUNCSTATE_SELECTIVITY | TSDB_FUNCSTATE_NEED_TS)) != 0) && (tsCol != NULL)) {
     pCtx->ptsList = tsCol;
   }
@@ -1878,7 +1878,7 @@ static int32_t setCtxTagColumnInfo(SQueryRuntimeEnv *pRuntimeEnv, SQLFunctionCtx
       if (pSqlFuncMsg->functionId == TSDB_FUNC_TAG_DUMMY || pSqlFuncMsg->functionId == TSDB_FUNC_TS_DUMMY) {
         tagLen += pCtx[i].outputBytes;
         pTagCtx[num++] = &pCtx[i];
-      } else if ((aAggs[pSqlFuncMsg->functionId].nStatus & TSDB_FUNCSTATE_SELECTIVITY) != 0) {
+      } else if ((aAggs[pSqlFuncMsg->functionId].status & TSDB_FUNCSTATE_SELECTIVITY) != 0) {
         p = &pCtx[i];
       } else if (pSqlFuncMsg->functionId == TSDB_FUNC_TS || pSqlFuncMsg->functionId == TSDB_FUNC_TAG) {
         // tag function may be the group by tag column
@@ -2178,7 +2178,7 @@ static bool isFixedOutputQuery(SQueryRuntimeEnv* pRuntimeEnv) {
       continue;
     }
 
-    if (!IS_MULTIOUTPUT(aAggs[pExprMsg->functionId].nStatus)) {
+    if (!IS_MULTIOUTPUT(aAggs[pExprMsg->functionId].status)) {
       return true;
     }
   }
@@ -2303,7 +2303,7 @@ static void setScanLimitationByResultBuffer(SQuery *pQuery) {
         continue;
       }
 
-      hasMultioutput = IS_MULTIOUTPUT(aAggs[pExprMsg->functionId].nStatus);
+      hasMultioutput = IS_MULTIOUTPUT(aAggs[pExprMsg->functionId].status);
       if (!hasMultioutput) {
         break;
       }
@@ -3796,7 +3796,7 @@ static void handleInterpolationQuery(SQInfo* pQInfo) {
     }
 
     pCtx->param[2].i64 = (int8_t)pQuery->fillType;
-    pCtx->nStartQueryTimestamp = pQuery->window.skey;
+    pCtx->startTs = pQuery->window.skey;
     if (pQuery->fillVal != NULL) {
       if (isNull((const char *)&pQuery->fillVal[i], pCtx->inputType)) {
         pCtx->param[1].nType = TSDB_DATA_TYPE_NULL;
@@ -4190,7 +4190,7 @@ void setIntervalQueryRange(SQInfo *pQInfo, TSKEY key) {
 bool requireTimestamp(SQuery *pQuery) {
   for (int32_t i = 0; i < pQuery->numOfOutput; i++) {
     int32_t functionId = pQuery->pExpr1[i].base.functionId;
-    if ((aAggs[functionId].nStatus & TSDB_FUNCSTATE_NEED_TS) != 0) {
+    if ((aAggs[functionId].status & TSDB_FUNCSTATE_NEED_TS) != 0) {
       return true;
     }
   }
