@@ -60,8 +60,8 @@ class multiThreadingClass extends Thread
             long end = System.currentTimeMillis();
 //            printSql(sql, true, (end - start));
 //            printResult(resultSet);
-//            resultSet.close();
-//            statement.close();
+            resultSet.close();
+            statement.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -75,15 +75,19 @@ public class JDBCDemo {
     private static final String stbName = "weather";
     private static final String tbName = "subweather";
     public Connection connection;
-    private static int numOfSTb = 3000000;
+    private static int numOfSTb = 300000;
     private static int numOfTb = 3;
-    private int numOfThreads = 100;
+    private static int numOfThreads = 1;
 
 
     public static void main(String[] args) {
+
         for (int i = 0; i < args.length; i++) {
             if ("-host".equalsIgnoreCase(args[i]) && i < args.length - 1)
                 host = args[++i];
+            if ("-T".equalsIgnoreCase(args[i]) && i < args.length - 1) {
+                numOfThreads = Integer.parseInt(args[++i]);
+            }
             if ("-driverType".equalsIgnoreCase(args[i]) && i < args.length - 1) {
                 driverType = args[++i];
                 if (!"jni".equalsIgnoreCase(driverType) && !"restful".equalsIgnoreCase(driverType))
@@ -94,6 +98,8 @@ public class JDBCDemo {
         if (host == null) {
             printHelp();
         }
+
+        System.out.println("Number of Threads: " + numOfThreads);
 
         JDBCDemo demo = new JDBCDemo();
         demo.init();
@@ -209,8 +215,8 @@ public class JDBCDemo {
             long end = System.currentTimeMillis();
             printSql(sql, true, (end - start));
 //            printResult(resultSet);
-//            resultSet.close();
-//            statement.close();
+            resultSet.close();
+            statement.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
