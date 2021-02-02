@@ -3252,7 +3252,7 @@ void copyResToQueryResultBuf(SQInfo *pQInfo, SQuery *pQuery) {
   }
 
   int32_t size = (int32_t) taosArrayGetSize(pGroupResInfo->pRows);
-  pQuery->rec.rows = doCopyToSData(pQInfo, pGroupResInfo->pRows->pData, (int32_t) size, &pGroupResInfo->index, TSDB_ORDER_ASC);
+  pQuery->rec.rows = doCopyToSData(pQInfo, pGroupResInfo->pRows->pData, size, &pGroupResInfo->index, TSDB_ORDER_ASC);
 }
 
 int64_t getNumOfResultWindowRes(SQueryRuntimeEnv* pRuntimeEnv, SResultRow *pResultRow) {

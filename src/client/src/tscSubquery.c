@@ -1855,7 +1855,7 @@ void doAppendData(SInterResult* pInterResult, TAOS_ROW row, int32_t numOfCols, S
     }
 
     int32_t id = pExpr->colInfo.colId;
-    int32_t numOfQueriedCols = taosArrayGetSize(pInterResult->pResult);
+    int32_t numOfQueriedCols = (int32_t) taosArrayGetSize(pInterResult->pResult);
 
     SArray* p = NULL;
     for(int32_t j = 0; j < numOfQueriedCols; ++j) {
@@ -1983,7 +1983,7 @@ void tscFirstRoundRetrieveCallback(void* param, TAOS_RES* tres, int numOfRows) {
     SBufferWriter bw = tbufInitWriter(NULL, false);
     interResToBinary(&bw, pSup->pResult, pSup->tagLen);
 
-    pQueryInfo1->bufLen = tbufTell(&bw);
+    pQueryInfo1->bufLen = (int32_t) tbufTell(&bw);
     pQueryInfo1->buf = tbufGetData(&bw, true);
 
     // set the serialized binary string as the parameter of arithmetic expression
@@ -2066,7 +2066,7 @@ int32_t tscHandleFirstRoundStableQuery(SSqlObj *pSql) {
   pCmd->command = TSDB_SQL_SELECT;
   pNew->fp = tscFirstRoundCallback;
 
-  int32_t numOfExprs = tscSqlExprNumOfExprs(pQueryInfo);
+  int32_t numOfExprs = (int32_t) tscSqlExprNumOfExprs(pQueryInfo);
 
   int32_t index = 0;
   int32_t numOfTags = 0;

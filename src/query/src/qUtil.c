@@ -242,7 +242,7 @@ void interResToBinary(SBufferWriter* bw, SArray* pRes, int32_t tagLen) {
       tbufWriteBinary(bw, pOne->tags, tagLen);
     }
 
-    uint32_t numOfCols = taosArrayGetSize(pOne->pResult);
+    uint32_t numOfCols = (uint32_t) taosArrayGetSize(pOne->pResult);
     tbufWriteUint32(bw, numOfCols);
     for(int32_t j = 0; j < numOfCols; ++j) {
       SStddevInterResult* p = taosArrayGet(pOne->pResult, j);
