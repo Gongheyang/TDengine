@@ -107,7 +107,7 @@ int tsem_destroy(tsem_t *sem) {
   struct tsem_s *p = *sem;
   if (!p) {
     fprintf(stderr, "==%s[%d]%s()sem:[%p]==not initialized\n", basename(__FILE__), __LINE__, __func__, sem);
-    abort();
+    return 0;
   }
   if (!p->valid) {
     fprintf(stderr, "==%s[%d]%s()sem:[%p]==already destroyed\n", basename(__FILE__), __LINE__, __func__, sem);

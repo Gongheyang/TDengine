@@ -517,6 +517,7 @@ void tscFreeSqlObj(SSqlObj* pSql) {
   tfree(pCmd->payload);
   pCmd->allocSize = 0;
   
+  tscError("%p try to destroy sem:%p", pSql, &pSql->rspSem);
   tsem_destroy(&pSql->rspSem);
   memset(pSql, 0, sizeof(*pSql));
   free(pSql);
