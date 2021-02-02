@@ -22,15 +22,15 @@ extern "C" {
 
 #include "os.h"
 
+#include "qAggMain.h"
 #include "taos.h"
 #include "taosdef.h"
 #include "taosmsg.h"
 #include "tarray.h"
-#include "tglobal.h"
-#include "tsqlfunction.h"
-#include "tutil.h"
 #include "tcache.h"
+#include "tglobal.h"
 #include "tref.h"
+#include "tutil.h"
 
 #include "qExecutor.h"
 #include "qSqlparser.h"
@@ -223,6 +223,8 @@ typedef struct SQueryInfo {
 
   int32_t          udColumnId;    // current user-defined constant output field column id, monotonically decreases from TSDB_UD_COLUMN_INDEX
   int16_t          resColumnId;   // result column id
+  bool             distinctTag;   // distinct tag or not
+  
 } SQueryInfo;
 
 typedef struct {
@@ -295,6 +297,11 @@ typedef struct {
   struct SLocalMerger  *pLocalMerger;
 } SSqlRes;
 
+typedef struct {
+  char         key[512]; 
+  void         *pDnodeConn; 
+} SRpcObj;
+
 typedef struct STscObj {
   void *             signature;
   void *             pTimer;
@@ -310,8 +317,8 @@ typedef struct STscObj {
   int64_t            hbrid;
   struct SSqlObj *   sqlList;
   struct SSqlStream *streamList;
-  SRpcCorEpSet       *tscCorMgmtEpSet;
-  void*              pDnodeConn;
+  SRpcObj           *pRpcObj;
+  SRpcCorEpSet      *tscCorMgmtEpSet;
   pthread_mutex_t    mutex;
   int32_t            numOfObj; // number of sqlObj from this tscObj
 } STscObj;
@@ -388,8 +395,10 @@ typedef struct SSqlStream {
 
 void tscSetStreamDestTable(SSqlStream* pStream, const char* dstTable);
 
-int32_t tscInitRpc(const char *user, const char *secret, void** pDnodeConn);
-void    tscInitMsgsFp();
+
+int  tscAcquireRpc(const char *key, const char *user, const char *secret,void **pRpcObj);
+void tscReleaseRpc(void *param);
+void tscInitMsgsFp();
 
 int tsParseSql(SSqlObj *pSql, bool initial);
 
@@ -411,7 +420,7 @@ void    tscRestoreSQLFuncForSTableQuery(SQueryInfo *pQueryInfo);
 int32_t tscCreateResPointerInfo(SSqlRes *pRes, SQueryInfo *pQueryInfo);
 void tscSetResRawPtr(SSqlRes* pRes, SQueryInfo* pQueryInfo);
 
-void tscResetSqlCmdObj(SSqlCmd *pCmd);
+void tscResetSqlCmd(SSqlCmd *pCmd, bool removeMeta);
 
 /**
  * free query result of the sql object

@@ -105,6 +105,7 @@ int64_t tsMaxRetentWindow = 24 * 3600L;  // maximum time window tolerance
 // 0  no query allowed, queries are disabled
 // positive value (in MB)
 int32_t tsQueryBufferSize = -1;
+int64_t tsQueryBufferSizeBytes = -1;
 
 // in retrieve blocking model, the retrieve threads will wait for the completion of the query processing.
 int32_t tsRetrieveBlockingModel = 0;
@@ -121,8 +122,8 @@ int32_t tsMinRowsInFileBlock = TSDB_DEFAULT_MIN_ROW_FBLOCK;
 int32_t tsMaxRowsInFileBlock = TSDB_DEFAULT_MAX_ROW_FBLOCK;
 int16_t tsCommitTime    = TSDB_DEFAULT_COMMIT_TIME;  // seconds
 int32_t tsTimePrecision = TSDB_DEFAULT_PRECISION;
-int16_t tsCompression   = TSDB_DEFAULT_COMP_LEVEL;
-int16_t tsWAL           = TSDB_DEFAULT_WAL_LEVEL;
+int8_t  tsCompression   = TSDB_DEFAULT_COMP_LEVEL;
+int8_t  tsWAL           = TSDB_DEFAULT_WAL_LEVEL;
 int32_t tsFsyncPeriod   = TSDB_DEFAULT_FSYNC_PERIOD;
 int32_t tsReplications  = TSDB_DEFAULT_DB_REPLICA_OPTION;
 int32_t tsQuorum        = TSDB_DEFAULT_DB_QUORUM_OPTION;
@@ -137,7 +138,7 @@ int32_t tsTableIncStepPerVnode = TSDB_TABLES_STEP;
 int8_t  tsEnableBalance = 1;
 int8_t  tsAlternativeRole = 0;
 int32_t tsBalanceInterval = 300;           // seconds
-int32_t tsOfflineThreshold = 86400 * 100;  // seconds 10days
+int32_t tsOfflineThreshold = 86400 * 100;  // seconds 100 days
 int32_t tsMnodeEqualVnodeNum = 4;
 int8_t  tsEnableFlowCtrl = 1;
 int8_t  tsEnableSlaveQuery = 1;
@@ -181,7 +182,14 @@ char   tsDnodeDir[TSDB_FILENAME_LEN] = {0};
 char   tsMnodeDir[TSDB_FILENAME_LEN] = {0};
 char   tsDataDir[TSDB_FILENAME_LEN] = {0};
 char   tsScriptDir[TSDB_FILENAME_LEN] = {0};
-char   tsVnodeBakDir[TSDB_FILENAME_LEN] = {0};
+
+int32_t  tsDiskCfgNum = 0;
+
+#ifndef _STORAGE
+SDiskCfg tsDiskCfg[1];
+#else
+SDiskCfg tsDiskCfg[TSDB_MAX_DISKS];
+#endif
 
 /*
  * minimum scale for whole system, millisecond by default
@@ -226,6 +234,7 @@ int32_t sDebugFlag = 135;
 int32_t wDebugFlag = 135;
 int32_t tsdbDebugFlag = 131;
 int32_t cqDebugFlag = 131;
+int32_t fsDebugFlag = 135;
 
 int32_t (*monStartSystemFp)() = NULL;
 void (*monStopSystemFp)() = NULL;
@@ -283,7 +292,7 @@ bool taosCfgDynamicOptions(char *msg) {
     int32_t cfgLen = (int32_t)strlen(cfg->option);
     if (cfgLen != olen) continue;
     if (strncasecmp(option, cfg->option, olen) != 0) continue;
-    if (cfg->valType != TAOS_CFG_VTYPE_INT32) {
+    if (cfg->valType == TAOS_CFG_VTYPE_INT32) {
       *((int32_t *)cfg->ptr) = vint;
     } else {
       *((int8_t *)cfg->ptr) = (int8_t)vint;
@@ -331,6 +340,39 @@ bool taosCfgDynamicOptions(char *msg) {
   }
 
   return false;
+}
+
+void taosAddDataDir(int index, char *v1, int level, int primary) {
+  tstrncpy(tsDiskCfg[index].dir, v1, TSDB_FILENAME_LEN);
+  tsDiskCfg[index].level = level;
+  tsDiskCfg[index].primary = primary;
+  uTrace("dataDir:%s, level:%d primary:%d is configured", v1, level, primary);
+}
+
+#ifndef _STORAGE
+void taosReadDataDirCfg(char *v1, char *v2, char *v3) {
+  if (tsDiskCfgNum == 1) {
+    SDiskCfg *cfg = &tsDiskCfg[0];
+    uInfo("dataDir:%s, level:%d primary:%d is replaced by %s", cfg->dir, cfg->level, cfg->primary, v1);
+  }
+  taosAddDataDir(0, v1, 0, 1);
+  tsDiskCfgNum = 1;
+}
+
+void taosPrintDataDirCfg() {
+  for (int i = 0; i < tsDiskCfgNum; ++i) {
+    SDiskCfg *cfg = &tsDiskCfg[i];
+    uInfo(" dataDir: %s", cfg->dir);
+  }
+}
+#endif
+
+static void taosCheckDataDirCfg() {
+  if (tsDiskCfgNum <= 0) {
+    taosAddDataDir(0, tsDataDir, 0, 1);
+    tsDiskCfgNum = 1;
+    uTrace("dataDir:%s, level:0 primary:1 is configured by default", tsDataDir);
+  }
 }
 
 static void doInitGlobalConfig(void) {
@@ -414,7 +456,7 @@ static void doInitGlobalConfig(void) {
 
   cfg.option = "dataDir";
   cfg.ptr = tsDataDir;
-  cfg.valType = TAOS_CFG_VTYPE_DIRECTORY;
+  cfg.valType = TAOS_CFG_VTYPE_DATA_DIRCTORY;
   cfg.cfgType = TSDB_CFG_CTYPE_B_CONFIG;
   cfg.minValue = 0;
   cfg.maxValue = 0;
@@ -550,7 +592,7 @@ static void doInitGlobalConfig(void) {
   cfg.valType = TAOS_CFG_VTYPE_INT32;
   cfg.cfgType = TSDB_CFG_CTYPE_B_CONFIG | TSDB_CFG_CTYPE_B_SHOW;
   cfg.minValue = 3;
-  cfg.maxValue = 7200000;
+  cfg.maxValue = 86400 * 365;
   cfg.ptrLength = 0;
   cfg.unitType = TAOS_CFG_UTYPE_SECOND;
   taosInitConfigOption(cfg);
@@ -758,7 +800,7 @@ static void doInitGlobalConfig(void) {
 
   cfg.option = "comp";
   cfg.ptr = &tsCompression;
-  cfg.valType = TAOS_CFG_VTYPE_INT16;
+  cfg.valType = TAOS_CFG_VTYPE_INT8;
   cfg.cfgType = TSDB_CFG_CTYPE_B_CONFIG | TSDB_CFG_CTYPE_B_SHOW;
   cfg.minValue = TSDB_MIN_COMP_LEVEL;
   cfg.maxValue = TSDB_MAX_COMP_LEVEL;
@@ -768,7 +810,7 @@ static void doInitGlobalConfig(void) {
 
   cfg.option = "walLevel";
   cfg.ptr = &tsWAL;
-  cfg.valType = TAOS_CFG_VTYPE_INT16;
+  cfg.valType = TAOS_CFG_VTYPE_INT8;
   cfg.cfgType = TSDB_CFG_CTYPE_B_CONFIG | TSDB_CFG_CTYPE_B_SHOW;
   cfg.minValue = TSDB_MIN_WAL_LEVEL;
   cfg.maxValue = TSDB_MAX_WAL_LEVEL;
@@ -1447,6 +1489,7 @@ int32_t taosCheckGlobalCfg() {
     snprintf(tsSecond, sizeof(tsSecond), "%s:%u", fqdn, port);
   }
 
+  taosCheckDataDirCfg();
   taosGetSystemInfo();
 
   tsSetLocale();
@@ -1487,6 +1530,10 @@ int32_t taosCheckGlobalCfg() {
   tsDnodeDnodePort = tsServerPort + TSDB_PORT_DNODEDNODE;   // udp/tcp
   tsSyncPort = tsServerPort + TSDB_PORT_SYNC;
   tsHttpPort = tsServerPort + TSDB_PORT_HTTP;
+
+  if (tsQueryBufferSize >= 0) {
+    tsQueryBufferSizeBytes = tsQueryBufferSize * 1048576UL;
+  }
 
   taosPrintGlobalCfg();
 

@@ -16,7 +16,7 @@
 #include "tscUtil.h"
 #include "hash.h"
 #include "os.h"
-#include "qAst.h"
+#include "texpr.h"
 #include "taosmsg.h"
 #include "tkey.h"
 #include "tmd5.h"
@@ -32,6 +32,14 @@
 static void freeQueryInfoImpl(SQueryInfo* pQueryInfo);
 static void clearAllTableMetaInfo(SQueryInfo* pQueryInfo);
 
+static void tscStrToLower(char *str, int32_t n) {
+  if (str == NULL || n <= 0) { return;}
+  for (int32_t i = 0; i < n; i++) {
+    if (str[i] >= 'A' && str[i] <= 'Z') {
+        str[i] -= ('A' - 'a');
+    }
+  }
+}
 SCond* tsGetSTableQueryCond(STagCond* pTagCond, uint64_t uid) {
   if (pTagCond->pCond == NULL) {
     return NULL;
@@ -381,7 +389,7 @@ void tscFreeQueryInfo(SSqlCmd* pCmd) {
   tfree(pCmd->pQueryInfo);
 }
 
-void tscResetSqlCmdObj(SSqlCmd* pCmd) {
+void tscResetSqlCmd(SSqlCmd* pCmd, bool removeMeta) {
   pCmd->command   = 0;
   pCmd->numOfCols = 0;
   pCmd->count     = 0;
@@ -399,7 +407,7 @@ void tscResetSqlCmdObj(SSqlCmd* pCmd) {
   pCmd->numOfTables = 0;
   tfree(pCmd->pTableNameList);
 
-  pCmd->pTableBlockHashList = tscDestroyBlockHashTable(pCmd->pTableBlockHashList);
+  pCmd->pTableBlockHashList = tscDestroyBlockHashTable(pCmd->pTableBlockHashList, removeMeta);
   pCmd->pDataBlocks = tscDestroyBlockArrayList(pCmd->pDataBlocks);
   tscFreeQueryInfo(pCmd);
 }
@@ -447,7 +455,6 @@ void tscFreeRegisteredSqlObj(void *pSql) {
 
   SSqlObj* p = *(SSqlObj**)pSql;
   STscObj* pTscObj = p->pTscObj;
-
   assert(RID_VALID(p->self));
 
   int32_t num   = atomic_sub_fetch_32(&pTscObj->numOfObj, 1);
@@ -501,7 +508,7 @@ void tscFreeSqlObj(SSqlObj* pSql) {
   pSql->self = 0;
 
   tscFreeSqlResult(pSql);
-  tscResetSqlCmdObj(pCmd);
+  tscResetSqlCmd(pCmd, false);
 
   tfree(pCmd->tagData.data);
   pCmd->tagData.dataLen = 0;
@@ -515,7 +522,7 @@ void tscFreeSqlObj(SSqlObj* pSql) {
   free(pSql);
 }
 
-void tscDestroyDataBlock(STableDataBlocks* pDataBlock) {
+void tscDestroyDataBlock(STableDataBlocks* pDataBlock, bool removeMeta) {
   if (pDataBlock == NULL) {
     return;
   }
@@ -526,6 +533,13 @@ void tscDestroyDataBlock(STableDataBlocks* pDataBlock) {
   // free the refcount for metermeta
   if (pDataBlock->pTableMeta != NULL) {
     tfree(pDataBlock->pTableMeta);
+  }
+
+  if (removeMeta) {
+    char name[TSDB_TABLE_FNAME_LEN] = {0};
+    tNameExtractFullName(&pDataBlock->tableName, name);
+
+    taosHashRemove(tscTableMetaInfo, name, strnlen(name, TSDB_TABLE_FNAME_LEN));
   }
 
   tfree(pDataBlock);
@@ -563,21 +577,21 @@ void*  tscDestroyBlockArrayList(SArray* pDataBlockList) {
   size_t size = taosArrayGetSize(pDataBlockList);
   for (int32_t i = 0; i < size; i++) {
     void* d = taosArrayGetP(pDataBlockList, i);
-    tscDestroyDataBlock(d);
+    tscDestroyDataBlock(d, false);
   }
 
   taosArrayDestroy(pDataBlockList);
   return NULL;
 }
 
-void* tscDestroyBlockHashTable(SHashObj* pBlockHashTable) {
+void* tscDestroyBlockHashTable(SHashObj* pBlockHashTable, bool removeMeta) {
   if (pBlockHashTable == NULL) {
     return NULL;
   }
 
   STableDataBlocks** p = taosHashIterate(pBlockHashTable, NULL);
   while(p) {
-    tscDestroyDataBlock(*p);
+    tscDestroyDataBlock(*p, removeMeta);
     p = taosHashIterate(pBlockHashTable, p);
   }
 
@@ -791,7 +805,7 @@ static void extractTableNameList(SSqlCmd* pCmd, bool freeBlockMap) {
   }
 
   if (freeBlockMap) {
-    pCmd->pTableBlockHashList = tscDestroyBlockHashTable(pCmd->pTableBlockHashList);
+    pCmd->pTableBlockHashList = tscDestroyBlockHashTable(pCmd->pTableBlockHashList, false);
   }
 }
 
@@ -891,16 +905,10 @@ void tscCloseTscObj(void *param) {
   pObj->signature = NULL;
   taosTmrStopA(&(pObj->pTimer));
 
-  void* p = pObj->pDnodeConn;
-  if (pObj->pDnodeConn != NULL) {
-    rpcClose(pObj->pDnodeConn);
-    pObj->pDnodeConn = NULL;
-  }
-
   tfree(pObj->tscCorMgmtEpSet);
+  tscReleaseRpc(pObj->pRpcObj);
   pthread_mutex_destroy(&pObj->mutex);
 
-  tscDebug("%p DB connection is closed, dnodeConn:%p", pObj, p);
   tfree(pObj);
 }
 
@@ -1047,7 +1055,7 @@ void tscFieldInfoClear(SFieldInfo* pFieldInfo) {
     SInternalField* pInfo = taosArrayGet(pFieldInfo->internalField, i);
     
     if (pInfo->pArithExprInfo != NULL) {
-      tExprTreeDestroy(&pInfo->pArithExprInfo->pExpr, NULL);
+      tExprTreeDestroy(pInfo->pArithExprInfo->pExpr, NULL);
 
       SSqlFuncMsg* pFuncMsg = &pInfo->pArithExprInfo->base;
       for(int32_t j = 0; j < pFuncMsg->numOfParams; ++j) {
@@ -1080,6 +1088,8 @@ static SSqlExpr* doBuildSqlExpr(SQueryInfo* pQueryInfo, int16_t functionId, SCol
   // set the correct columnIndex index
   if (pColIndex->columnIndex == TSDB_TBNAME_COLUMN_INDEX) {
     pExpr->colInfo.colId = TSDB_TBNAME_COLUMN_INDEX;
+  } else if (pColIndex->columnIndex == TSDB_BLOCK_DIST_COLUMN_INDEX) {
+    pExpr->colInfo.colId = TSDB_BLOCK_DIST_COLUMN_INDEX;
   } else if (pColIndex->columnIndex <= TSDB_UD_COLUMN_INDEX) {
     pExpr->colInfo.colId = pColIndex->columnIndex;
   } else {
@@ -1411,9 +1421,11 @@ int32_t tscValidateName(SStrToken* pToken) {
   char* sep = strnchr(pToken->z, TS_PATH_DELIMITER[0], pToken->n, true);
   if (sep == NULL) {  // single part
     if (pToken->type == TK_STRING) {
+       
       strdequote(pToken->z);
+      tscStrToLower(pToken->z, pToken->n);
       pToken->n = (uint32_t)strtrim(pToken->z);
-
+       
       int len = tSQLGetToken(pToken->z, &pToken->type);
 
       // single token, validate it
@@ -1465,7 +1477,7 @@ int32_t tscValidateName(SStrToken* pToken) {
     if (pToken->type == TK_STRING && validateQuoteToken(pToken) != TSDB_CODE_SUCCESS) {
       return TSDB_CODE_TSC_INVALID_SQL;
     }
-
+    
     // re-build the whole name string
     if (pStr[firstPartLen] == TS_PATH_DELIMITER[0]) {
       // first part do not have quote do nothing
@@ -1477,6 +1489,8 @@ int32_t tscValidateName(SStrToken* pToken) {
     }
     pToken->n += (firstPartLen + sizeof(TS_PATH_DELIMITER[0]));
     pToken->z = pStr;
+
+    tscStrToLower(pToken->z,pToken->n);
   }
 
   return TSDB_CODE_SUCCESS;
@@ -1496,7 +1510,7 @@ bool tscValidateColumnId(STableMetaInfo* pTableMetaInfo, int32_t colId, int32_t 
     return false;
   }
 
-  if (colId == TSDB_TBNAME_COLUMN_INDEX || (colId <= TSDB_UD_COLUMN_INDEX && numOfParams == 2)) {
+  if (colId == TSDB_TBNAME_COLUMN_INDEX || colId == TSDB_BLOCK_DIST_COLUMN_INDEX || (colId <= TSDB_UD_COLUMN_INDEX && numOfParams == 2)) {
     return true;
   }
 
@@ -1933,6 +1947,10 @@ SSqlObj* createSimpleSubObj(SSqlObj* pSql, __async_cb_func_t fp, void* param, in
   }
 
   if (tscAddSubqueryInfo(pCmd) != TSDB_CODE_SUCCESS) {
+#ifdef __APPLE__
+    // to satisfy later tsem_destroy in taos_free_result
+    tsem_init(&pNew->rspSem, 0, 0);
+#endif // __APPLE__
     tscFreeSqlObj(pNew);
     return NULL;
   }
@@ -2114,7 +2132,11 @@ SSqlObj* createSubqueryObj(SSqlObj* pSql, int16_t tableIndex, __async_cb_func_t 
                                      pTableMetaInfo->tagColList, pTableMetaInfo->pVgroupTables);
   } else {  // transfer the ownership of pTableMeta to the newly create sql object.
     STableMetaInfo* pPrevInfo = tscGetTableMetaInfoFromCmd(&pPrevSql->cmd, pPrevSql->cmd.clauseIndex, 0);
-
+    if (pPrevInfo->pTableMeta && pPrevInfo->pTableMeta->tableType < 0) {
+      terrno = TSDB_CODE_TSC_APP_ERROR;
+      goto _error;
+    }
+    
     STableMeta*  pPrevTableMeta = tscTableMetaDup(pPrevInfo->pTableMeta);
     SVgroupsInfo* pVgroupsInfo = pPrevInfo->vgroupList;
     pFinalInfo = tscAddTableMetaInfo(pNewQueryInfo, &pTableMetaInfo->name, pPrevTableMeta, pVgroupsInfo, pTableMetaInfo->tagColList,
@@ -2499,7 +2521,11 @@ bool tscSetSqlOwner(SSqlObj* pSql) {
   SSqlRes* pRes = &pSql->res;
 
   // set the sql object owner
+#ifdef __APPLE__
+  pthread_t threadId = (pthread_t)taosGetSelfPthreadId();
+#else // __APPLE__
   uint64_t threadId = taosGetSelfPthreadId();
+#endif // __APPLE__
   if (atomic_val_compare_exchange_64(&pSql->owner, 0, threadId) != 0) {
     pRes->code = TSDB_CODE_QRY_IN_EXEC;
     return false;

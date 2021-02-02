@@ -242,6 +242,8 @@ TAOS_DEFINE_ERROR(TSDB_CODE_TDB_NO_TABLE_DATA_IN_MEM,     0, 0x060F, "No table d
 TAOS_DEFINE_ERROR(TSDB_CODE_TDB_FILE_ALREADY_EXISTS,      0, 0x0610, "File already exists")
 TAOS_DEFINE_ERROR(TSDB_CODE_TDB_TABLE_RECONFIGURE,        0, 0x0611, "Need to reconfigure table")
 TAOS_DEFINE_ERROR(TSDB_CODE_TDB_IVD_CREATE_TABLE_INFO,    0, 0x0612, "Invalid information to create table")
+TAOS_DEFINE_ERROR(TSDB_CODE_TDB_NO_AVAIL_DISK,            0, 0x0613, "No available disk")
+TAOS_DEFINE_ERROR(TSDB_CODE_TDB_MESSED_MSG,               0, 0x0614, "TSDB messed message")
 
 // query
 TAOS_DEFINE_ERROR(TSDB_CODE_QRY_INVALID_QHANDLE,          0, 0x0700, "Invalid handle")
@@ -256,6 +258,8 @@ TAOS_DEFINE_ERROR(TSDB_CODE_QRY_HAS_RSP,                  0, 0x0708, "Query shou
 TAOS_DEFINE_ERROR(TSDB_CODE_QRY_IN_EXEC,                  0, 0x0709, "Multiple retrieval of this query")
 TAOS_DEFINE_ERROR(TSDB_CODE_QRY_TOO_MANY_TIMEWINDOW,      0, 0x070A, "Too many time window in query")
 TAOS_DEFINE_ERROR(TSDB_CODE_QRY_NOT_ENOUGH_BUFFER,        0, 0x070B, "Query buffer limit has reached")
+TAOS_DEFINE_ERROR(TSDB_CODE_QRY_INCONSISTAN,              0, 0x070C, "File inconsistance in replica")
+
 
 // grant
 TAOS_DEFINE_ERROR(TSDB_CODE_GRANT_EXPIRED,                0, 0x0800, "License expired")
