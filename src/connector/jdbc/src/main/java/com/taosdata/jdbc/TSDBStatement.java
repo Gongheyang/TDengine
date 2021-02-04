@@ -14,12 +14,14 @@
  *****************************************************************************/
 package com.taosdata.jdbc;
 
+import com.taosdata.jdbc.utils.TaosInfo;
+
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 public class TSDBStatement implements Statement {
-    private TSDBJNIConnector connector = null;
+    private TSDBJNIConnector connector;
 
     /**
      * To store batched commands
@@ -51,24 +53,28 @@ public class TSDBStatement implements Statement {
         this.isClosed = false;
     }
 
+    @Override
     public <T> T unwrap(Class<T> iface) throws SQLException {
-        throw new SQLException(TSDBConstants.UNSUPPORT_METHOD_EXCEPTIONZ_MSG);
+        try {
+            return iface.cast(this);
+        } catch (ClassCastException cce) {
+            throw new SQLException("Unable to unwrap to " + iface.toString());
+        }
     }
 
+    @Override
     public boolean isWrapperFor(Class<?> iface) throws SQLException {
-        throw new SQLException(TSDBConstants.UNSUPPORT_METHOD_EXCEPTIONZ_MSG);
+        return iface.isInstance(this);
     }
 
     public ResultSet executeQuery(String sql) throws SQLException {
-        if (isClosed) {
-            throw new SQLException("Invalid method call on a closed statement.");
+        if (isClosed()) {
+            throw TSDBError.createSQLException(TSDBErrorNumbers.ERROR_STATEMENT_CLOSED);
         }
 
         // TODO make sure it is not a update query
         pSql = this.connector.executeQuery(sql);
-
         long resultSetPointer = this.connector.getResultSet();
-
         if (resultSetPointer == TSDBConstants.JNI_CONNECTION_NULL) {
             this.connector.freeResultSet(pSql);
             throw new SQLException(TSDBConstants.FixErrMsg(TSDBConstants.JNI_CONNECTION_NULL));
@@ -92,8 +98,8 @@ public class TSDBStatement implements Statement {
     }
 
     public int executeUpdate(String sql) throws SQLException {
-        if (isClosed) {
-            throw new SQLException("Invalid method call on a closed statement.");
+        if (isClosed()) {
+            throw TSDBError.createSQLException(TSDBErrorNumbers.ERROR_STATEMENT_CLOSED);
         }
 
         // TODO check if current query is update query
@@ -125,20 +131,33 @@ public class TSDBStatement implements Statement {
     }
 
     public int getMaxFieldSize() throws SQLException {
+        if (isClosed()) {
+            throw TSDBError.createSQLException(TSDBErrorNumbers.ERROR_STATEMENT_CLOSED);
+        }
+
         return 0;
-//        throw new SQLException(TSDBConstants.UNSUPPORT_METHOD_EXCEPTIONZ_MSG);
     }
 
     public void setMaxFieldSize(int max) throws SQLException {
+        if (isClosed()) {
+            throw TSDBError.createSQLException(TSDBErrorNumbers.ERROR_STATEMENT_CLOSED);
+        }
+
         throw new SQLException(TSDBConstants.UNSUPPORT_METHOD_EXCEPTIONZ_MSG);
     }
 
     public int getMaxRows() throws SQLException {
+        if (isClosed()) {
+            throw TSDBError.createSQLException(TSDBErrorNumbers.ERROR_STATEMENT_CLOSED);
+        }
         // always set maxRows to zero, meaning unlimitted rows in a resultSet
         return 0;
     }
 
     public void setMaxRows(int max) throws SQLException {
+        if (isClosed()) {
+            throw TSDBError.createSQLException(TSDBErrorNumbers.ERROR_STATEMENT_CLOSED);
+        }
         // always set maxRows to zero, meaning unlimited rows in a resultSet
     }
 

@@ -19,18 +19,7 @@
 
 #include "qExecutor.h"
 #include "qUtil.h"
-
-static int32_t getResultRowKeyInfo(SResultRow* pResult, int16_t type, char** key, int16_t* bytes) {
-  if (type == TSDB_DATA_TYPE_BINARY || type == TSDB_DATA_TYPE_NCHAR) {
-    *key   = varDataVal(pResult->key);
-    *bytes = varDataLen(pResult->key);
-  } else {
-    *key = (char*) &pResult->win.skey;
-    *bytes = tDataTypeDesc[type].nSize;
-  }
-
-  return 0;
-}
+#include "tbuffer.h"
 
 int32_t getOutputInterResultBufSize(SQuery* pQuery) {
   int32_t size = 0;
@@ -96,76 +85,7 @@ void resetResultRowInfo(SQueryRuntimeEnv *pRuntimeEnv, SResultRowInfo *pResultRo
   
   pResultRowInfo->curIndex = -1;
   pResultRowInfo->size = 0;
-  
-  pResultRowInfo->startTime = TSKEY_INITIAL_VAL;
   pResultRowInfo->prevSKey = TSKEY_INITIAL_VAL;
-}
-
-void popFrontResultRow(SQueryRuntimeEnv *pRuntimeEnv, SResultRowInfo *pResultRowInfo, int32_t num) {
-  if (pResultRowInfo == NULL || pResultRowInfo->capacity == 0 || pResultRowInfo->size == 0 || num == 0) {
-    return;
-  }
-  
-  int32_t numOfClosed = numOfClosedResultRows(pResultRowInfo);
-  assert(num >= 0 && num <= numOfClosed);
-
-  int16_t type = pResultRowInfo->type;
-  int64_t uid = getResultInfoUId(pRuntimeEnv);
-
-  char    *key  = NULL;
-  int16_t  bytes = -1;
-
-  for (int32_t i = 0; i < num; ++i) {
-    SResultRow *pResult = pResultRowInfo->pResult[i];
-    if (pResult->closed) {  // remove the window slot from hash table
-      getResultRowKeyInfo(pResult, type, &key, &bytes);
-      SET_RES_WINDOW_KEY(pRuntimeEnv->keyBuf, key, bytes, uid);
-      taosHashRemove(pRuntimeEnv->pResultRowHashTable, (const char *)pRuntimeEnv->keyBuf, GET_RES_WINDOW_KEY_LEN(bytes));
-    } else {
-      break;
-    }
-  }
-  
-  int32_t remain = pResultRowInfo->size - num;
-  
-  // clear all the closed windows from the window list
-  for (int32_t k = 0; k < remain; ++k) {
-    copyResultRow(pRuntimeEnv, pResultRowInfo->pResult[k], pResultRowInfo->pResult[num + k], type);
-  }
-  
-  // move the unclosed window in the front of the window list
-  for (int32_t k = remain; k < pResultRowInfo->size; ++k) {
-    SResultRow *pWindowRes = pResultRowInfo->pResult[k];
-    clearResultRow(pRuntimeEnv, pWindowRes, pResultRowInfo->type);
-  }
-  
-  pResultRowInfo->size = remain;
-
-  for (int32_t k = 0; k < pResultRowInfo->size; ++k) {
-    SResultRow *pResult = pResultRowInfo->pResult[k];
-    getResultRowKeyInfo(pResult, type, &key, &bytes);
-    SET_RES_WINDOW_KEY(pRuntimeEnv->keyBuf, key, bytes, uid);
-
-    int32_t *p = (int32_t *)taosHashGet(pRuntimeEnv->pResultRowHashTable, (const char *)pRuntimeEnv->keyBuf, GET_RES_WINDOW_KEY_LEN(bytes));
-    assert(p != NULL); 
-
-    int32_t  v = (*p - num);
-    assert(v >= 0 && v <= pResultRowInfo->size);
-
-    SET_RES_WINDOW_KEY(pRuntimeEnv->keyBuf, key, bytes, uid);
-    taosHashPut(pRuntimeEnv->pResultRowHashTable, pRuntimeEnv->keyBuf, GET_RES_WINDOW_KEY_LEN(bytes), (char *)&v, sizeof(int32_t));
-  }
-  
-  pResultRowInfo->curIndex = -1;
-}
-
-void clearClosedResultRows(SQueryRuntimeEnv *pRuntimeEnv, SResultRowInfo *pResultRowInfo) {
-  if (pResultRowInfo == NULL || pResultRowInfo->capacity == 0 || pResultRowInfo->size == 0) {
-    return;
-  }
-  
-  int32_t numOfClosed = numOfClosedResultRows(pResultRowInfo);
-  popFrontResultRow(pRuntimeEnv, &pRuntimeEnv->windowResInfo, numOfClosed);
 }
 
 int32_t numOfClosedResultRows(SResultRowInfo *pResultRowInfo) {
@@ -181,45 +101,12 @@ void closeAllResultRows(SResultRowInfo *pResultRowInfo) {
   assert(pResultRowInfo->size >= 0 && pResultRowInfo->capacity >= pResultRowInfo->size);
   
   for (int32_t i = 0; i < pResultRowInfo->size; ++i) {
-    if (pResultRowInfo->pResult[i]->closed) {
+    SResultRow* pRow = pResultRowInfo->pResult[i];
+    if (pRow->closed) {
       continue;
     }
     
-    pResultRowInfo->pResult[i]->closed = true;
-  }
-}
-
-/*
- * remove the results that are not the FIRST time window that spreads beyond the
- * the last qualified time stamp in case of sliding query, which the sliding time is not equalled to the interval time.
- * NOTE: remove redundant, only when the result set order equals to traverse order
- */
-void removeRedundantResultRows(SResultRowInfo *pResultRowInfo, TSKEY lastKey, int32_t order) {
-  assert(pResultRowInfo->size >= 0 && pResultRowInfo->capacity >= pResultRowInfo->size);
-  if (pResultRowInfo->size <= 1) {
-    return;
-  }
-
-  // get the result order
-  int32_t resultOrder = (pResultRowInfo->pResult[0]->win.skey < pResultRowInfo->pResult[1]->win.skey)? 1:-1;
-  if (order != resultOrder) {
-    return;
-  }
-
-  int32_t i = 0;
-  if (order == QUERY_ASC_FORWARD_STEP) {
-    TSKEY ekey = pResultRowInfo->pResult[i]->win.ekey;
-    while (i < pResultRowInfo->size && (ekey < lastKey)) {
-      ++i;
-    }
-  } else if (order == QUERY_DESC_FORWARD_STEP) {
-    while (i < pResultRowInfo->size && (pResultRowInfo->pResult[i]->win.skey > lastKey)) {
-      ++i;
-    }
-  }
-
-  if (i < pResultRowInfo->size) {
-    pResultRowInfo->size = (i + 1);
+    pRow->closed = true;
   }
 }
 
@@ -260,47 +147,6 @@ void clearResultRow(SQueryRuntimeEnv *pRuntimeEnv, SResultRow *pResultRow, int16
     tfree(pResultRow->key);
   } else {
     pResultRow->win = TSWINDOW_INITIALIZER;
-  }
-}
-
-/**
- * The source window result pos attribution of the source window result does not assign to the destination,
- * since the attribute of "Pos" is bound to each window result when the window result is created in the
- * disk-based result buffer.
- */
-void copyResultRow(SQueryRuntimeEnv *pRuntimeEnv, SResultRow *dst, const SResultRow *src, int16_t type) {
-  dst->numOfRows = src->numOfRows;
-
-  if (type == TSDB_DATA_TYPE_BINARY || type == TSDB_DATA_TYPE_NCHAR) {
-    dst->key = realloc(dst->key, varDataTLen(src->key));
-    varDataCopy(dst->key, src->key);
-  } else {
-    dst->win   = src->win;
-  }
-  dst->closed = src->closed;
-  
-  int32_t nOutputCols = pRuntimeEnv->pQuery->numOfOutput;
-  
-  for (int32_t i = 0; i < nOutputCols; ++i) {
-    SResultRowCellInfo *pDst = getResultCell(pRuntimeEnv, dst, i);
-    SResultRowCellInfo *pSrc = getResultCell(pRuntimeEnv, src, i);
-    
-//    char *buf = pDst->interResultBuf;
-    memcpy(pDst, pSrc, sizeof(SResultRowCellInfo) + pRuntimeEnv->pCtx[i].interBufBytes);
-//    pDst->interResultBuf = buf;  // restore the allocated buffer
-    
-    // copy the result info struct
-//    memcpy(pDst->interResultBuf, pSrc->interResultBuf, pRuntimeEnv->pCtx[i].interBufBytes);
-    
-    // copy the output buffer data from src to dst, the position info keep unchanged
-    tFilePage *dstpage = getResBufPage(pRuntimeEnv->pResultBuf, dst->pageId);
-    char * dstBuf = getPosInResultPage(pRuntimeEnv, i, dst, dstpage);
-
-    tFilePage *srcpage = getResBufPage(pRuntimeEnv->pResultBuf, src->pageId);
-    char * srcBuf = getPosInResultPage(pRuntimeEnv, i, (SResultRow *)src, srcpage);
-    size_t s = pRuntimeEnv->pQuery->pExpr1[i].bytes;
-    
-    memcpy(dstBuf, srcBuf, s);
   }
 }
 
@@ -385,16 +231,95 @@ void* destroyResultRowPool(SResultRowPool* p) {
   return NULL;
 }
 
-uint64_t getResultInfoUId(SQueryRuntimeEnv* pRuntimeEnv) {
-  if (!pRuntimeEnv->stableQuery) {
-    return 0;  // for simple table query, the uid is always set to be 0;
+void interResToBinary(SBufferWriter* bw, SArray* pRes, int32_t tagLen) {
+  uint32_t numOfGroup = (uint32_t) taosArrayGetSize(pRes);
+  tbufWriteUint32(bw, numOfGroup);
+  tbufWriteUint16(bw, tagLen);
+
+  for(int32_t i = 0; i < numOfGroup; ++i) {
+    SInterResult* pOne = taosArrayGet(pRes, i);
+    if (tagLen > 0) {
+      tbufWriteBinary(bw, pOne->tags, tagLen);
+    }
+
+    uint32_t numOfCols = (uint32_t) taosArrayGetSize(pOne->pResult);
+    tbufWriteUint32(bw, numOfCols);
+    for(int32_t j = 0; j < numOfCols; ++j) {
+      SStddevInterResult* p = taosArrayGet(pOne->pResult, j);
+      uint32_t numOfRows = (uint32_t) taosArrayGetSize(p->pResult);
+
+      tbufWriteUint16(bw, p->colId);
+      tbufWriteUint32(bw, numOfRows);
+
+      for(int32_t k = 0; k < numOfRows; ++k) {
+        SResPair v = *(SResPair*) taosArrayGet(p->pResult, k);
+        tbufWriteDouble(bw, v.avg);
+        tbufWriteInt64(bw, v.key);
+      }
+    }
+  }
+}
+
+SArray* interResFromBinary(const char* data, int32_t len) {
+  SBufferReader br = tbufInitReader(data, len, false);
+  uint32_t numOfGroup = tbufReadUint32(&br);
+  uint16_t tagLen = tbufReadUint16(&br);
+
+  char* tag = NULL;
+  if (tagLen > 0) {
+    tag = calloc(1, tagLen);
   }
 
-  SQuery* pQuery = pRuntimeEnv->pQuery;
-  if (pQuery->interval.interval == 0 || isPointInterpoQuery(pQuery) || pRuntimeEnv->groupbyNormalCol) {
-    return 0;
+  SArray* pResult = taosArrayInit(4, sizeof(SInterResult));
+
+  for(int32_t i = 0; i < numOfGroup; ++i) {
+    if (tagLen > 0) {
+      memset(tag, 0, tagLen);
+      tbufReadToBinary(&br, tag, tagLen);
+    }
+
+    uint32_t numOfCols = tbufReadUint32(&br);
+
+    SArray* p = taosArrayInit(numOfCols, sizeof(SStddevInterResult));
+    for(int32_t j = 0; j < numOfCols; ++j) {
+      int16_t colId = tbufReadUint16(&br);
+      int32_t numOfRows = tbufReadUint32(&br);
+
+      SStddevInterResult interRes = {.colId = colId, .pResult = taosArrayInit(4, sizeof(struct SResPair)),};
+      for(int32_t k = 0; k < numOfRows; ++k) {
+        SResPair px = {0};
+        px.avg = tbufReadDouble(&br);
+        px.key = tbufReadInt64(&br);
+
+        taosArrayPush(interRes.pResult, &px);
+      }
+
+      taosArrayPush(p, &interRes);
+    }
+
+    char* p1 = NULL;
+    if (tagLen > 0) {
+      p1 = malloc(tagLen);
+      memcpy(p1, tag, tagLen);
+    }
+
+    SInterResult d = {.pResult = p, .tags = p1,};
+    taosArrayPush(pResult, &d);
   }
 
-  STableId* id = TSDB_TABLEID(pRuntimeEnv->pQuery->current->pTable);
-  return id->uid;
+  tfree(tag);
+  return pResult;
+}
+
+void freeInterResult(void* param) {
+  SInterResult* pResult = (SInterResult*) param;
+  tfree(pResult->tags);
+
+  int32_t numOfCols = (int32_t) taosArrayGetSize(pResult->pResult);
+  for(int32_t i = 0; i < numOfCols; ++i) {
+    SStddevInterResult *p = taosArrayGet(pResult->pResult, i);
+    taosArrayDestroy(p->pResult);
+  }
+
+  taosArrayDestroy(pResult->pResult);
 }

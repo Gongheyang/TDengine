@@ -218,7 +218,7 @@ static int32_t mnodeProcessRetrieveMsg(SMnodeMsg *pMsg) {
   }
 
   pRsp->numOfRows = htonl(rowsRead);
-  pRsp->precision = htonl(TSDB_TIME_PRECISION_MILLI);  // millisecond time precision
+  pRsp->precision = (int16_t)htonl(TSDB_TIME_PRECISION_MILLI);  // millisecond time precision
 
   pMsg->rpcRsp.rsp = pRsp;
   pMsg->rpcRsp.len = size;
@@ -350,6 +350,8 @@ static int32_t mnodeProcessConnectMsg(SMnodeMsg *pMsg) {
   pConnectRsp->superAuth = pUser->superAuth;
   
   mnodeGetMnodeEpSetForShell(&pConnectRsp->epSet, false);
+
+  dnodeGetClusterId(pConnectRsp->clusterId);
 
 connect_over:
   if (code != TSDB_CODE_SUCCESS) {

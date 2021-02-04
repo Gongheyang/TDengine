@@ -20,8 +20,10 @@
 extern "C" {
 #endif
 
-#ifndef STDERR_FILENO
-#define STDERR_FILENO (2)
+#ifndef WINDOWS
+  #ifndef O_BINARY
+    #define O_BINARY 0
+  #endif
 #endif
 
 #define FD_VALID(x) ((x) > STDERR_FILENO)
@@ -90,11 +92,11 @@ extern "C" {
 #ifdef _ISOC11_SOURCE
   #define threadlocal _Thread_local
 #elif defined(__APPLE__)
-  #define threadlocal
+  #define threadlocal __thread
 #elif defined(__GNUC__) && !defined(threadlocal)
   #define threadlocal __thread
 #else
-  #define threadlocal
+  #define threadlocal __declspec( thread )
 #endif
 
 #ifdef __cplusplus

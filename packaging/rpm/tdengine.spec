@@ -55,9 +55,13 @@ cp %{_compiledir}/../packaging/cfg/taos.cfg         %{buildroot}%{homepath}/cfg
 cp %{_compiledir}/../packaging/rpm/taosd            %{buildroot}%{homepath}/init.d
 cp %{_compiledir}/../packaging/tools/post.sh        %{buildroot}%{homepath}/script
 cp %{_compiledir}/../packaging/tools/preun.sh       %{buildroot}%{homepath}/script
+cp %{_compiledir}/../packaging/tools/startPre.sh    %{buildroot}%{homepath}/bin
+cp %{_compiledir}/../packaging/tools/set_core.sh    %{buildroot}%{homepath}/bin
+cp %{_compiledir}/../packaging/tools/taosd-dump-cfg.gdb    %{buildroot}%{homepath}/bin
 cp %{_compiledir}/build/bin/taos                    %{buildroot}%{homepath}/bin
 cp %{_compiledir}/build/bin/taosd                   %{buildroot}%{homepath}/bin
 cp %{_compiledir}/build/bin/taosdemo                %{buildroot}%{homepath}/bin
+cp %{_compiledir}/build/bin/taosdemox               %{buildroot}%{homepath}/bin
 cp %{_compiledir}/build/bin/taosdump                %{buildroot}%{homepath}/bin
 cp %{_compiledir}/build/lib/${libfile}              %{buildroot}%{homepath}/driver
 cp %{_compiledir}/../src/inc/taos.h                 %{buildroot}%{homepath}/include
@@ -135,7 +139,8 @@ if [ $1 -eq 0 ];then
     ${csudo} rm -f ${bin_link_dir}/taos       || :
     ${csudo} rm -f ${bin_link_dir}/taosd      || :
     ${csudo} rm -f ${bin_link_dir}/taosdemo   || :
-    #${csudo} rm -f ${bin_link_dir}/taosdump   || :
+    ${csudo} rm -f ${bin_link_dir}/taosdemox  || :
+    ${csudo} rm -f ${bin_link_dir}/taosdump   || :
     ${csudo} rm -f ${cfg_link_dir}/*          || :
     ${csudo} rm -f ${inc_link_dir}/taos.h     || :
     ${csudo} rm -f ${inc_link_dir}/taoserror.h     || :

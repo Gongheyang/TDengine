@@ -18,6 +18,7 @@
 #include "os.h"
 
 #include "hash.h"
+#include "qAggMain.h"
 #include "qFill.h"
 #include "qResultbuf.h"
 #include "qSqlparser.h"
@@ -27,18 +28,10 @@
 #include "tarray.h"
 #include "tlockfree.h"
 #include "tsdb.h"
-#include "tsqlfunction.h"
 
 struct SColumnFilterElem;
-typedef bool (*__filter_func_t)(struct SColumnFilterElem* pFilter, char* val1, char* val2);
+typedef bool (*__filter_func_t)(struct SColumnFilterElem* pFilter, const char* val1, const char* val2, int16_t type);
 typedef int32_t (*__block_search_fn_t)(char* data, int32_t num, int64_t key, int32_t order);
-
-typedef struct SGroupResInfo {
-  int32_t  groupId;
-  int32_t  numOfDataPages;
-  int32_t  pageId;
-  int32_t  rowId;
-} SGroupResInfo;
 
 typedef struct SResultRowPool {
   int32_t elemSize;
@@ -72,6 +65,12 @@ typedef struct SResultRow {
   union {STimeWindow win; char* key;};  // start key of current time window
 } SResultRow;
 
+typedef struct SGroupResInfo {
+  int32_t rowId;
+  int32_t index;
+  SArray* pRows;      // SArray<SResultRow*>
+} SGroupResInfo;
+
 /**
  * If the number of generated results is greater than this value,
  * query query will be halt and return results to client immediate.
@@ -89,7 +88,6 @@ typedef struct SResultRowInfo {
   int32_t      size:24;    // number of result set
   int32_t      capacity;   // max capacity
   int32_t      curIndex;   // current start active index
-  int64_t      startTime;  // start time of the first time window for sliding query
   int64_t      prevSKey;   // previous (not completed) sliding window start key
 } SResultRowInfo;
 
@@ -145,6 +143,11 @@ typedef struct {
   int64_t ts;
 } SOrderedPrjQueryInfo;
 
+typedef struct {
+  char*   tags;
+  SArray* pResult;  // SArray<SStddevInterResult>
+} SInterResult;
+
 typedef struct SQuery {
   int16_t          numOfCols;
   int16_t          numOfTags;
@@ -154,9 +157,14 @@ typedef struct SQuery {
   int16_t          precision;
   int16_t          numOfOutput;
   int16_t          fillType;
-  int16_t          checkBuffer;  // check if the buffer is full during scan each block
+  int16_t          checkResultBuf;   // check if the buffer is full during scan each block
   SLimitVal        limit;
-  int32_t          rowSize;
+
+  int32_t          srcRowSize;       // todo extract struct
+  int32_t          resultRowSize;
+  int32_t          maxSrcColumnSize;
+  int32_t          tagLen;           // tag value length of current query
+
   SSqlGroupbyExpr* pGroupbyExpr;
   SExprInfo*       pExpr1;
   SExprInfo*       pExpr2;
@@ -166,13 +174,14 @@ typedef struct SQuery {
   SColumnInfo*     tagColList;
   int32_t          numOfFilterCols;
   int64_t*         fillVal;
-  uint32_t         status;  // query status
+  uint32_t         status;             // query status
   SResultRec       rec;
   int32_t          pos;
   tFilePage**      sdata;
   STableQueryInfo* current;
+  int32_t          numOfCheckedBlocks; // number of check data blocks
 
-  SOrderedPrjQueryInfo prjInfo;  // limit value for each vgroup, only available in global order projection query.
+  SOrderedPrjQueryInfo prjInfo;        // limit value for each vgroup, only available in global order projection query.
   SSingleColumnFilterInfo* pFilterInfo;
 } SQuery;
 
@@ -185,17 +194,17 @@ typedef struct SQueryRuntimeEnv {
   uint16_t             scanFlag;         // denotes reversed scan of data or not
   SFillInfo*           pFillInfo;
   SResultRowInfo       windowResInfo;
-  STSBuf*              pTSBuf;
-  STSCursor            cur;
+
   SQueryCostInfo       summary;
   void*                pQueryHandle;
   void*                pSecQueryHandle;  // another thread for
   bool                 stableQuery;      // super table query or not
   bool                 topBotQuery;      // TODO used bitwise flag
-  bool                 groupbyNormalCol; // denote if this is a groupby normal column query
+  bool                 groupbyColumn;    // denote if this is a groupby normal column query
   bool                 hasTagResults;    // if there are tag values in final result or not
   bool                 timeWindowInterpo;// if the time window start/end required interpolation
   bool                 queryWindowIdentical; // all query time windows are identical for all tables in one group
+  bool                 queryBlockDist;    // if query data block distribution  
   int32_t              interBufSize;     // intermediate buffer sizse
   int32_t              prevGroupId;      // previous executed group id
   SDiskbasedResultBuf* pResultBuf;       // query result buffer based on blocked-wised disk file
@@ -205,7 +214,13 @@ typedef struct SQueryRuntimeEnv {
 
   int32_t*             rowCellInfoOffset;// offset value for each row result cell info
   char**               prevRow;
-  char**               nextRow;
+
+  SArray*              prevResult;       // intermediate result, SArray<SInterResult>
+  STSBuf*              pTsBuf;           // timestamp filter list
+  STSCursor            cur;
+
+  char*                tagVal;           // tag value of current data block
+  SArithmeticSupport  *sasArray;
 } SQueryRuntimeEnv;
 
 enum {
@@ -239,6 +254,7 @@ typedef struct SQInfo {
   int32_t          dataReady;   // denote if query result is ready or not
   void*            rspContext;  // response context
   int64_t          startExecTs; // start to exec timestamp
+  char*            sql;         // query sql string
 } SQInfo;
 
 #endif  // TDENGINE_QUERYEXECUTOR_H

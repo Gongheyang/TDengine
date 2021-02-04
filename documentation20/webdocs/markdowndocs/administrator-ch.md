@@ -12,7 +12,7 @@
 Memory Size = maxVgroupsPerDb * (blocks * cache + 10Mb) + numOfTables * (tagSizePerTable + 0.5Kb)
 ```
 
-示例：假设是4核机器，cache是缺省大小16M, blocks是缺省值6，假设有10万张表，标签总长度是256字节，则总的内存需求为：4\*(16\*6+10) + 100000*(0.25+0.5)/1000 = 499M。 
+示例：假设是4核机器，cache是缺省大小16M, blocks是缺省值6，假设有10万张表，标签总长度是256字节，则总的内存需求为：4\*(16\*6+10) + 100000\*(0.25+0.5)/1000 = 499M。
 
 实际运行的系统往往会根据数据特点的不同，将数据存放在不同的DB里。因此做规划时，也需要考虑。
 
@@ -35,7 +35,7 @@ TDengine相对于通用数据库，有超高的压缩比，在绝大多数场景
 Raw DataSize = numOfTables * rowSizePerTable * rowsPerTable
 ```
 
-示例：1000万台智能电表，每台电表每15分钟采集一次数据，每次采集的数据128字节，那么一年的原始数据量是：10000000\*128\*24\*60/15*365 = 44.8512T。TDengine大概需要消耗44.851/5=8.97024T空间。 
+示例：1000万台智能电表，每台电表每15分钟采集一次数据，每次采集的数据128字节，那么一年的原始数据量是：10000000\*128\*24\*60/15\*365 = 44.8512T。TDengine大概需要消耗44.851/5=8.97024T空间。
 
 用户可以通过参数keep，设置数据在磁盘中的最大保存时长。为进一步减少存储成本，TDengine还提供多级存储，最冷的数据可以存放在最廉价的存储介质上，应用的访问不用做任何调整，只是读取速度降低了。
 
@@ -105,7 +105,7 @@ taosd -C
 - queryBufferSize: 为所有并发查询占用保留的内存大小。计算规则可以根据实际应用可能的最大并发数和表的数字相乘，再乘 170 。单位为字节。
 - ratioOfQueryCores: 设置查询线程的最大数量。最小值0 表示只有1个查询线程；最大值2表示最大建立2倍CPU核数的查询线程。默认为1，表示最大和CPU核数相等的查询线程。该值可以为小数，即0.5表示最大建立CPU核数一半的查询线程。
 
-**注意：**对于端口，TDengine会使用从serverPort起13个连续的TCP和UDP端口号，请务必在防火墙打开。因此如果是缺省配置，需要打开从6030都6042共13个端口，而且必须TCP和UDP都打开。
+**注意：**对于端口，TDengine会使用从serverPort起13个连续的TCP和UDP端口号，请务必在防火墙打开。因此如果是缺省配置，需要打开从6030到6042共13个端口，而且必须TCP和UDP都打开。
 
 不同应用场景的数据往往具有不同的数据特征，比如保留天数、副本数、采集频次、记录大小、采集点的数量、压缩等都可完全不同。为获得在存储上的最高效率，TDengine提供如下存储相关的系统配置参数：
 
@@ -121,13 +121,13 @@ taosd -C
 - replica：副本个数，取值范围：1-3。单位为个，默认值：1
 - precision：时间戳精度标识，ms表示毫秒，us表示微秒。默认值：ms
 
-对于一个应用场景，可能有多种数据特征的数据并存，最佳的设计是将具有相同数据特征的表放在一个库里，这样一个应用有多个库，而每个库可以配置不同的存储参数，从而保证系统有最优的性能。TDengine允许应用在创建库时指定上述存储参数，如果指定，该参数就将覆盖对应的系统配置参数。举例，有下述SQL： 
+对于一个应用场景，可能有多种数据特征的数据并存，最佳的设计是将具有相同数据特征的表放在一个库里，这样一个应用有多个库，而每个库可以配置不同的存储参数，从而保证系统有最优的性能。TDengine允许应用在创建库时指定上述存储参数，如果指定，该参数就将覆盖对应的系统配置参数。举例，有下述SQL：
 
 ```
- create database demo days 10 cache 32 blocks 8 replica 3;
+ create database demo days 10 cache 32 blocks 8 replica 3 update 1;
 ```
 
-该SQL创建了一个库demo, 每个数据文件存储10天数据，内存块为32兆字节，每个VNODE占用8个内存块，副本数为3，而其他参数与系统配置完全一致。
+该SQL创建了一个库demo, 每个数据文件存储10天数据，内存块为32兆字节，每个VNODE占用8个内存块，副本数为3，允许更新，而其他参数与系统配置完全一致。
 
 TDengine集群中加入一个新的dnode时，涉及集群相关的一些参数必须与已有集群的配置相同，否则不能成功加入到集群中。会进行校验的参数如下：
 
@@ -148,8 +148,8 @@ ALTER DNODE <dnode_id> <config>
 ```
 
 - dnode_id: 可以通过SQL语句"SHOW DNODES"命令获取
-- config: 要调整的日志参数，在如下列表中取值    
-    > resetlog 截断旧日志文件，创建一个新日志文件    
+- config: 要调整的日志参数，在如下列表中取值
+    > resetlog 截断旧日志文件，创建一个新日志文件
     > debugFlag  < 131 | 135 | 143 > 设置debugFlag为131、135或者143
 
 例如：
@@ -157,9 +157,9 @@ ALTER DNODE <dnode_id> <config>
     alter dnode 1 debugFlag 135;
 ```
 
-## 客户端配置 
+## 客户端配置
 
-TDengine系统的前台交互客户端应用程序为taos，以及应用驱动，它与taosd共享同一个配置文件taos.cfg。运行taos时，使用参数-c指定配置文件目录，如taos -c /home/cfg，表示使用/home/cfg/目录下的taos.cfg配置文件中的参数，缺省目录是/etc/taos。更多taos的使用方法请见[Shell命令行程序](https://www.taosdata.com/cn/documentation/administrator/#_TDengine_Shell命令行程序)。本节主要说明 taos 客户端应用在配置文件 taos.cfg 文件中使用到的参数。
+TDengine系统的前台交互客户端应用程序为taos，以及应用驱动，它与taosd共享同一个配置文件taos.cfg。运行taos时，使用参数-c指定配置文件目录，如taos -c /home/cfg，表示使用/home/cfg/目录下的taos.cfg配置文件中的参数，缺省目录是/etc/taos。更多taos的使用方法请见<a href="https://www.taosdata.com/cn/documentation/administrator/#_TDengine_Shell命令行程序">Shell命令行程序</a>。本节主要说明 taos 客户端应用在配置文件 taos.cfg 文件中使用到的参数。
 
 **2.0.10.0 之后版本支持命令行以下参数显示当前客户端参数的配置**
 
@@ -176,17 +176,17 @@ taos -C  或  taos --dump-config
 - locale
 
     默认值：系统中动态获取，如果自动获取失败，需要用户在配置文件设置或通过API设置
-    
+
     TDengine为存储中文、日文、韩文等非ASCII编码的宽字符，提供一种专门的字段类型nchar。写入nchar字段的数据将统一采用UCS4-LE格式进行编码并发送到服务器。需要注意的是，编码正确性是客户端来保证。因此，如果用户想要正常使用nchar字段来存储诸如中文、日文、韩文等非ASCII字符，需要正确设置客户端的编码格式。
 
     客户端的输入的字符均采用操作系统当前默认的编码格式，在Linux系统上多为UTF-8，部分中文系统编码则可能是GB18030或GBK等。在docker环境中默认的编码是POSIX。在中文版Windows系统中，编码则是CP936。客户端需要确保正确设置自己所使用的字符集，即客户端运行的操作系统当前编码字符集，才能保证nchar中的数据正确转换为UCS4-LE编码格式。
 
-    在 Linux 中 locale 的命名规则为: <语言>_<地区>.<字符集编码> 如：zh_CN.UTF-8，zh代表中文，CN代表大陆地区，UTF-8表示字符集。字符集编码为客户端正确解析本地字符串提供编码转换的说明。Linux系统与 Mac OSX 系统可以通过设置locale来确定系统的字符编码，由于Windows使用的locale中不是POSIX标准的locale格式，因此在Windows下需要采用另一个配置参数charset来指定字符编码。在Linux 系统中也可以使用charset来指定字符编码。
+    在 Linux 中 locale 的命名规则为: <语言>\_<地区>.<字符集编码> 如：zh_CN.UTF-8，zh代表中文，CN代表大陆地区，UTF-8表示字符集。字符集编码为客户端正确解析本地字符串提供编码转换的说明。Linux系统与 Mac OSX 系统可以通过设置locale来确定系统的字符编码，由于Windows使用的locale中不是POSIX标准的locale格式，因此在Windows下需要采用另一个配置参数charset来指定字符编码。在Linux 系统中也可以使用charset来指定字符编码。
 
 - charset
 
     默认值：系统中动态获取，如果自动获取失败，需要用户在配置文件设置或通过API设置
-    
+
     如果配置文件中不设置charset，在Linux系统中，taos在启动时候，自动读取系统当前的locale信息，并从locale信息中解析提取charset编码格式。如果自动读取locale信息失败，则尝试读取charset配置，如果读取charset配置也失败，则中断启动过程。
 
     在Linux系统中，locale信息包含了字符编码信息，因此正确设置了Linux系统locale以后可以不用再单独设置charset。例如：
@@ -242,11 +242,10 @@ taos -C  或  taos --dump-config
     为了避免使用字符串时间格式带来的不确定性，也可以直接使用Unix时间戳。此外，还可以在SQL语句中使用带有时区的时间戳字符串，例如：RFC3339格式的时间戳字符串，2013-04-12T15:52:01.123+08:00或者ISO-8601格式时间戳字符串2013-04-12T15:52:01.123+0800。上述两个字符串转化为Unix时间戳不受系统所在时区的影响。
 
     启动taos时，也可以从命令行指定一个taosd实例的end point，否则就从taos.cfg读取。
-   
+
 - maxBinaryDisplayWidth
 
     Shell中binary 和 nchar字段的显示宽度上限，超过此限制的部分将被隐藏。默认值：30。可在 shell 中通过命令 set max_binary_display_width nn 动态修改此选项。
-
 
 ## 用户管理
 
@@ -256,7 +255,7 @@ taos -C  或  taos --dump-config
 CREATE USER <user_name> PASS <'password'>;
 ```
 
-创建用户，并指定用户名和密码，密码需要用单引号引起来,单引号为英文半角
+创建用户，并指定用户名和密码，密码需要用单引号引起来，单引号为英文半角
 
 ```sql
 DROP USER <user_name>;
@@ -268,19 +267,21 @@ DROP USER <user_name>;
 ALTER USER <user_name> PASS <'password'>;
 ```
 
-修改用户密码, 为避免被转换为小写，密码需要用单引号引用,单引号为英文半角
+修改用户密码，为避免被转换为小写，密码需要用单引号引用，单引号为英文半角
 
 ```sql
-ALTER USER <user_name> PRIVILEGE <super|write|read>;
+ALTER USER <user_name> PRIVILEGE <write|read>;
 ```
 
-修改用户权限为：super/write/read，不需要添加单引号
+修改用户权限为：write 或 read，不需要添加单引号
+
+说明：系统内共有 super/write/read 三种权限级别，但目前不允许通过 alter 指令把 super 权限赋予用户。
 
 ```mysql
 SHOW USERS;
 ```
 
-显示所有用户  
+显示所有用户
 
 **注意：**SQL 语法中，< >表示需要用户输入的部分，但请不要输入< >本身
 
@@ -428,18 +429,17 @@ TDengine的所有可执行文件默认存放在 _/usr/local/taos/bin_ 目录下�
 
 您可以通过修改系统配置文件taos.cfg来配置不同的数据目录和日志目录。
 
-
-
 ## TDengine参数限制与保留关键字
 
 - 数据库名：不能包含“.”以及特殊字符，不能超过32个字符
 - 表名：不能包含“.”以及特殊字符，与所属数据库名一起，不能超过192个字符
 - 表的列名：不能包含特殊字符，不能超过64个字符
+- 数据库名、表名、列名，都不能以数字开头
 - 表的列数：不能超过1024列
 - 记录的最大长度：包括时间戳8 byte，不能超过16KB
 - 单条SQL语句默认最大字符串长度：65480 byte
 - 数据库副本数：不能超过3
-- 用户名：不能超过20个byte
+- 用户名：不能超过23个byte
 - 用户密码：不能超过15个byte
 - 标签(Tags)数量：不能超过128个
 - 标签的总长度：不能超过16Kbyte
@@ -448,46 +448,43 @@ TDengine的所有可执行文件默认存放在 _/usr/local/taos/bin_ 目录下�
 - 库的个数：仅受节点个数限制
 - 单个库上虚拟节点个数：不能超过64个
 
- 
-
 目前TDengine有将近200个内部保留关键字，这些关键字无论大小写均不可以用作库名、表名、STable名、数据列名及标签列名等。这些关键字列表如下：
 
 | 关键字列表 |             |              |            |           |
 | ---------- | ----------- | ------------ | ---------- | --------- |
-| ABLOCKS    | CONNECTION  | GT           | MINUS      | SHOW      |
-| ABORT      | CONNECTIONS | ID           | MNODES     | SLASH     |
-| ACCOUNT    | COPY        | IF           | MODULES    | SLIDING   |
-| ACCOUNTS   | COUNT       | IGNORE       | NCHAR      | SMALLINT  |
-| ADD        | CREATE      | IMMEDIATE    | NE         | SPREAD    |
-| AFTER      | CTIME       | IMPORT       | NONE       | STAR      |
-| ALL        | DATABASE    | IN           | NOT        | STATEMENT |
-| ALTER      | DATABASES   | INITIALLY    | NOTNULL    | STDDEV    |
-| AND        | DAYS        | INSERT       | NOW        | STREAM    |
-| AS         | DEFERRED    | INSTEAD      | OF         | STREAMS   |
-| ASC        | DELIMITERS  | INTEGER      | OFFSET     | STRING    |
-| ATTACH     | DESC        | INTERVAL     | OR         | SUM       |
-| AVG        | DESCRIBE    | INTO         | ORDER      | TABLE     |
-| BEFORE     | DETACH      | IP           | PASS       | TABLES    |
-| BEGIN      | DIFF        | IS           | PERCENTILE | TAG       |
-| BETWEEN    | DIVIDE      | ISNULL       | PLUS       | TAGS      |
-| BIGINT     | DNODE       | JOIN         | PRAGMA     | TBLOCKS   |
-| BINARY     | DNODES      | KEEP         | PREV       | TBNAME    |
-| BITAND     | DOT         | KEY          | PRIVILEGE  | TIMES     |
-| BITNOT     | DOUBLE      | KILL         | QUERIES    | TIMESTAMP |
-| BITOR      | DROP        | LAST         | QUERY      | TINYINT   |
-| BOOL       | EACH        | LE           | RAISE      | TOP       |
-| BOTTOM     | END         | LEASTSQUARES | REM        | TRIGGER   |
-| BY         | EQ          | LIKE         | REPLACE    | UMINUS    |
-| CACHE      | EXISTS      | LIMIT        | REPLICA    | UPLUS     |
-| CASCADE    | EXPLAIN     | LINEAR       | RESET      | USE       |
-| CHANGE     | FAIL        | LOCAL        | RESTRICT   | USER      |
-| CLOG       | FILL        | LP           | ROW        | USERS     |
-| CLUSTER    | FIRST       | LSHIFT       | ROWS       | USING     |
-| COLON      | FLOAT       | LT           | RP         | VALUES    |
-| COLUMN     | FOR         | MATCH        | RSHIFT     | VARIABLE  |
-| COMMA      | FROM        | MAX          | SCORES     | VGROUPS   |
-| COMP       | GE          | METRIC       | SELECT     | VIEW      |
-| CONCAT     | GLOB        | METRICS      | SEMI       | WAVG      |
-| CONFIGS    | GRANTS      | MIN          | SET        | WHERE     |
-| CONFLICT   | GROUP       |              |            |           |
-
+| ABLOCKS    | CONNECTION  | GROUP        | MINUS      | SLASH     |
+| ABORT      | CONNECTIONS | GT           | MNODES     | SLIDING   |
+| ACCOUNT    | COPY        | ID           | MODULES    | SMALLINT  |
+| ACCOUNTS   | COUNT       | IF           | NCHAR      | SPREAD    |
+| ADD        | CREATE      | IGNORE       | NE         | STABLE    |
+| AFTER      | CTIME       | IMMEDIATE    | NONE       | STABLES   |
+| ALL        | DATABASE    | IMPORT       | NOT        | STAR      |
+| ALTER      | DATABASES   | IN           | NOTNULL    | STATEMENT |
+| AND        | DAYS        | INITIALLY    | NOW        | STDDEV    |
+| AS         | DEFERRED    | INSERT       | OF         | STREAM    |
+| ASC        | DELIMITERS  | INSTEAD      | OFFSET     | STREAMS   |
+| ATTACH     | DESC        | INTEGER      | OR         | STRING    |
+| AVG        | DESCRIBE    | INTERVAL     | ORDER      | SUM       |
+| BEFORE     | DETACH      | INTO         | PASS       | TABLE     |
+| BEGIN      | DIFF        | IP           | PERCENTILE | TABLES    |
+| BETWEEN    | DISTINCT    | IS           | PLUS       | TAG       |
+| BIGINT     | DIVIDE      | ISNULL       | PRAGMA     | TAGS      |
+| BINARY     | DNODE       | JOIN         | PREV       | TBLOCKS   |
+| BITAND     | DNODES      | KEEP         | PRIVILEGE  | TBNAME    |
+| BITNOT     | DOT         | KEY          | QUERIES    | TIMES     |
+| BITOR      | DOUBLE      | KILL         | QUERY      | TIMESTAMP |
+| BOOL       | DROP        | LAST         | RAISE      | TINYINT   |
+| BOTTOM     | EACH        | LE           | REM        | TOP       |
+| BY         | END         | LEASTSQUARES | REPLACE    | TRIGGER   |
+| CACHE      | EQ          | LIKE         | REPLICA    | UMINUS    |
+| CASCADE    | EXISTS      | LIMIT        | RESET      | UPLUS     |
+| CHANGE     | EXPLAIN     | LINEAR       | RESTRICT   | USE       |
+| CLOG       | FAIL        | LOCAL        | ROW        | USER      |
+| CLUSTER    | FILL        | LP           | ROWS       | USERS     |
+| COLON      | FIRST       | LSHIFT       | RP         | USING     |
+| COLUMN     | FLOAT       | LT           | RSHIFT     | VALUES    |
+| COMMA      | FOR         | MATCH        | SCORES     | VARIABLE  |
+| COMP       | FROM        | MAX          | SELECT     | VGROUPS   |
+| CONCAT     | GE          | METRIC       | SEMI       | VIEW      |
+| CONFIGS    | GLOB        | METRICS      | SET        | WAVG      |
+| CONFLICT   | GRANTS      | MIN          | SHOW       | WHERE     |

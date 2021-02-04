@@ -174,6 +174,7 @@ function install_bin() {
     ${csudo} rm -f ${bin_link_dir}/power     || :
     ${csudo} rm -f ${bin_link_dir}/powerd    || :
     ${csudo} rm -f ${bin_link_dir}/powerdemo || :
+    ${csudo} rm -f ${bin_link_dir}/powerdemox || :
     ${csudo} rm -f ${bin_link_dir}/rmpower   || :
     ${csudo} rm -f ${bin_link_dir}/tarbitrator   || :
     ${csudo} rm -f ${bin_link_dir}/set_core   || :
@@ -184,6 +185,7 @@ function install_bin() {
     [ -x ${install_main_dir}/bin/power ] && ${csudo} ln -s ${install_main_dir}/bin/power ${bin_link_dir}/power                        || :
     [ -x ${install_main_dir}/bin/powerd ] && ${csudo} ln -s ${install_main_dir}/bin/powerd ${bin_link_dir}/powerd                     || :
     [ -x ${install_main_dir}/bin/powerdemo ] && ${csudo} ln -s ${install_main_dir}/bin/powerdemo ${bin_link_dir}/powerdemo            || :
+    [ -x ${install_main_dir}/bin/powerdemox ] && ${csudo} ln -s ${install_main_dir}/bin/powerdemox ${bin_link_dir}/powerdemox         || :
     [ -x ${install_main_dir}/bin/remove_power.sh ] && ${csudo} ln -s ${install_main_dir}/bin/remove_power.sh ${bin_link_dir}/rmpower  || :
     [ -x ${install_main_dir}/bin/set_core.sh ] && ${csudo} ln -s ${install_main_dir}/bin/set_core.sh ${bin_link_dir}/set_core         || :
     [ -x ${install_main_dir}/bin/tarbitrator ] && ${csudo} ln -s ${install_main_dir}/bin/tarbitrator ${bin_link_dir}/tarbitrator      || :
@@ -343,7 +345,7 @@ function set_ipAsFqdn() {
 }
 
 function local_fqdn_check() {
-  #serverFqdn=$(hostname -f)
+  #serverFqdn=$(hostname)
   echo
   echo -e -n "System hostname is: ${GREEN}$serverFqdn${NC}"
   echo
@@ -576,6 +578,7 @@ function install_service_on_systemd() {
     ${csudo} bash -c "echo '[Service]'                           >> ${powerd_service_config}"
     ${csudo} bash -c "echo 'Type=simple'                         >> ${powerd_service_config}"
     ${csudo} bash -c "echo 'ExecStart=/usr/bin/powerd'           >> ${powerd_service_config}"
+    ${csudo} bash -c "echo 'ExecStartPre=/usr/local/power/bin/startPre.sh'           >> ${powerd_service_config}"
     ${csudo} bash -c "echo 'LimitNOFILE=infinity'                >> ${powerd_service_config}"
     ${csudo} bash -c "echo 'LimitNPROC=infinity'                 >> ${powerd_service_config}"
     ${csudo} bash -c "echo 'LimitCORE=infinity'                  >> ${powerd_service_config}"
@@ -879,7 +882,7 @@ function install_PowerDB() {
 
 
 ## ==============================Main program starts from here============================
-serverFqdn=$(hostname -f)
+serverFqdn=$(hostname)
 if [ "$verType" == "server" ]; then
     # Install server and client
     if [ -x ${bin_dir}/powerd ]; then

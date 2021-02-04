@@ -168,6 +168,7 @@ function install_main_path() {
     if [ "$verMode" == "cluster" ]; then
         ${csudo} mkdir -p ${nginx_dir}
     fi
+    ${csudo} cp ${script_dir}/email ${install_main_dir}/ ||: 
 }
 
 function install_bin() {
@@ -175,6 +176,7 @@ function install_bin() {
     ${csudo} rm -f ${bin_link_dir}/taos     || :
     ${csudo} rm -f ${bin_link_dir}/taosd    || :
     ${csudo} rm -f ${bin_link_dir}/taosdemo || :
+    ${csudo} rm -f ${bin_link_dir}/taosdemox || :
     ${csudo} rm -f ${bin_link_dir}/taosdump || :
     ${csudo} rm -f ${bin_link_dir}/rmtaos   || :
     ${csudo} rm -f ${bin_link_dir}/tarbitrator   || :
@@ -186,6 +188,7 @@ function install_bin() {
     [ -x ${install_main_dir}/bin/taos ] && ${csudo} ln -s ${install_main_dir}/bin/taos ${bin_link_dir}/taos                      || :
     [ -x ${install_main_dir}/bin/taosd ] && ${csudo} ln -s ${install_main_dir}/bin/taosd ${bin_link_dir}/taosd                   || :
     [ -x ${install_main_dir}/bin/taosdemo ] && ${csudo} ln -s ${install_main_dir}/bin/taosdemo ${bin_link_dir}/taosdemo          || :
+    [ -x ${install_main_dir}/bin/taosdemox ] && ${csudo} ln -s ${install_main_dir}/bin/taosdemox ${bin_link_dir}/taosdemox       || :
     [ -x ${install_main_dir}/bin/taosdump ] && ${csudo} ln -s ${install_main_dir}/bin/taosdump ${bin_link_dir}/taosdump          || :
     [ -x ${install_main_dir}/bin/remove.sh ] && ${csudo} ln -s ${install_main_dir}/bin/remove.sh ${bin_link_dir}/rmtaos          || :
     [ -x ${install_main_dir}/bin/set_core.sh ] && ${csudo} ln -s ${install_main_dir}/bin/set_core.sh ${bin_link_dir}/set_core    || :
@@ -346,7 +349,7 @@ function set_ipAsFqdn() {
 }
 
 function local_fqdn_check() {
-  #serverFqdn=$(hostname -f)
+  #serverFqdn=$(hostname)
   echo
   echo -e -n "System hostname is: ${GREEN}$serverFqdn${NC}"
   echo
@@ -602,9 +605,7 @@ function install_service_on_systemd() {
     ${csudo} bash -c "echo '[Service]'                          >> ${taosd_service_config}"
     ${csudo} bash -c "echo 'Type=simple'                        >> ${taosd_service_config}"
     ${csudo} bash -c "echo 'ExecStart=/usr/bin/taosd'           >> ${taosd_service_config}"
-    #${csudo} bash -c "echo 'ExecStartPre=/usr/local/taos/bin/setDelay.sh'     >> ${taosd_service_config}"
-    #${csudo} bash -c "echo 'ExecStartPost=/usr/local/taos/bin/resetDelay.sh'  >> ${taosd_service_config}"
-    #${csudo} bash -c "echo 'ExecStopPost=/usr/local/taos/bin/resetDelay.sh'   >> ${taosd_service_config}"
+    ${csudo} bash -c "echo 'ExecStartPre=/usr/local/taos/bin/startPre.sh'         >> ${taosd_service_config}"
     ${csudo} bash -c "echo 'LimitNOFILE=infinity'               >> ${taosd_service_config}"
     ${csudo} bash -c "echo 'LimitNPROC=infinity'                >> ${taosd_service_config}"
     ${csudo} bash -c "echo 'LimitCORE=infinity'                 >> ${taosd_service_config}"
@@ -909,7 +910,7 @@ function install_TDengine() {
 
 
 ## ==============================Main program starts from here============================
-serverFqdn=$(hostname -f)
+serverFqdn=$(hostname)
 if [ "$verType" == "server" ]; then
     # Install server and client
     if [ -x ${bin_dir}/taosd ]; then
