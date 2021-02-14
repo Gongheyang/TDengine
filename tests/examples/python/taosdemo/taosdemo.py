@@ -200,6 +200,7 @@ def create_stb():
 
 
 def use_database():
+    current_db = "%s%d" % (dbName, (numOfDb - 1))
 
     if native:
         cursor.execute("USE %s" % current_db)
@@ -224,15 +225,43 @@ def create_databases():
 
 
 def drop_tables():
-    # TODO
-    v_print("TODO: drop tables total %d", numOfTb)
-    pass
+    # use last database
+    use_database()
+
+    v_print("drop tables total %d", numOfTb)
+    for i in range(0, numOfTb):
+        if native:
+            cursor.execute(
+                "DROP TABLE IF EXISTS %s%d" %
+                (tbName, i))
+        else:
+            restful_execute(
+                host,
+                port,
+                user,
+                password,
+                "DROP TABLE IF EXISTS %s%d" %
+                (tbName, i))
 
 
-def drop_stable():
-    # TODO
-    v_print("TODO: drop stables total %d", numOfStb)
-    pass
+def drop_stables():
+    # use last database
+    use_database()
+
+    v_print("drop stables total %d", numOfStb)
+    for i in range(0, numOfStb):
+        if native:
+            cursor.execute(
+                "DROP TABLE IF EXISTS %s%d" %
+                (stbName, i))
+        else:
+            restful_execute(
+                host,
+                port,
+                user,
+                password,
+                "DROP TABLE IF EXISTS %s%d" %
+                (stbName, i))
 
 
 def drop_databases():
@@ -448,6 +477,7 @@ def printConfig():
     print("# Table prefix:                      %s" % tbName)
     if useStable:
         print("# STable prefix:                     %s" % stbName)
+        print("# Number of Stables:                 %s" % numOfStb)
 
     print("# Data order:                        %s" % outOfOrder)
     print("# Data out of order rate:            %s" % rateOOOO)
@@ -660,6 +690,10 @@ if __name__ == "__main__":
                     "inputed delete method is %d, valid value is 0~3, set to default 0" %
                     deleteMethod)
                 deleteMethod = 0
+            elif deleteMethod == 2:
+                useStable = True
+                numOfStb = 1
+
             v_print("the delete method is %d", deleteMethod)
 
         if key in ['-v', '--verbose']:
@@ -717,7 +751,6 @@ if __name__ == "__main__":
     create_databases()
 
     # use last database
-    current_db = "%s%d" % (dbName, (numOfDb - 1))
     use_database()
 
     if measure:
