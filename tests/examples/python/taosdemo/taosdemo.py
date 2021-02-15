@@ -26,6 +26,12 @@ from multipledispatch import dispatch
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 
 
+@dispatch(str)
+def v_print(msg: str):
+    if verbose:
+        print(msg)
+
+
 @dispatch(str, str)
 def v_print(msg: str, arg: str):
     if verbose:
@@ -150,11 +156,11 @@ def query_data_process(cmd: str):
 
         try:
             cursor = conn.cursor()
-            v_print("cursor:%d %s", id(cursor), str(cursor.__class__))
         except Exception as e:
             print("Error: %s" % e.args[0])
             conn.close()
             sys.exit(1)
+        v_print("cursor:%d %s", id(cursor), str(cursor.__class__))
 
     if native:
         try:
@@ -178,6 +184,7 @@ def query_data_process(cmd: str):
                 cmd)
 
     if native:
+        v_print("close query conn")
         cursor.close()
         conn.close()
 
@@ -287,6 +294,7 @@ def drop_databases():
 
 def insert_func(process: int, thread: int):
     v_print("%d process %d thread, insert_func ", process, thread)
+    current_db = "%s%d" % (dbName, (numOfDb - 1))
 
     # generate uuid
     uuid_int = random.randint(0, numOfTb + 1)
@@ -295,25 +303,25 @@ def insert_func(process: int, thread: int):
 
     # establish connection if native
     if native:
-        v_print("host:%s, user:%s passwd:%s configDir:%s ", host, user, password, configDir)
+        v_print("insert_func, host:%s, user:%s passwd:%s configDir:%s ", host, user, password, configDir)
         try:
             conn = taos.connect(
                 host=host,
                 user=user,
                 password=password,
                 config=configDir)
-            v_print("conn: %s", str(conn.__class__))
         except Exception as e:
             print("Error: %s" % e.args[0])
             sys.exit(1)
+        v_print("insert_func, conn: %s", str(conn.__class__))
 
         try:
             cursor = conn.cursor()
-            v_print("cursor:%d %s", id(cursor), str(cursor.__class__))
         except Exception as e:
             print("Error: %s" % e.args[0])
             conn.close()
             sys.exit(1)
+        v_print("insert_func, cursor:%d %s", id(cursor), str(cursor.__class__))
 
     v_print("numOfRec %d:", numOfRec)
 
@@ -350,6 +358,8 @@ def insert_func(process: int, thread: int):
 
         cmd = ' '.join(sqlCmd)
 
+        v_print("cmd: %s, length:%d", cmd, len(cmd))
+
         if measure:
             exec_start_time = datetime.datetime.now()
 
@@ -357,28 +367,22 @@ def insert_func(process: int, thread: int):
             affectedRows = cursor.execute(cmd)
         else:
             restful_execute(
-                host, port, user, password, cmd)
+                    host, port, user, password, cmd)
 
         if measure:
             exec_end_time = datetime.datetime.now()
             exec_delta = exec_end_time - exec_start_time
             v_print(
-                "consume %d microseconds",
-                 exec_delta.microseconds)
-
-        v_print("cmd: %s, length:%d", cmd, len(cmd))
+                    "consume %d microseconds",
+                     exec_delta.microseconds)
 
     if native:
+        v_print("close insert conn")
         cursor.close()
         conn.close()
 
 
-def create_tb_using_stb():
-    # TODO:
-    pass
-
-
-def create_tb():
+def create_tb(stbId: int):
     v_print("create_tb() numOfTb: %d", numOfTb)
     for i in range(0, numOfDb):
         if native:
@@ -389,18 +393,19 @@ def create_tb():
                 (dbName, i))
 
         for j in range(0, numOfTb):
+            if useStable:
+                cmd = "CREATE TABLE %s%d USING %s%d TAGS(\'%s\')" % (tbName, j, stbName, stbId, str(stbId))
+            else:
+                cmd = "CREATE TABLE %s%d (ts timestamp, value float)" % (tbName, j)
             if native:
-                cursor.execute(
-                    "CREATE TABLE %s%d (ts timestamp, value float)" %
-                    (tbName, j))
+                cursor.execute(cmd)
             else:
                 restful_execute(
                     host,
                     port,
                     user,
                     password,
-                    "CREATE TABLE %s%d (ts timestamp, value float)" %
-                    (tbName, j))
+                    cmd)
 
 
 def insert_data_process(lock, i: int, begin: int, end: int):
@@ -408,29 +413,32 @@ def insert_data_process(lock, i: int, begin: int, end: int):
     tasks = end - begin
     v_print("insert_data_process:%d table from %d to %d, tasks %d", i, begin, end, tasks)
 
-    if (threads < (end - begin)):
-        for j in range(begin, end, threads):
-            with ThreadPoolExecutor(max_workers=threads) as executor:
-                k = end if ((j + threads) > end) else (j + threads)
-                workers = [
-                    executor.submit(
-                        insert_func,
-                        i,
-                        n) for n in range(
-                        j,
-                        k)]
-                wait(workers, return_when=ALL_COMPLETED)
-    else:
-        with ThreadPoolExecutor(max_workers=threads) as executor:
-            workers = [
-                executor.submit(
-                    insert_func,
-                    i,
-                    j) for j in range(
-                    begin,
-                    end)]
-            wait(workers, return_when=ALL_COMPLETED)
+    for n in range(begin, end):
+        insert_func(i, n)
 
+#    if (threads < (end - begin)):
+#        for j in range(begin, end, threads):
+#            with ThreadPoolExecutor(max_workers=threads) as executor:
+#                k = end if ((j + threads) > end) else (j + threads)
+#                workers = [
+#                    executor.submit(
+#                        insert_func,
+#                        i,
+#                        n) for n in range(
+#                        j,
+#                        k)]
+#                wait(workers, return_when=ALL_COMPLETED)
+#    else:
+#        with ThreadPoolExecutor(max_workers=threads) as executor:
+#            workers = [
+#                executor.submit(
+#                    insert_func,
+#                    i,
+#                    j) for j in range(
+#                    begin,
+#                    end)]
+#            wait(workers, return_when=ALL_COMPLETED)
+#
     lock.release()
 
 
@@ -720,18 +728,18 @@ if __name__ == "__main__":
                 user=user,
                 password=password,
                 config=configDir)
-            v_print("conn: %s", str(conn.__class__))
         except Exception as e:
             print("Error: %s" % e.args[0])
             sys.exit(1)
+        v_print("conn: %s", str(conn.__class__))
 
         try:
             cursor = conn.cursor()
-            v_print("cursor:%d %s", id(cursor), str(cursor.__class__))
         except Exception as e:
             print("Error: %s" % e.args[0])
             conn.close()
             sys.exit(1)
+        v_print("cursor:%d %s", id(cursor), str(cursor.__class__))
 
     # drop data only if delete method be set
     if deleteMethod > 0:
@@ -758,10 +766,10 @@ if __name__ == "__main__":
 
     if numOfStb > 0:
         create_stb()
-        if (autosubtable == False):
-            create_tb_using_stb()
+        for i in range(numOfStb):
+            create_tb(i)
     else:
-        create_tb()
+        create_tb(numOfStb)
 
     if measure:
         end_time = time.time()
@@ -770,6 +778,7 @@ if __name__ == "__main__":
             (end_time - start_time_begin)))
 
     if native:
+        v_print("close early conn")
         cursor.close()
         conn.close()
 
@@ -804,10 +813,10 @@ if __name__ == "__main__":
         else:
             end = begin + quotient
         pool.apply_async(insert_data_process, args=(lock, i, begin, end,))
+#        pool.apply(insert_data_process, args=(lock, i, begin, end,))
 
     pool.close()
     pool.join()
-    time.sleep(1)
 
     if measure:
         end_time = time.time()
