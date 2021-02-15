@@ -333,7 +333,7 @@ def insert_func(process: int, thread: int):
             sqlCmd.append(
                 "%s.%s%d " % (current_db, tbName, thread))
 
-            if (numOfStb > 0 and autosubtable):
+            if (numOfStb > 0):
                 sqlCmd.append("USING %s.%s%d TAGS('%s') " %
                               (current_db, stbName, numOfStb - 1, uuid))
 
@@ -413,32 +413,32 @@ def insert_data_process(lock, i: int, begin: int, end: int):
     tasks = end - begin
     v_print("insert_data_process:%d table from %d to %d, tasks %d", i, begin, end, tasks)
 
-    for n in range(begin, end):
-        insert_func(i, n)
+#    for n in range(begin, end):
+#        insert_func(i, n)
 
-#    if (threads < (end - begin)):
-#        for j in range(begin, end, threads):
-#            with ThreadPoolExecutor(max_workers=threads) as executor:
-#                k = end if ((j + threads) > end) else (j + threads)
-#                workers = [
-#                    executor.submit(
-#                        insert_func,
-#                        i,
-#                        n) for n in range(
-#                        j,
-#                        k)]
-#                wait(workers, return_when=ALL_COMPLETED)
-#    else:
-#        with ThreadPoolExecutor(max_workers=threads) as executor:
-#            workers = [
-#                executor.submit(
-#                    insert_func,
-#                    i,
-#                    j) for j in range(
-#                    begin,
-#                    end)]
-#            wait(workers, return_when=ALL_COMPLETED)
-#
+    if (threads < (end - begin)):
+        for j in range(begin, end, threads):
+            with ThreadPoolExecutor(max_workers=threads) as executor:
+                k = end if ((j + threads) > end) else (j + threads)
+                workers = [
+                    executor.submit(
+                        insert_func,
+                        i,
+                        n) for n in range(
+                        j,
+                        k)]
+                wait(workers, return_when=ALL_COMPLETED)
+    else:
+        with ThreadPoolExecutor(max_workers=threads) as executor:
+            workers = [
+                executor.submit(
+                    insert_func,
+                    i,
+                    j) for j in range(
+                    begin,
+                    end)]
+            wait(workers, return_when=ALL_COMPLETED)
+
     lock.release()
 
 
@@ -527,7 +527,6 @@ if __name__ == "__main__":
     processes = 1
     threads = 1
     insertOnly = False
-    autosubtable = False
     queryCmd = "NO"
     outOfOrder = 0
     rateOOOO = 0
